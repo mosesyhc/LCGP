@@ -1,0 +1,18 @@
+---
+title: "binary missingness"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load library and dataset}
+library(logisticPCA)
+ftrain <- read.table('ftrain.txt')
+ytrain <- is.na(ftrain)
+```
+
+```{r fit binaryPCA}
+model <- logisticPCA(ytrain, k=10)
+```
