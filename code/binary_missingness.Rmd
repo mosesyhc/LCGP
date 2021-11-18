@@ -9,10 +9,33 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r load library and dataset}
 library(logisticPCA)
-ftrain <- read.table('ftrain.txt')
-ytrain <- is.na(ftrain)
+f <- read.table('f.txt')
+y <- is.na(f)
+
+# logisticPCA takes an n x d matrix, n = number of parameters, d = dimension of output (to be reduced)
+# model <- logisticPCA(t(y), k=10) 
+```
+
+```{r getModels}
+getLPCAmodels <- function(inds){
+  yboot <- y[,inds]
+  model <- logisticPCA(t(yboot), k = 20)
+  print(model$prop_deviance_expl)
+  return(model)
+  # PC <- model$PCs
+  # U <- model$U
+}
 ```
 
 ```{r fit binaryPCA}
-model <- logisticPCA(ytrain, k=10)
+bootinds <- lapply(1:10, function(i) sample(dim(y)[2], replace=T))
+models <- lapply(bootinds, function(inds) getLPCAmodels(inds))
+
+```
+
+```{r extract decomposition elements}
+
+mus <- as.data.frame(lapply(models, function(model) model$mu), col.names = 1:10)
+
+
 ```
