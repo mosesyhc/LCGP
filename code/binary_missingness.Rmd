@@ -17,25 +17,61 @@ y <- is.na(f)
 ```
 
 ```{r getModels}
-getLPCAmodels <- function(inds){
+getLPCAmodels <- function(inds, k){
   yboot <- y[,inds]
-  model <- logisticPCA(t(yboot), k = 20)
-  print(model$prop_deviance_expl)
+  model <- logisticPCA(t(yboot), k)
+  # print(model$prop_deviance_expl)
   return(model)
   # PC <- model$PCs
   # U <- model$U
 }
 ```
 
-```{r fit binaryPCA}
-bootinds <- lapply(1:10, function(i) sample(dim(y)[2], replace=T))
-models <- lapply(bootinds, function(inds) getLPCAmodels(inds))
+```{r fit to find number of representative PCs}
+K <- 25
+ks <- c(seq(1, K, 4), 35, 50, 60, 75, 100, 150, 198)
+
+explained_dev <- matrix("numeric", nrow=length(ks), ncol=2)
+for (i in 1:length(ks)){
+  k <- ks[i]
+  m <- getLPCAmodels(1:dim(y)[2], k)
+  explained_dev[i, 1] <- k
+  explained_dev[i, 2] <- m$prop_deviance_expl
+}
+
+plot(explained_dev, type ='b',
+     ylim = c(0, 1),
+     xlab = 'number of PCs', 
+     ylab = 'explained proportion of dev')
+text(150, 0.75, paste('max = ', signif(as.numeric(tail(explained_dev, 1)[2]), 3)))
 
 ```
 
-```{r extract decomposition elements}
+```{r bootstrap LPCA models}
+B <- 25
+k <- 20
+bootinds <- lapply(1:B, function(i) sample(dim(y)[2], replace=T))
+models <- lapply(bootinds, function(inds) getLPCAmodels(inds, k))
 
-mus <- as.data.frame(lapply(models, function(model) model$mu), col.names = 1:10)
+```
 
+The decomposition of ($n \times d$) natural parameters is estimated as: 
+  $1_n \mu^T + W U^T$,
+where $\mu \in R^d, W \in R^{n \times k}, U \in R^{d \times k}$.
+$\mu$ is the mean estimate, W contains the PCs, and U is the orthonormal basis. 
 
+```{r extract decomposition means}
+mus <- as.data.frame(lapply(models, function(model) model$mu), col.names = 1:B)
+
+mu_hat <- rowMeans(mus)
+S_hat <- cov(t(mus))
+sigma2_hat <- diag(S_hat)
+```
+
+```{r extract Us}
+Ulist <- lapply(models, function(model) model$U)
+Us <- array(unlist(Ulist), c(dim(y)[1], k, B))
+
+Umean <- apply(Us, c(1, 2), mean)
+Usd <- apply(Us, c(1, 2), sd)
 ```
