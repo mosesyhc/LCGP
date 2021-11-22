@@ -10,12 +10,24 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r load library and dataset}
 library(logisticPCA)
 f <- read.table('f.txt')
-y <- is.na(f)
+y <- as.data.frame(is.na(f))
+theta <- as.data.frame(read.table('theta.txt'))
 
 # logisticPCA takes an n x d matrix, n = number of parameters, d = dimension of output (to be reduced)
 # model <- logisticPCA(t(y), k=10) 
 ```
 
+### logistic regression
+```{r logistic regression}
+ysum <- colSums(y)
+N <- dim(y)[1]
+
+traininds <- sample(1:1000, 500, replace=T)
+train <- data.frame(y=ysum[traininds], theta=theta[traininds,])
+lr <- glm(y ~ ., data=train)
+```
+
+### Logistic PCA decompositions
 ```{r getModels}
 getLPCAmodels <- function(inds, k){
   yboot <- y[,inds]
