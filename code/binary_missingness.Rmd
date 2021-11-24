@@ -4,13 +4,13 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
 ```
 
 ```{r load library and dataset}
 library(logisticPCA)
 f <- read.table('f.txt')
-y <- as.data.frame(is.na(f))
+y <- as.data.frame(t(is.na(f)))
 theta <- as.data.frame(read.table('theta.txt'))
 
 # logisticPCA takes an n x d matrix, n = number of parameters, d = dimension of output (to be reduced)
@@ -19,12 +19,21 @@ theta <- as.data.frame(read.table('theta.txt'))
 
 ### logistic regression
 ```{r logistic regression}
-ysum <- colSums(y)
-N <- dim(y)[1]
+N <- dim(y)[2]
 
-traininds <- sample(1:1000, 500, replace=T)
-train <- data.frame(y=ysum[traininds], theta=theta[traininds,])
-lr <- glm(y ~ ., data=train)
+traininds <- sample(1:1000, 500, replace=F)
+ytrain <- y[traininds, ]
+thetatrain <- theta[traininds, ]
+thetatest <- data.frame(theta=theta[-traininds, ])
+
+store = list()
+for (i in 1:N){
+  data <- data.frame(y=ytrain[, i], theta=thetatrain)
+  store[[i]] <- glm(y ~ ., family = binomial(link = "logit"), data = data)
+}
+
+trainpred <- data.frame(matrix(unlist(lapply(store, function(model) model$fitted.values)), ncol=N))
+testpred <- data.frame(matrix(unlist(lapply(store, function(model) predict.glm(model, newdata=thetatest, type='response'))), ncol=N))
 ```
 
 ### Logistic PCA decompositions
