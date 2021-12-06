@@ -95,8 +95,9 @@ if __name__ == '__main__':
     S = np.ones((p, p)) * 0.5
     np.fill_diagonal(S, diag)
 
-    lb = np.diag(np.ones(p) * 10e-8)
-    ub = np.diag(np.ones(p))
+    lb = np.full_like(S, np.nan)
+    np.fill_diagonal(lb, np.zeros(p))
+    ub = np.full_like(S, np.nan)
+    np.fill_diagonal(ub, np.ones(p))
     bounds = spo.Bounds(lb.flatten(), ub.flatten())
     opt = spo.minimize(negloglik, S.flatten(), y, method='L-BFGS-B', jac=negloglikgrad, bounds=bounds)
-    
