@@ -1,0 +1,190 @@
+---
+title: "binary missingness"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+```{r load library and dataset}
+library(logisticPCA)
+library(laGP)
+f <- read.table('f.txt')
+y <- as.data.frame(t(is.na(f)))
+theta <- as.data.frame(read.table('theta.txt'))
+
+# logisticPCA takes an n x d matrix, n = number of parameters, d = dimension of output (to be reduced)
+# model <- logisticPCA(t(y), k=10) 
+```
+
+### logistic regression
+```{r logistic regression}
+N <- dim(y)[2]
+
+traininds <- sample(1:1000, 500, replace=F)
+ytrain <- y[traininds, ]
+ytest <- y[-traininds, ]
+thetatrain <- theta[traininds, ]
+thetatest <- data.frame(theta=theta[-traininds, ])
+
+# logistic regression over each column
+storeLR = list()
+for (i in 1:N){
+  data <- data.frame(y=ytrain[, i], theta=thetatrain)
+  storeLR[[i]] <- glm(y ~ ., family = binomial(link = "logit"), data = data)
+}
+
+trainpred <- data.frame(matrix(unlist(lapply(storeLR, function(model) model$fitted.values)), ncol=N))
+testpred <- data.frame(matrix(unlist(lapply(storeLR, function(model) predict.glm(model, newdata=thetatest, type='response'))), ncol=N))
+```
+
+#### Potential measure
+```{r cos-angle between p and y}
+calSpherical <- function(p,y){
+  p <- as.numeric(p)
+  y <- as.numeric(y)
+  sp <- (p%*%y + (1-p)%*%(1-y))  / sum(sqrt(p^2 + (1-p)^2))
+
+  # transform p and y from [0, 1] to [-1, 1] to avoid division by zero
+  pp <- 2*as.numeric(p) - 1
+  yy <- 2*as.numeric(y) - 1
+  
+  norm.pp <- norm(pp, type="2")
+  norm.yy <- norm(yy, type="2")
+  angle <- acos(pp%*%yy / (norm.pp * norm.yy))
+  
+  return(list(sp=sp, angle=angle))
+}
+
+getScoreAngle <- function(ps, ys){
+  n <- dim(ps)[1]
+  temps <- lapply(1:n, function(i) calSpherical(ps[i, ], ys[i, ]))
+  sph <- sapply(1:n, function(i) temps[[i]]$sp)
+  angle <- sapply(1:n, function(i) temps[[i]]$angle)
+  
+  return(list(sph=sph, angle=angle))
+}
+```
+
+```{r scores}
+trainLRscore <- getScoreAngle(trainpred, ytrain)
+testLRscore <- getScoreAngle(testpred, ytest)
+```
+
+
+
+### Logistic PCA decompositions
+```{r getModels}
+getLPCAmodels <- function(inds, k){
+  yboot <- y[inds,]
+  model <- logisticPCA(yboot, k)
+  return(model)
+}
+```
+
+```{r fit to find number of representative PCs, eval=FALSE}
+K <- 25
+ks <- c(seq(1, K, 4), 35, 50, 60, 75, 100, 150, 198)
+
+explained_dev <- matrix("numeric", nrow=length(ks), ncol=2)
+for (i in 1:length(ks)){
+  k <- ks[i]
+  m <- getLPCAmodels(1:dim(y)[2], k)
+  explained_dev[i, 1] <- k
+  explained_dev[i, 2] <- m$prop_deviance_expl
+}
+
+plot(explained_dev, type ='b',
+     ylim = c(0, 1),
+     xlab = 'number of PCs', 
+     ylab = 'explained proportion of dev')
+text(150, 0.75, paste('max = ', signif(as.numeric(tail(explained_dev, 1)[2]), 3)))
+
+```
+
+```{r prediction LPCA models}
+# B <- 25
+k <- 10
+# bootinds <- lapply(1:B, function(i) sample(dim(y)[1], replace=T))
+# models <- lapply(bootinds, function(inds) getLPCAmodels(inds, k))
+
+LPCAtrain <- getLPCAmodels(traininds, k)
+
+PCs <- LPCAtrain$PCs
+U <- LPCAtrain$U
+mu <- LPCAtrain$mu
+```
+
+```{r fitting PCs}
+fitPC <- function(PC, theta){
+  # data <- data.frame(PC=PC, theta=theta)
+  # lm(PC ~ ., data=data)
+  modeli <- newGPsep(theta, PC, 0.1, 1e-6, dK=TRUE)
+}
+
+PCmodels <- lapply(1:k, function(i) fitPC(PCs[, i], thetatrain))
+
+```
+
+```{r verify recovery}
+G <- data.frame(rep(mu, each=nrow(PCs)) + PCs %*% t(U))
+pPCA <- exp(G) / (1 + exp(G))
+
+scorePCA <- getScoreAngle(pPCA, ytrain)
+```
+
+```{r verify GP PCs}
+predPCstrain <- lapply(PCmodels, function(gpi) predGPsep(gpi, thetatrain)$mean)
+predPCstrain <- matrix(unlist(predPCstrain), ncol=k)
+
+print('train PC MSE:')
+print(mean((predPCstrain - PCs)**2))
+
+Gtrain <- data.frame(rep(mu, each=nrow(predPCstrain)) + predPCstrain %*% t(U))
+ptrainPCA <- exp(Gtrain) / (1 + exp(Gtrain))
+
+trainscorePCA <- getScoreAngle(ptrainPCA, ytrain)
+
+```
+
+
+```{r predict test PCs}
+predPCstest <- lapply(PCmodels, function(gpi) predGPsep(gpi, thetatest)$mean)
+predPCstest <- matrix(unlist(predPCstest), ncol=k)
+
+Gtest <- data.frame(rep(mu, each=nrow(predPCstest)) + predPCstest %*% t(U))
+ptestPCA <- exp(Gtest) / (1 + exp(Gtest))
+
+testscorePCA <- getScoreAngle(ptestPCA, ytest)
+
+```
+
+```{r summary scores}
+print('Logistic regression')
+print('Training')
+print(summary(1 - trainLRscore$sph))
+print(summary(trainLRscore$angle))
+
+print('Testing')
+print(summary(1 - testLRscore$sph))
+print(summary(testLRscore$angle))
+
+
+print('Logistic PCA')
+print('Training')
+print(format(summary(1 - trainscorePCA$sph), digits = 3))
+print(summary(trainscorePCA$angle))
+
+print('Testing')
+print(summary(1 - testscorePCA$sph))
+print(summary(testscorePCA$angle))
+
+
+```
+
+The decomposition of ($n \times d$) natural parameters is estimated as: 
+  $1_n \mu^T + W U^T$,
+where $\mu \in R^d, W \in R^{n \times k}, U \in R^{d \times k}$.
+$\mu$ is the mean estimate, W contains the PCs, and U is the orthonormal basis. 
+
