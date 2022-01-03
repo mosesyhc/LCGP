@@ -22,7 +22,7 @@ def visualize_dataset(ytrain, ytest):
 
 
 class mvLogisticRegression():
-    def __init__(self, y, X):
+    def __init__(self, X, y):
         self.X = X
         self.y = y
         self.m, self.n = y.shape
@@ -36,9 +36,15 @@ class mvLogisticRegression():
         m = self.m
         model = {}
         for i in np.arange(m):
-            modeli = LogisticRegression()
-            modeli.fit(X, y[i])
-            model[i] = modeli
+            model[i] = {}
+            if np.unique(y[i]).size < 1.5:
+                model[i]['monoclass'] = True
+                model[i]['model'] = np.unique(y[i])[0]
+            else:
+                modeli = LogisticRegression()
+                modeli.fit(X, y[i])
+                model[i]['monoclass'] = False
+                model[i]['model'] = modeli
         self.model = model
         return
 
@@ -46,21 +52,18 @@ class mvLogisticRegression():
         model = self.model
         m = self.m
 
-        ypred = np.zeros((m, X.shape[0]))
+        npred = X.shape[0]
+        ypred = np.zeros((m, npred))
         for i in np.arange(m):
-            ypred[i] = model[i].predict(X)
+            if model[i]['monoclass']:
+                ypred[i] = model[i]['model'] * np.ones(npred)
+            else:
+                ypred[i] = model[i]['model'].predict(X)
         return ypred
 
 
-def ind_logistic_reg(y, theta):
-    from sklearn.linear_model import LogisticRegression
+    
 
-    model = {}
-    for i in np.arange(y.shape[0]):
-        m = LogisticRegression()
-        m.fit(theta, y[i])
-        model[i] = m
-    return model
 
 def get_psi(y):
     z = (y.sum(1) + 10) / (y.shape[1] + 20)
@@ -90,10 +93,12 @@ if __name__ == '__main__':
     thetate = theta0[testinds]
 
     # percent missing
-    print(r'Missing percentages: {:.3f} (Training), {:.3f} (Testing)'.format(ytrain.mean(), ytest.mean()))
+    print(r'Missing percentages: {:.3f} (Training), {:.3f} (Testing)'.format(ytr.mean(), yte.mean()))
     # plot data
     visualize_dataset(ytr, yte)
 
     psi = get_psi(ytr)
     Phi = get_Phi(x0)
 
+    lrmodel = mvLogisticRegression(thetatr, ytr)
+    ypred = lrmodel.predict(thetatr)
