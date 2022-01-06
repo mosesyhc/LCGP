@@ -62,20 +62,39 @@ class mvLogisticRegression():
         return ypred
 
 
-    
+class lowrankGP():
+    from likelihood import negloglik, negloglikgrad
+    def __init__(self, theta, x, y):
+        self.theta = theta
+        self.x = x
+        self.y = y
+        self.m, self.n = y.shape
+        self.model = None
+
+        self.psi = self.get_psi()
+        self.Phi = self.get_Phi()
+
+        self.fit()
 
 
-def get_psi(y):
-    z = (y.sum(1) + 10) / (y.shape[1] + 20)
-    psi = sps.norm.ppf(z)
-    return psi
+    def fit(self):
 
 
-def get_Phi(x):
-    tmp = x[:, :2]
-    tmp[:, 0] -= tmp[:, 1]  # Use (N, Z) instead of (A, Z)
-    Phi = (tmp - tmp.mean(0)) / tmp.std(0)
-    return Phi
+
+    def get_psi(self):
+        y = self.y
+        z = (y.sum(1) + 10) / (y.shape[1] + 20)
+        psi = sps.norm.ppf(z)
+        return psi
+
+
+    def get_Phi(self):
+        x = self.x
+        tmp = x[:, :2]
+        tmp[:, 0] -= tmp[:, 1]  # Use (N, Z) instead of (A, Z)
+        Phi = (tmp - tmp.mean(0)) / tmp.std(0)
+        return Phi
+
 
 
 if __name__ == '__main__':
@@ -97,8 +116,7 @@ if __name__ == '__main__':
     # plot data
     visualize_dataset(ytr, yte)
 
-    psi = get_psi(ytr)
-    Phi = get_Phi(x0)
-
     lrmodel = mvLogisticRegression(thetatr, ytr)
     ypred = lrmodel.predict(thetatr)
+
+    gpmodel = lowrankGP(thetatr, x0, ytr)
