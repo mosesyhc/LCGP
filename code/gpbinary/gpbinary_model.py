@@ -1,7 +1,8 @@
 import numpy as np
 import scipy.stats as sps
 import torch
-
+import torch.distributions.normal as Normal
+norm = Normal.Normal(0, 1)
 
 def read_data(dir):
     f = np.loadtxt(dir + r'f.txt')
@@ -84,8 +85,8 @@ class lowrankGP():
     def get_psi(self):
         y = self.y
         z = (y.sum(1) + 10) / (y.shape[1] + 20)
-        psi = sps.norm.ppf(z)
-        return psi
+        psi = norm.icdf(z)
+        return psi.unsqueeze(1)  # returns m x 1
 
 
     def get_Phi(self):
@@ -93,7 +94,7 @@ class lowrankGP():
         tmp = x[:, :2]
         tmp[:, 0] -= tmp[:, 1]  # Use (N, Z) instead of (A, Z)
         Phi = (tmp - tmp.mean(0)) / tmp.std(0)
-        return Phi
+        return Phi  # returns m x kappa
 
 
 
