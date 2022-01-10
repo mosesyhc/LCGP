@@ -5,7 +5,7 @@ norm = Normal.Normal(loc=0, scale=1)
 
 
 def negloglik(hyp, theta, y, psi, Phi):
-    # hyperparameter organization:
+    # hyperparameter organization (size 2d + 2 + 1 + kap*n), kap = 2:
     # hyp = (lambda_1, lambda_2, sigma, G_11, G_21, ..., G_n1, G_12, ..., Gn2)
     # (lambda_k1, ..., lambda_kd) are the lengthscales for theta, k = 1, 2
     # lambda_k(d+1) is the scale for GP, k = 1, 2
@@ -21,10 +21,9 @@ def negloglik(hyp, theta, y, psi, Phi):
     lmb2 = hyp[(d+1):(2*d+2)]
     sigma = hyp[2*d+2]
 
-    nll = negloglik_link(sigma, y, psi, Phi, G) + \
-        negloglik_gp(lmb1, theta, G[:, 0]) + \
-        negloglik_gp(lmb2, theta, G[:, 1])
-
+    nll = negloglik_link(sigma, G, y, psi, Phi)
+    nll += negloglik_gp(lmb1, theta, G[:, 0])
+    nll += negloglik_gp(lmb2, theta, G[:, 1])
     return nll
 
 
@@ -43,13 +42,13 @@ def negloglikgrad(hyp, theta, y, psi, Phi):
 
     dnegloglik[:(d+1)], R1inv = negloglikgrad_gp(lmb1, theta, G[:, 0])
     dnegloglik[(d+1):(2*d+2)], R2inv = negloglikgrad_gp(lmb2, theta, G[:, 1])
-    dnegloglik[2*d+2] = negloglikgrad_link(sigma, y, psi, Phi, G)
-    dnegloglik[-(2*n):-n] = R1inv @ G[:, 0]
-    dnegloglik[-n:] = R2inv @ G[:, 1]
+    dnegloglik[2*d+2:] = negloglikgrad_link(sigma, G, y, psi, Phi)
+    dnegloglik[-(2*n):-n] += R1inv @ G[:, 0]
+    dnegloglik[-n:] += R2inv @ G[:, 1]
     return dnegloglik
 
 
-def negloglik_link(sigma, y, psi, Phi, G):
+def negloglik_link(sigma, G, y, psi, Phi):
     z = (psi + Phi @ G.T) / sigma
     F = norm.cdf(z)
     ypos = y > 0.5
@@ -59,14 +58,25 @@ def negloglik_link(sigma, y, psi, Phi, G):
     return negloglik
 
 
-def negloglikgrad_link(sigma, y, psi, Phi, G):
+def negloglikgrad_link(sigma, G, y, psi, Phi):
+    # gradient is of size (2n + 1)
+    # first entry is over sigma, the remaining are over G
+    m, n = y.shape
+    kap = Phi.shape[1]
+
     z = (psi + Phi @ G.T) / sigma
     F = norm.cdf(z)
     f = torch.exp(norm.log_prob(z))
     ypos = y > 0.5
 
-    dnegloglik = (z / sigma * f[ypos] / F[ypos]).sum()  # ones
-    dnegloglik -= ((z/ sigma) * f[ypos] / (1 - F[ypos])).sum()  # zeros
+    Phi1mat = Phi[:, 0].repeat(n).resize_(n, m).transpose(1, 0)
+    Phi2mat = Phi[:, 1].repeat(n).resize_(n, m).transpose(1, 0)
+
+    dnegloglik = torch.zeros(kap*n + 1)
+    dnegloglik[0] = (z[ypos] / sigma * f[ypos] / F[ypos]).sum()  # ones
+    dnegloglik[0] -= ((z[~ypos] / sigma) * f[~ypos] / (1 - F[~ypos])).sum()  # zeros
+    dnegloglik[1:(n+1)] = -(Phi1mat / sigma * f / F * ypos).sum(0) + (Phi1mat / sigma * f / (1 - F) * ~ypos).sum(0)
+    dnegloglik[(n+1):] = -(Phi2mat / sigma * f / F * ypos).sum(0) + (Phi2mat / sigma * f / (1 - F) * ~ypos).sum(0)
     return dnegloglik
 
 

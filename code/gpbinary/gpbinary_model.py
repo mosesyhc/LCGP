@@ -1,8 +1,11 @@
 import numpy as np
-import scipy.stats as sps
 import torch
 import torch.distributions.normal as Normal
+from likelihood import negloglik, negloglikgrad
+from matern_covmat import covmat
+torch.set_default_dtype(torch.float64)
 norm = Normal.Normal(0, 1)
+
 
 def read_data(dir):
     f = np.loadtxt(dir + r'f.txt')
@@ -22,102 +25,110 @@ def visualize_dataset(ytrain, ytest):
     plt.show()
 
 
-class mvLogisticRegression():
-    def __init__(self, X, y):
-        self.X = X
-        self.y = y
-        self.m, self.n = y.shape
-        self.model = None
-        self.fit()
-
-    def fit(self):
-        from sklearn.linear_model import LogisticRegression
-        X = self.X
-        y = self.y
-        m = self.m
-        model = {}
-        for i in np.arange(m):
-            model[i] = {}
-            if np.unique(y[i]).size < 1.5:
-                model[i]['monoclass'] = True
-                model[i]['model'] = np.unique(y[i])[0]
-            else:
-                modeli = LogisticRegression()
-                modeli.fit(X, y[i])
-                model[i]['monoclass'] = False
-                model[i]['model'] = modeli
-        self.model = model
-        return
-
-    def predict(self, X):
-        model = self.model
-        m = self.m
-
-        npred = X.shape[0]
-        ypred = np.zeros((m, npred))
-        for i in np.arange(m):
-            if model[i]['monoclass']:
-                ypred[i] = model[i]['model'] * np.ones(npred)
-            else:
-                ypred[i] = model[i]['model'].predict(X)
-        return ypred
+def get_psi(y):
+    # y = self.y
+    z = (y.sum(1) + 10) / (y.shape[1] + 20)
+    psi = norm.icdf(z)
+    return psi.unsqueeze(1)  # returns m x 1
 
 
-class lowrankGP():
-    from likelihood import negloglik, negloglikgrad
-    def __init__(self, theta, x, y):
-        self.theta = theta
-        self.x = x
-        self.y = y
-        self.m, self.n = y.shape
-        self.model = None
-
-        self.psi = self.get_psi()
-        self.Phi = self.get_Phi()
-
-        self.fit()
+def get_Phi(x):
+    # x = self.x
+    tmp = x[:, :2]
+    tmp[:, 0] -= tmp[:, 1]  # Use (N, Z) instead of (A, Z)
+    Phi = (tmp - tmp.mean(0)) / tmp.std(0)
+    return Phi  # returns m x kappa
 
 
-    def fit(self):
+def pred_gp(lmb, theta, thetanew, g):
+    R = covmat(theta, theta, lmb)
+
+    W, V = torch.linalg.eigh(R)
+    Vh = V / torch.sqrt(torch.abs(W))
+
+    Rinv_g = Vh @ Vh.T @ g
+    Rnew = covmat(thetanew, theta, lmb)
+
+    return Rnew @ Rinv_g
 
 
+def pred(hyp, thetanew, theta, psi, Phi):
+    d = theta.shape[1]
+    kap = Phi.shape[1]
+    n0 = thetanew.shape[0]
 
-    def get_psi(self):
-        y = self.y
-        z = (y.sum(1) + 10) / (y.shape[1] + 20)
-        psi = norm.icdf(z)
-        return psi.unsqueeze(1)  # returns m x 1
+    G = hyp[-(kap*n):]
+    G.resize_(kap, n).transpose_(0, 1)  # G is n x kap
+    lmb1 = hyp[:(d+1)]
+    lmb2 = hyp[(d+1):(2*d+2)]
+    sigma = hyp[2*d+2]
 
+    G0 = torch.zeros(n0, kap)
+    G0[:, 0] = pred_gp(lmb1, theta, thetanew, G[:, 0])
+    G0[:, 1] = pred_gp(lmb2, theta, thetanew, G[:, 1])
 
-    def get_Phi(self):
-        x = self.x
-        tmp = x[:, :2]
-        tmp[:, 0] -= tmp[:, 1]  # Use (N, Z) instead of (A, Z)
-        Phi = (tmp - tmp.mean(0)) / tmp.std(0)
-        return Phi  # returns m x kappa
+    z0 = (psi + Phi @ G0.T) / sigma
+    ypred = z0 > 0
 
+    return ypred
 
 
 if __name__ == '__main__':
-    f0, x0, theta0 = read_data(r'code/data/')
+    f0, x0, theta0 = read_data(r'../data/')
     y0 = np.isnan(f0).astype(int)
+
+    f0 = torch.tensor(f0)
+    x0 = torch.tensor(x0)
+    theta0 = torch.tensor(theta0)
+    y0 = torch.tensor(y0)
 
     # choose training and testing data
     failinds = np.argsort(y0.sum(0))
-    traininds = failinds[-250:-50][::2]
-    testinds = failinds[-250:-50][1::2]
+    traininds = failinds[-250:-50][::4]
+    testinds = np.setdiff1d(failinds[-250:-50], traininds)
 
     ytr = y0[:, traininds]
     thetatr = theta0[traininds]
     yte = y0[:, testinds]
     thetate = theta0[testinds]
 
-    # percent missing
-    print(r'Missing percentages: {:.3f} (Training), {:.3f} (Testing)'.format(ytr.mean(), yte.mean()))
-    # plot data
-    visualize_dataset(ytr, yte)
+    psi = get_psi(ytr)
+    Phi = get_Phi(x0)
+    d = 13
+    m, n = ytr.shape
+    kap = Phi.shape[1]
 
-    lrmodel = mvLogisticRegression(thetatr, ytr)
-    ypred = lrmodel.predict(thetatr)
+    # hyp = torch.ones(2*d + 2 + 1 + kap*n)
+    # nll = negloglik(hyp, torch.tensor(thetatr), torch.tensor(ytr), psi, Phi)
+    # dnll = negloglikgrad(hyp, torch.tensor(thetatr), torch.tensor(ytr), psi, Phi)
+    # print(nll)
+    # print(dnll)
 
-    gpmodel = lowrankGP(thetatr, x0, ytr)
+    ## hyperparameter organization (size 2d + 2 + 1 + kap*n), kap = 2:
+    ## hyp = (lambda_1, lambda_2, sigma, G_11, G_21, ..., G_n1, G_12, ..., Gn2)
+    ## (lambda_k1, ..., lambda_kd) are the lengthscales for theta, k = 1, 2
+    ## lambda_k(d+1) is the scale for GP, k = 1, 2
+    ## sigma is the noise parameter in the indicator function
+    hyp0 = torch.zeros(2*d + 2 + 1 + kap*n)
+    hyp0[:d] = 0 + 0.5 * torch.log(torch.tensor(d)) + torch.log(torch.std(thetatr, dim=0))
+    hyp0[d] = 0
+    hyp0[(d+1):(2*d + 1)] = 0 + 0.5 * torch.log(torch.tensor(d)) + torch.log(torch.std(thetatr, dim=0))
+    hyp0[2*d+1] = 0
+    hyp0[2*d+2] = 2
+
+    alpha = 10e-5
+    nll = negloglik(hyp0, thetatr, ytr, psi, Phi)
+    dnll = negloglikgrad(hyp0, thetatr, ytr, psi, Phi)
+    ypred = pred(hyp0, thetate, thetatr, psi, Phi)
+
+    header = ['iter', 'negloglik', 'dnegloglik', 'accuracy']
+    print('{:<5s} {:<12s} {:<12s} {:<10s}'.format(*header))
+    for i in range(50):
+        print('{:<5d} {:<12.6f} {:<12.6f} {:<10.3f}'.format(i, nll, dnll.mean(), (ypred == yte).sum() / yte.numel()))
+        hyp0 -= alpha * dnll
+        nll = negloglik(hyp0, thetatr, ytr, psi, Phi)
+        dnll = negloglikgrad(hyp0, thetatr, ytr, psi, Phi)
+        ypred = pred(hyp0, thetate, thetatr, psi, Phi)
+
+        if i == 10:
+            pass
