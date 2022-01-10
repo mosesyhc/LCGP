@@ -4,6 +4,7 @@ from matern_covmat import covmat
 norm = Normal.Normal(loc=0, scale=1)
 
 
+# named inputs in function calls
 def negloglik(hyp, theta, y, psi, Phi):
     # hyperparameter organization (size 2d + 2 + 1 + kap*n), kap = 2:
     # hyp = (lambda_1, lambda_2, sigma, G_11, G_21, ..., G_n1, G_12, ..., Gn2)
@@ -27,6 +28,7 @@ def negloglik(hyp, theta, y, psi, Phi):
     return nll
 
 
+# delete this
 def negloglikgrad(hyp, theta, y, psi, Phi):
     dnegloglik = torch.zeros(hyp.shape[0])
 

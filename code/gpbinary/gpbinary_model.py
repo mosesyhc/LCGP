@@ -7,6 +7,9 @@ torch.set_default_dtype(torch.float64)
 norm = Normal.Normal(0, 1)
 
 
+# pytorch model class
+
+
 def read_data(dir):
     f = np.loadtxt(dir + r'f.txt')
     x = np.loadtxt(dir + r'x.txt')
@@ -41,10 +44,21 @@ def get_Phi(x):
 
 
 def pred_gp(lmb, theta, thetanew, g):
+    '''
+    No test at the moment.
+
+    :param lmb: hyperparameter for the covariance matrix
+    :param theta: set of training parameters (size n x d)
+    :param thetanew: set of testing parameters (size n0 x d)
+    :param g: reduced rank latent variables (size n x 1)
+    :return:
+    '''
+
+    # covariance matrix R for the training thetas
     R = covmat(theta, theta, lmb)
 
     W, V = torch.linalg.eigh(R)
-    Vh = V / torch.sqrt(torch.abs(W))
+    Vh = V / torch.sqrt(torch.abs(W))  # check abs?
 
     Rinv_g = Vh @ Vh.T @ g
     Rnew = covmat(thetanew, theta, lmb)
@@ -63,6 +77,7 @@ def pred(hyp, thetanew, theta, psi, Phi):
     lmb2 = hyp[(d+1):(2*d+2)]
     sigma = hyp[2*d+2]
 
+    # loop through kap dim of G
     G0 = torch.zeros(n0, kap)
     G0[:, 0] = pred_gp(lmb1, theta, thetanew, G[:, 0])
     G0[:, 1] = pred_gp(lmb2, theta, thetanew, G[:, 1])
