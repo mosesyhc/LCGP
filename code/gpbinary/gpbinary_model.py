@@ -1,13 +1,52 @@
 import numpy as np
 import torch
 import torch.distributions.normal as Normal
-from likelihood import negloglik, negloglikgrad
+from torch import nn
+from likelihood import negloglik
 from matern_covmat import covmat
 torch.set_default_dtype(torch.float64)
 norm = Normal.Normal(0, 1)
 
 
-# pytorch model class
+class MultiBinaryGP(nn.Module):
+    def __init__(self, theta, x, y):
+        super().__init__()
+        self.theta = theta
+        self.y = y
+        self.psi = get_psi(y)
+        self.Phi = get_Phi(x)
+        self.d = theta.shape[1]
+        self.m, self.n = y.shape
+        self.kap = self.Phi.shape[1]
+
+        # parameters
+        self.lmb = nn.Parameter(torch.randn(self.d+1, self.kap), requires_grad=False)  # hyperparameter for kth GP, k=1, 2, ... kap
+        self.sigma = nn.Parameter(torch.Tensor((1,)), requires_grad=False)  # noise parameter
+        self.G = nn.Parameter(torch.randn(self.n, self.kap))  # principal component, k=1, 2, ... kap
+
+
+    def forward(self, thetanew):
+        lmb = self.lmb
+        G = self.G
+        sigma = self.sigma
+
+        ypred = pred(lmb=lmb, G=G, sigma=sigma, thetanew=thetanew, theta=self.theta, psi=psi, Phi=Phi)
+        return ypred
+
+    def lik(self):
+        lmb = self.lmb
+        G = self.G
+        sigma = self.sigma
+
+        theta = self.theta
+        y = self.y
+        psi = self.psi
+        Phi = self.Phi
+
+        return negloglik(lmb=lmb, sigma=sigma, G=G, theta=theta, y=y, psi=psi, Phi=Phi)
+
+    def accuracy(self, y, ypred):
+        return (y == ypred).sum() / ypred.numel()
 
 
 def read_data(dir):
@@ -45,7 +84,7 @@ def get_Phi(x):
 
 def pred_gp(lmb, theta, thetanew, g):
     '''
-    No test at the moment.
+    Test in test_gp.py.
 
     :param lmb: hyperparameter for the covariance matrix
     :param theta: set of training parameters (size n x d)
@@ -61,26 +100,22 @@ def pred_gp(lmb, theta, thetanew, g):
     Vh = V / torch.sqrt(torch.abs(W))  # check abs?
 
     Rinv_g = Vh @ Vh.T @ g
-    Rnew = covmat(thetanew, theta, lmb)
+    Rnewold = covmat(thetanew, theta, lmb)
+    Rnewnew = covmat(thetanew, thetanew, lmb)
 
-    return Rnew @ Rinv_g
+    predmean = Rnewold @ Rinv_g
+    predvar = Rnewnew - Rnewold @ Vh @ Vh.T @ Rnewold.T
+    return predmean, predvar.diag()
 
 
-def pred(hyp, thetanew, theta, psi, Phi):
-    d = theta.shape[1]
+def pred(lmb, G, sigma, thetanew, theta, psi, Phi):
     kap = Phi.shape[1]
     n0 = thetanew.shape[0]
 
-    G = hyp[-(kap*n):]
-    G.resize_(kap, n).transpose_(0, 1)  # G is n x kap
-    lmb1 = hyp[:(d+1)]
-    lmb2 = hyp[(d+1):(2*d+2)]
-    sigma = hyp[2*d+2]
-
     # loop through kap dim of G
     G0 = torch.zeros(n0, kap)
-    G0[:, 0] = pred_gp(lmb1, theta, thetanew, G[:, 0])
-    G0[:, 1] = pred_gp(lmb2, theta, thetanew, G[:, 1])
+    for k in range(kap):
+        G0[:, k], _ = pred_gp(lmb=lmb[:, k], theta=theta, thetanew=thetanew, g=G[:, k])
 
     z0 = (psi + Phi @ G0.T) / sigma
     ypred = z0 > 0
@@ -109,41 +144,19 @@ if __name__ == '__main__':
 
     psi = get_psi(ytr)
     Phi = get_Phi(x0)
-    d = 13
-    m, n = ytr.shape
-    kap = Phi.shape[1]
 
-    # hyp = torch.ones(2*d + 2 + 1 + kap*n)
-    # nll = negloglik(hyp, torch.tensor(thetatr), torch.tensor(ytr), psi, Phi)
-    # dnll = negloglikgrad(hyp, torch.tensor(thetatr), torch.tensor(ytr), psi, Phi)
-    # print(nll)
-    # print(dnll)
+    lr = 10e-3
+    model = MultiBinaryGP(thetatr, x0, ytr)
+    model.double()
 
-    ## hyperparameter organization (size 2d + 2 + 1 + kap*n), kap = 2:
-    ## hyp = (lambda_1, lambda_2, sigma, G_11, G_21, ..., G_n1, G_12, ..., Gn2)
-    ## (lambda_k1, ..., lambda_kd) are the lengthscales for theta, k = 1, 2
-    ## lambda_k(d+1) is the scale for GP, k = 1, 2
-    ## sigma is the noise parameter in the indicator function
-    hyp0 = torch.zeros(2*d + 2 + 1 + kap*n)
-    hyp0[:d] = 0 + 0.5 * torch.log(torch.tensor(d)) + torch.log(torch.std(thetatr, dim=0))
-    hyp0[d] = 0
-    hyp0[(d+1):(2*d + 1)] = 0 + 0.5 * torch.log(torch.tensor(d)) + torch.log(torch.std(thetatr, dim=0))
-    hyp0[2*d+1] = 0
-    hyp0[2*d+2] = 2
+    optim = torch.optim.Adam(model.parameters(), lr)
 
-    alpha = 10e-5
-    nll = negloglik(hyp0, thetatr, ytr, psi, Phi)
-    dnll = negloglikgrad(hyp0, thetatr, ytr, psi, Phi)
-    ypred = pred(hyp0, thetate, thetatr, psi, Phi)
-
-    header = ['iter', 'negloglik', 'dnegloglik', 'accuracy']
-    print('{:<5s} {:<12s} {:<12s} {:<10s}'.format(*header))
-    for i in range(50):
-        print('{:<5d} {:<12.6f} {:<12.6f} {:<10.3f}'.format(i, nll, dnll.mean(), (ypred == yte).sum() / yte.numel()))
-        hyp0 -= alpha * dnll
-        nll = negloglik(hyp0, thetatr, ytr, psi, Phi)
-        dnll = negloglikgrad(hyp0, thetatr, ytr, psi, Phi)
-        ypred = pred(hyp0, thetate, thetatr, psi, Phi)
-
-        if i == 10:
-            pass
+    header = ['iter', 'negloglik', 'accuracy']
+    print('{:<5s} {:<12s} {:<10s}'.format(*header))
+    for epoch in range(500):
+        model.forward(thetatr)
+        lik = model.lik()
+        lik.backward()
+        optim.step()
+        if epoch % 50 == 0:
+            print('{:<5d} {:<12.6f} {:<10.3f}'.format(epoch, lik, model.accuracy(yte, model(thetate))))
