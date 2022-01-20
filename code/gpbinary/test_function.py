@@ -31,14 +31,14 @@ def gen_true_theta():
                             [700, 820], # Hl
                             [1120, 1680], # L
                             [9855, 12045]]) # Kw
-    theta =  np.random.uniform(thetalimits[:,0],
-                               thetalimits[:,1])
+    theta = np.random.uniform(thetalimits[:,0],
+                              thetalimits[:,1])
     return theta
 
 
-def gen_borehole_data():
-    theta = torch.zeros(100, 8)
-    for k in range(100):
+def gen_borehole_data(ntrain=20, ntest=50):
+    theta = torch.zeros(ntrain, 8)
+    for k in range(ntrain):
         theta[k] = torch.tensor(gen_true_theta())
     f = borehole(theta.T).unsqueeze(1)
 
@@ -49,9 +49,11 @@ def gen_borehole_data():
     thstd = theta.std(0)
     theta = (theta - thmean) / thstd
 
-    thetatest = torch.zeros(50, 8)
-    for k in range(50):
+    thetatest = torch.zeros(ntest, 8)
+    for k in range(ntest):
         thetatest[k] = torch.tensor(gen_true_theta())
+    ind0 = torch.argsort(thetatest[:, 0])
+    thetatest = thetatest[ind0]
     ftest = borehole(thetatest.T).unsqueeze(1)
     ftest = (ftest - fmean) / fstd
     thetatest = (thetatest - thmean) / thstd

@@ -1,3 +1,5 @@
+torch
 numpy
 scipy
 matplotlib
+surmise

@@ -18,7 +18,7 @@ def covmat(x1, x2, lmb):
     R = torch.ones((x1.shape[0], x2.shape[0])) * torch.exp(lmb[d-1])
 
     for j in range(d-1):
-        S = torch.abs(x1[:, j].reshape(-1, 1) - x2[:, j]) / lmb[j]
+        S = torch.abs(x1[:, j].reshape(-1, 1) - x2[:, j]) / torch.exp(lmb[j])
         R *= (1 + S)
         V -= S
 

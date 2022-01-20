@@ -1,11 +1,10 @@
 import numpy as np
 import torch
-import torch.distributions.normal as Normal
 from torch import nn
-from likelihood import negloglik
-from matern_covmat import covmat
-torch.set_default_dtype(torch.float64)
-norm = Normal.Normal(0, 1)
+
+from prediction import pred_gp
+from likelihood import negloglik_mvbinary
+from fayans_support import get_Phi, get_psi, read_data, visualize_dataset
 
 
 class MultiBinaryGP(nn.Module):
@@ -43,69 +42,10 @@ class MultiBinaryGP(nn.Module):
         psi = self.psi
         Phi = self.Phi
 
-        return negloglik(lmb=lmb, sigma=sigma, G=G, theta=theta, y=y, psi=psi, Phi=Phi)
+        return negloglik_mvbinary(lmb=lmb, sigma=sigma, G=G, theta=theta, y=y, psi=psi, Phi=Phi)
 
     def accuracy(self, y, ypred):
         return (y == ypred).sum() / ypred.numel()
-
-
-def read_data(dir):
-    f = np.loadtxt(dir + r'f.txt')
-    x = np.loadtxt(dir + r'x.txt')
-    theta = np.loadtxt(dir + r'theta.txt')
-    return f, x, theta
-
-
-def visualize_dataset(ytrain, ytest):
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(nrows=1, ncols=2)
-    ax[0].imshow(-ytrain.T, aspect='auto', cmap='gray', interpolation='none')
-    ax[1].imshow(-ytest.T, aspect='auto', cmap='gray', interpolation='none')
-    ax[0].set_title('Training data')
-    ax[0].set_ylabel('Parameters')
-    ax[1].set_title('Testing data')
-    plt.show()
-
-
-def get_psi(y):
-    # y = self.y
-    z = (y.sum(1) + 10) / (y.shape[1] + 20)
-    psi = norm.icdf(z)
-    return psi.unsqueeze(1)  # returns m x 1
-
-
-def get_Phi(x):
-    # x = self.x
-    tmp = x[:, :2]
-    tmp[:, 0] -= tmp[:, 1]  # Use (N, Z) instead of (A, Z)
-    Phi = (tmp - tmp.mean(0)) / tmp.std(0)
-    return Phi  # returns m x kappa
-
-
-def pred_gp(lmb, theta, thetanew, g):
-    '''
-    Test in test_gp.py.
-
-    :param lmb: hyperparameter for the covariance matrix
-    :param theta: set of training parameters (size n x d)
-    :param thetanew: set of testing parameters (size n0 x d)
-    :param g: reduced rank latent variables (size n x 1)
-    :return:
-    '''
-
-    # covariance matrix R for the training thetas
-    R = covmat(theta, theta, lmb)
-
-    W, V = torch.linalg.eigh(R)
-    Vh = V / torch.sqrt(torch.abs(W))  # check abs?
-
-    Rinv_g = Vh @ Vh.T @ g
-    Rnewold = covmat(thetanew, theta, lmb)
-    Rnewnew = covmat(thetanew, thetanew, lmb)
-
-    predmean = Rnewold @ Rinv_g
-    predvar = Rnewnew - Rnewold @ Vh @ Vh.T @ Rnewold.T
-    return predmean, predvar.diag()
 
 
 def pred(lmb, G, sigma, thetanew, theta, psi, Phi):

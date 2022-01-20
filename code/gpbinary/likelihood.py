@@ -5,7 +5,7 @@ norm = Normal.Normal(loc=0, scale=1)
 
 
 # named inputs in function calls
-def negloglik(lmb, sigma, G, theta, y, psi, Phi):
+def negloglik_mvbinary(lmb, sigma, G, theta, y, psi, Phi):
     # hyperparameter organization (size 2d + 2 + 1 + kap*n), kap = 2:
     # hyp = (lambda_1, lambda_2, sigma, G_11, G_21, ..., G_n1, G_12, ..., Gn2)
     # (lambda_k1, ..., lambda_kd) are the lengthscales for theta, k = 1, 2
@@ -20,6 +20,16 @@ def negloglik(lmb, sigma, G, theta, y, psi, Phi):
     return nll
 
 
+def negloglik_mvlatent(Lmb, sigma, G, theta, f, psi, Phi):
+    kap = Phi.shape[1]
+
+    D = f - (psi + Phi @ G.T) / sigma
+    nll = 1/2 * (D.T @ D).sum()
+    for k in range(kap):
+        nll += negloglik_gp(lmb=Lmb[:, k], theta=theta, g=G[:, k])
+    return nll
+
+
 def negloglik_link(sigma, G, y, psi, Phi):
     z = (psi + Phi @ G.T) / sigma
     F = norm.cdf(z)
@@ -30,17 +40,17 @@ def negloglik_link(sigma, G, y, psi, Phi):
     return negloglik
 
 
-def negloglik_gp(lmb, theta, g, lmbregmean=None, lmbregstd=None):
+def negloglik_gp(lmb, theta, g, lmbregmean=0, lmbregstd=1):
     R = covmat(theta, theta, lmb)
 
     W, V = torch.linalg.eigh(R)
-    Vh = V / torch.sqrt(torch.abs(W))
+    Vh = V / torch.sqrt(W)
     fcenter = Vh.T @ g
     n = g.shape[0]
 
     sig2hat = (n * torch.mean(fcenter ** 2) + 1) / (n + 1)
-    negloglik = 1/2 * torch.sum(torch.log(torch.abs(W))) + n/2 * torch.log(sig2hat)
-    # negloglik += 1/2 * torch.sum(((lmb - lmbregmean)/lmbregstd)**2)
+    negloglik = 1/2 * torch.sum(torch.log(W)) + n/2 * torch.log(sig2hat)
+    negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)
 
     return negloglik
 
