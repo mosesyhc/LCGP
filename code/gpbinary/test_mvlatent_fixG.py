@@ -11,7 +11,7 @@ class MVlatentGP(nn.Module):
     def __init__(self, Lmb, G, sigma, theta, f, psi, Phi):
         super().__init__()
         self.Lmb = nn.Parameter(Lmb)
-        self.G = nn.Parameter(G)
+        self.G = nn.Parameter(G, requires_grad=False)
         self.sigma = nn.Parameter(sigma)
         self.theta = theta
         self.f = f
@@ -106,8 +106,9 @@ def test_mvlatent():
     # torch.manual_seed(1)
 
     Lmb = torch.Tensor(torch.randn(kap, d+1))
-    G = torch.Tensor(torch.randn(ntrain, kap))
-    sigma = torch.Tensor(torch.randn(1,))
+    # G = torch.Tensor(torch.randn(ntrain, kap))
+    sigma = torch.Tensor((1,))
+    G = (sigma * ftr - psi) @ torch.linalg.inv(Phi.T @ Phi)
 
     model = MVlatentGP(Lmb=Lmb, G=G, sigma=sigma,
                        theta=thetatr, f=ftr,

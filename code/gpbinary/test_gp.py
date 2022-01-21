@@ -45,10 +45,13 @@ def test_gp():
     model.double()
     model.requires_grad_()
 
-    optim = torch.optim.LBFGS(model.parameters(), lr, line_search_fn='strong_wolfe')
+    # optim = torch.optim.LBFGS(model.parameters(), lr, line_search_fn='strong_wolfe')
+    optim = torch.optim.Adam(model.parameters(), lr)  #, line_search_fn='strong_wolfe')
+
     lik = model.lik()
     header = ['iter', 'negloglik', 'test mse']
     print('{:<5s} {:<12s} {:<12s}'.format(*header))
+    print('{:<5s} {:<12.6f} {:<10.3f}'.format(' ', lik, model.test_mse(thetatest, gtest)))
     for epoch in range(10):
         optim.zero_grad()
         lik = model.lik()
@@ -83,9 +86,14 @@ def test_gp_borehole():
     model.double()
     model.requires_grad_()
 
-    optim = torch.optim.LBFGS(model.parameters(), lr, line_search_fn='strong_wolfe')
+    lik = model.lik()
+
+    # optim = torch.optim.LBFGS(model.parameters(), lr, line_search_fn='strong_wolfe')
+    optim = torch.optim.Adam(model.parameters(), lr)  #, line_search_fn='strong_wolfe')
+
     header = ['iter', 'negloglik', 'test mse']
     print('{:<5s} {:<12s} {:<12s}'.format(*header))
+    print('{:<5s} {:<12.6f} {:<10.3f}'.format(' ', lik, model.test_mse(thetatest, ftest)))
     for epoch in range(5):
         optim.zero_grad()
         lik = model.lik()
@@ -111,7 +119,6 @@ def test_gp_borehole():
 
     print('\nsurmise mse: {:.3f}'.format(emumse))
 
-    #
     # import matplotlib.pyplot as plt
     # thetatest = thetatest.numpy().squeeze()
     # fpred = fpred.detach().numpy().squeeze()
@@ -126,4 +133,4 @@ def test_gp_borehole():
 
 if __name__ == '__main__':
     test_gp()
-    # test_gp_borehole()
+    test_gp_borehole()
