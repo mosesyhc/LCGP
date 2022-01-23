@@ -1,3 +1,4 @@
+import torch
 import torch.distributions.normal as Normal
 norm = Normal.Normal(0, 1)
 import numpy as np
@@ -32,6 +33,7 @@ def visualize_dataset(ytrain, ytest):
     ax[1].set_title('Testing data')
     plt.show()
 
+
 def get_psi(y):
     # y = self.y
     z = (y.sum(1) + 10) / (y.shape[1] + 20)
@@ -41,7 +43,40 @@ def get_psi(y):
 
 def get_Phi(x):
     # x = self.x
+    m = x.shape[0]
+    cat = torch.unique(x[:, 2])
+    ntype = cat.shape[0]
+
     tmp = x[:, :2]
-    tmp[:, 0] -= tmp[:, 1]  # Use (N, Z) instead of (A, Z)
-    Phi = (tmp - tmp.mean(0)) / tmp.std(0)
+    tmp[:, 0] -= 2 * tmp[:, 1]  # Use (N, Z) instead of (A, Z)
+
+    M = torch.zeros((m, 3*ntype))
+    for k in range(ntype):
+        M[:, 3*k] = tmp[:, 0] * (x[:, 2] == cat[k])
+        M[:, 3*k + 1] = tmp[:, 1] * (x[:, 2] == cat[k])
+        M[:, 3*k + 2] = torch.ones(m) * (x[:, 2] == cat[k])
+
+
+    M = torch.column_stack((M,
+                            tmp[:, 0] ** 2 * (x[:, 2] == 2),
+                            tmp[:, 1] ** 2 * (x[:, 2] == 2),
+                            (x[:, 1] > 89) * (x[:, 2] == 2),
+                            (x[:, 1] > 85) * (x[:, 2] == 2),
+                            (x[:, 1] > 75) * (x[:, 2] == 2),
+                            (x[:, 1] > 80) * (x[:, 2] == 2)
+                            ))
+    #                         tmp[:, 0] ** 2 * (x[:, 2] == 7),
+    #                         tmp[:, 1] ** 2 * (x[:, 2] == 7),
+    #                         tmp[:, 0] * tmp[:, 1] * (x[:, 2] == 7),
+    #                         tmp[:, 0] ** 2 * (x[:, 2] == 3),
+    #                         tmp[:, 1] ** 2 * (x[:, 2] == 3),
+    #                         tmp[:, 0] * tmp[:, 1] * (x[:, 2] == 3),
+    #                         tmp[:, 0] ** 2 * (x[:, 2] == 8),
+    #                         tmp[:, 1] ** 2 * (x[:, 2] == 8),
+    #                         tmp[:, 0] * tmp[:, 1] * (x[:, 2] == 8),
+    #                         ))
+    Phi = M
+
+    # newshape = M.shape
+    # Phi = torch.randn(newshape)
     return Phi  # returns m x kappa

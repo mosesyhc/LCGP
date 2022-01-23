@@ -26,7 +26,7 @@ def negloglik_mvlatent(Lmb, sigma, G, theta, f, psi, Phi):
     D = f - (psi + Phi @ G.T) / sigma
     nll = 1/2 * (D.T @ D).sum()
     for k in range(kap):
-        nll += negloglik_gp(lmb=Lmb[:, k], theta=theta, g=G[:, k])
+        nll += negloglik_gp(lmb=Lmb[k], theta=theta, g=G[:, k])
     return nll
 
 
