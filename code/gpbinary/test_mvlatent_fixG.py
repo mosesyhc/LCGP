@@ -104,11 +104,12 @@ def test_mvlatent():
     # print('surmise training mse: {:.3f}'.format(emutrainmse))
 
     psi = ftr.mean(1).unsqueeze(1)
-    Phi = get_Phi(x)
-    print(Phi.shape)
-    kap = Phi.shape[1]
+    # Phi = get_Phi(x)
+    # print(Phi.shape)
+    # kap = Phi.shape[1]
     d = theta.shape[1]
 
+    kap = 20
 
     Lmb = torch.Tensor(torch.randn(kap, d+1))
     # G = torch.Tensor(torch.randn(ntrain, kap))
@@ -121,9 +122,12 @@ def test_mvlatent():
         kap = Phi.shape[1]
 
         G = (torch.linalg.solve(Phi.T @ Phi + 10e-8 * torch.eye(kap), Phi.T @ F)).T
-        mse = ((Phi @ G.T - F) ** 2).mean()
-        return mse
+        mse = nn.MSELoss(reduction='mean')
+        l = mse(Phi @ G.T, F)
+        return l
 
+    from basis_nn_model import BasisGenNN
+    get_Phi = BasisGenNN(n, kap)
     ourMSE = loss(get_Phi, x, ftr - psi)
 
 
