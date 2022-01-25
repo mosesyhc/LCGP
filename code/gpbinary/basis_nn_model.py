@@ -2,15 +2,39 @@ import torch
 from torch import nn
 
 
-class BasisGenNN(nn.Module):
-    def __init__(self, n, kap):
-        super(BasisGenNN, self).__init__()
+class BasisGenNNType(nn.Module):
+    def __init__(self, kap):
+        super(BasisGenNNType, self).__init__()
+        self.kap = kap
         self.layer = nn.Sequential(
-            nn.Linear(3, 40),
+            nn.Linear(11, 25 * kap),
+            nn.ReLU(),
+            nn.Linear(25 * kap, 10 * kap),
+            nn.ReLU(),
+            nn.Linear(10 * kap, 5 * kap),
+            nn.ReLU(),
+            nn.Linear(5 * kap, 2 * kap),
             nn.LeakyReLU(),
-            nn.Linear(40, 200),
+            nn.Linear(2 * kap, kap),
+        )
+
+    def forward(self, x):
+        return self.layer(x)
+
+
+
+class BasisGenNN(nn.Module):
+    def __init__(self, kap):
+        super(BasisGenNN, self).__init__()
+        self.kap = kap
+        self.layer = nn.Sequential(
+            nn.Linear(3, 400),
+            nn.ReLU(),
+            nn.Linear(400, 10 * kap),
+            nn.ReLU(),
+            nn.Linear(10 * kap, 5 * kap),
             nn.LeakyReLU(),
-            nn.Linear(200, n * kap),
+            nn.Linear(5 * kap, kap),
         )
 
     def forward(self, x):

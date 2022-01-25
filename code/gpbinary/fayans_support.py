@@ -41,7 +41,7 @@ def get_psi(y):
     return psi.unsqueeze(1)  # returns m x 1
 
 
-def get_Phi(x):
+def get_empPhi(x):
     # x = self.x
     m = x.shape[0]
     cat = torch.unique(x[:, 2])

@@ -5,7 +5,7 @@ norm = Normal.Normal(loc=0, scale=1)
 
 
 # named inputs in function calls
-def negloglik_mvbinary(lmb, sigma, G, theta, y, psi, Phi):
+def negloglik_mvbinary(lmb, G, theta, y, psi, Phi):
     # hyperparameter organization (size 2d + 2 + 1 + kap*n), kap = 2:
     # hyp = (lambda_1, lambda_2, sigma, G_11, G_21, ..., G_n1, G_12, ..., Gn2)
     # (lambda_k1, ..., lambda_kd) are the lengthscales for theta, k = 1, 2
@@ -14,24 +14,24 @@ def negloglik_mvbinary(lmb, sigma, G, theta, y, psi, Phi):
 
     kap = Phi.shape[1]
 
-    nll = negloglik_link(sigma, G, y, psi, Phi)
+    nll = negloglik_link(G, y, psi, Phi)
     for k in range(kap):
         nll += negloglik_gp(lmb[:, k], theta, G[:, k])
     return nll
 
 
-def negloglik_mvlatent(Lmb, sigma, G, theta, f, psi, Phi):
+def negloglik_mvlatent(Lmb, G, theta, f, psi, Phi):
     kap = Phi.shape[1]
 
-    D = f - (psi + Phi @ G.T) / sigma
+    D = f - (psi + Phi @ G.T)
     nll = 1/2 * (D.T @ D).sum()
     for k in range(kap):
         nll += negloglik_gp(lmb=Lmb[k], theta=theta, g=G[:, k])
     return nll
 
 
-def negloglik_link(sigma, G, y, psi, Phi):
-    z = (psi + Phi @ G.T) / sigma
+def negloglik_link(G, y, psi, Phi):
+    z = (psi + Phi @ G.T)
     F = norm.cdf(z)
     ypos = y > 0.5
     negloglik = -(torch.log(F[ypos])).sum()  # ones

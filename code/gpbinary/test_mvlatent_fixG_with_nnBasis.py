@@ -117,28 +117,45 @@ def test_mvlatent():
         l = mse(Phi @ G.T, F)
         return l
 
+    x_cat = torch.column_stack((x[:, 0], x[:, 1],
+                                x[:, 2] == 0,
+                                x[:, 2] == 1,
+                                x[:, 2] == 2,
+                                x[:, 2] == 3,
+                                x[:, 2] == 4,
+                                x[:, 2] == 5,
+                                x[:, 2] == 6,
+                                x[:, 2] == 7,
+                                x[:, 2] == 8, ))
+
     l0 = loss(get_empPhi, x, ftr - psi)
 
-    from basis_nn_model import BasisGenNN
-    kap = 25
-    get_Phi_ = BasisGenNN(kap)
+    from basis_nn_model import BasisGenNNType
+    kap = 100
+    get_Phi_ = BasisGenNNType(kap)
     get_Phi_.double()
 
     # optim_nn = torch.optim.LBFGS(get_Phi_.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
-    # optim_nn = torch.optim.Adam(get_Phi_.parameters(), lr=10e-4)
-    # print('{:<5s} {:<12s} {:<12s}'.format('iter', 'MSE', 'baseline MSE'))
-    # for epoch in range(500):
-    #     optim_nn.zero_grad()
-    #     l = loss(get_Phi_, x, ftr - psi)
-    #     l.backward()
-    #     optim_nn.step()
-    #
-    #     if epoch % 100 == 0:
-    #         print('{:<5d} {:<12.3f} {:<12.3f}'.format(epoch, l, l0))
-    #
+    optim_nn = torch.optim.Adam(get_Phi_.parameters(), lr=10e-4)
+    print('{:<5s} {:<12s} {:<12s}'.format('iter', 'MSE', 'baseline MSE'))
+    for epoch in range(300):
+        optim_nn.zero_grad()
+        l = loss(get_Phi_, x_cat, ftr - psi)
+        l.backward()
+        optim_nn.step()
+
+        if (epoch % 100 - 1) == 0:
+            print('{:<5d} {:<12.3f} {:<12.3f}'.format(epoch, l, l0))
+
+    Phi = get_Phi_(x_cat).detach()
+    U, S, V = torch.linalg.svd(Phi, full_matrices=False)
+
+    U, W = torch.linalg.eig(Phi.T @ Phi)
+
+    raise
 
     ### Gaussian process
-    Phi = get_empPhi(x)
+    Phi = get_Phi_(x).detach()
     G = (torch.linalg.solve(Phi.T @ Phi + 10e-8 * torch.eye(kap), Phi.T @ (ftr - psi))).T
     Lmb = torch.Tensor(torch.randn(kap, d+1))
 
