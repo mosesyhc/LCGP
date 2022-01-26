@@ -112,21 +112,14 @@ def test_mvlatent():
         Phi = get_Phi_(x)
         kap = Phi.shape[1]
 
+        # What can G be? Other than the LS solution.
         G = (torch.linalg.solve(Phi.T @ Phi + 10e-8 * torch.eye(kap), Phi.T @ F)).T
         mse = nn.MSELoss(reduction='mean')
         l = mse(Phi @ G.T, F)
         return l
 
     x_cat = torch.column_stack((x[:, 0], x[:, 1],
-                                x[:, 2] == 0,
-                                x[:, 2] == 1,
-                                x[:, 2] == 2,
-                                x[:, 2] == 3,
-                                x[:, 2] == 4,
-                                x[:, 2] == 5,
-                                x[:, 2] == 6,
-                                x[:, 2] == 7,
-                                x[:, 2] == 8, ))
+                                *[x[:, 2] == k for k in torch.unique(x[:, 2])]))
 
     l0 = loss(get_empPhi, x, ftr - psi)
 
@@ -138,7 +131,7 @@ def test_mvlatent():
     # optim_nn = torch.optim.LBFGS(get_Phi_.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
     optim_nn = torch.optim.Adam(get_Phi_.parameters(), lr=10e-4)
     print('{:<5s} {:<12s} {:<12s}'.format('iter', 'MSE', 'baseline MSE'))
-    for epoch in range(300):
+    for epoch in range(1000):
         optim_nn.zero_grad()
         l = loss(get_Phi_, x_cat, ftr - psi)
         l.backward()
@@ -148,9 +141,12 @@ def test_mvlatent():
             print('{:<5d} {:<12.3f} {:<12.3f}'.format(epoch, l, l0))
 
     Phi = get_Phi_(x_cat).detach()
-    U, S, V = torch.linalg.svd(Phi, full_matrices=False)
 
-    U, W = torch.linalg.eig(Phi.T @ Phi)
+    # further reduce rank
+    U, S, V = torch.linalg.svd(Phi, full_matrices=False)
+    ind = S > 10e-2
+    
+
 
     raise
 

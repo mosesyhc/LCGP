@@ -22,15 +22,14 @@ class BasisGenNNType(nn.Module):
         return self.layer(x)
 
 
-
 class BasisGenNN(nn.Module):
     def __init__(self, kap):
         super(BasisGenNN, self).__init__()
         self.kap = kap
         self.layer = nn.Sequential(
-            nn.Linear(3, 400),
+            nn.Linear(3, 20 * kap),
             nn.ReLU(),
-            nn.Linear(400, 10 * kap),
+            nn.Linear(20 * kap, 10 * kap),
             nn.ReLU(),
             nn.Linear(10 * kap, 5 * kap),
             nn.LeakyReLU(),
