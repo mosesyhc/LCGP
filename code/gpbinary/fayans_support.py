@@ -1,4 +1,6 @@
 import torch
+# torch.cuda.set_device(0)
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 import torch.distributions.normal as Normal
 norm = Normal.Normal(0, 1)
 import numpy as np

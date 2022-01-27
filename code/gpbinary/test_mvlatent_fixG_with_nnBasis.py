@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 torch.autograd.set_detect_anomaly(True)
+# torch.cuda.set_device(0)
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 from prediction import pred_gp
 from likelihood import negloglik_mvlatent
@@ -31,7 +33,7 @@ class MVlatentGP(nn.Module):
 
         Gpred = torch.zeros(n0, kap)
         for k in range(kap):
-            Gpred[:, k], _ = pred_gp(lmb=Lmb[:, k], theta=theta, thetanew=theta0, g=G[:, k])
+            Gpred[:, k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, g=G[:, k])
         fpred = (psi + Phi @ Gpred.T)
 
         return fpred
@@ -68,8 +70,12 @@ def test_mvlatent():
 
     f = torch.tensor(f)
     x = torch.tensor(x)
-
     theta = torch.tensor(theta)
+
+    # f = f.to(device)
+    # x = x.to(device)
+    # theta = theta.to(device)
+
     m, n = f.shape
 
     ntrain = 50
@@ -104,7 +110,6 @@ def test_mvlatent():
     # kap = Phi.shape[1]
     d = theta.shape[1]
 
-
     # G = (torch.linalg.solve(Phi.T  @ Phi + 10e-8 * torch.eye(kap), Phi.T @ (sigma * ftr - psi))).T
     # F = (Phi @ G.T + psi) / sigma
 
@@ -128,47 +133,66 @@ def test_mvlatent():
     get_Phi_ = BasisGenNNType(kap)
     get_Phi_.double()
 
+    # Neural network to find basis
     # optim_nn = torch.optim.LBFGS(get_Phi_.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
     optim_nn = torch.optim.Adam(get_Phi_.parameters(), lr=10e-4)
+    print('Neural network training:')
     print('{:<5s} {:<12s} {:<12s}'.format('iter', 'MSE', 'baseline MSE'))
-    for epoch in range(1000):
+    for epoch in range(250):
         optim_nn.zero_grad()
         l = loss(get_Phi_, x_cat, ftr - psi)
         l.backward()
         optim_nn.step()
-
         if (epoch % 100 - 1) == 0:
             print('{:<5d} {:<12.3f} {:<12.3f}'.format(epoch, l, l0))
-
     Phi = get_Phi_(x_cat).detach()
 
     # further reduce rank
     U, S, V = torch.linalg.svd(Phi, full_matrices=False)
-    ind = S > 10e-2
-    
+    # ind = (S / S.norm()) > 10e-7
 
-
-    raise
-
-    ### Gaussian process
-    Phi = get_Phi_(x).detach()
     G = (torch.linalg.solve(Phi.T @ Phi + 10e-8 * torch.eye(kap), Phi.T @ (ftr - psi))).T
-    Lmb = torch.Tensor(torch.randn(kap, d+1))
+    W = (S.diag() @ V @ G.T).detach().T
 
-    print('Basis size: ', Phi.shape)
+    mse0 = torch.mean((Phi @ G.T - (ftr - psi))**2)
+    print('{:<10s} {:<16s}'.format('no. basis', '(msep - mse0) / mse0'))
+    for kap0 in torch.arange(10, kap, 10).to(int):
+        Up = U[:, :kap0]  # keep
+        Sp = S[:kap0]
+        Vp = V[:kap0]
 
-    model = MVlatentGP(Lmb=Lmb, G=G,
+        Wp = (Sp.diag() @ Vp @ G.T).detach().T
+        msep = torch.mean((Up @ Wp.T - (ftr - psi))**2)
+        relmse = (msep - mse0) / mse0 / ((ftr - psi)**2).mean()
+        print('{:<10d} {:<16.6f}'.format(kap0, relmse))
+        if relmse < 0.01:
+            break
+
+
+    print('Truncation error in basis: {:.3E}'.format(((Phi - Up @ Sp.diag() @ Vp)**2).mean()))
+    # Phi @ G.T \approx Up @ W.T
+    print('MSE between Phi @ G.T and (ftr - psi): {:.3f}'.format(torch.mean((Phi @ G.T - (ftr - psi))**2)))
+    print('MSE between full U @ W.T and (ftr - psi): {:.3f}'.format(torch.mean((U @ W.T - (ftr - psi))**2)))
+    print('MSE between Up @ Wp.T and (ftr - psi): {:.3f}'.format(torch.mean((Up @ Wp.T - (ftr - psi))**2)))
+    Lmb = torch.Tensor(torch.randn(kap0, d+1))
+
+    print('Basis size: ', Up.shape)
+
+    model = MVlatentGP(Lmb=Lmb, G=Wp,
                        theta=thetatr, f=ftr,
-                       psi=psi, Phi=Phi)
+                       psi=psi, Phi=Up)
     model.double()
     model.requires_grad_()
-
+    #
+    ftrpred = model(thetatr)
+    print('GP training MSE: {:.3f}'.format(torch.mean((ftr - ftrpred)**2)))
     # optim = torch.optim.LBFGS(model.parameters(), lr, line_search_fn='strong_wolfe')
-    optim = torch.optim.Adam(model.parameters(), lr=10e-3)  #, line_search_fn='strong_wolfe')
+    optim = torch.optim.AdamW(model.parameters(), lr=10e-2)  #, line_search_fn='strong_wolfe')
 
     header = ['iter', 'negloglik', 'test mse', 'train mse']
-    print('\n{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
-    for epoch in range(10):
+    print('\nGP training:')
+    print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
+    for epoch in range(25):
         optim.zero_grad()
         lik = model.lik()
         lik.backward()
