@@ -66,10 +66,10 @@ class MVlatentGP(nn.Module):
 
 
 def test_mvlatent():
-    f, x, theta = read_only_complete_data(r'code/data/')
+    f, x0, theta = read_only_complete_data(r'code/data/')
 
     f = torch.tensor(f)
-    x = torch.tensor(x)
+    x0 = torch.tensor(x0)
     theta = torch.tensor(theta)
 
     # f = f.to(device)
@@ -123,14 +123,17 @@ def test_mvlatent():
         l = mse(Phi @ G.T, F)
         return l
 
-    x_cat = torch.column_stack((x[:, 0], x[:, 1],
-                                *[x[:, 2] == k for k in torch.unique(x[:, 2])]))
+    x = torch.column_stack((x0[:, 0], x0[:, 1],
+                            *[x0[:, 2] == k for k in torch.unique(x0[:, 2])]))
 
-    l0 = loss(get_empPhi, x, ftr - psi)
+    l0 = loss(get_empPhi, x0, ftr - psi)
 
-    from basis_nn_model import BasisGenNNType
-    kap = 100
-    get_Phi_ = BasisGenNNType(kap)
+    from basis_nn_model import BasisGenNNTypeMulti
+    kap = 50
+    # x.cuda()
+
+    get_Phi_ = BasisGenNNTypeMulti(kap, x)
+    # get_Phi_.cuda()
     get_Phi_.double()
 
     # Neural network to find basis
@@ -138,14 +141,14 @@ def test_mvlatent():
     optim_nn = torch.optim.Adam(get_Phi_.parameters(), lr=10e-4)
     print('Neural network training:')
     print('{:<5s} {:<12s} {:<12s}'.format('iter', 'MSE', 'baseline MSE'))
-    for epoch in range(250):
+    for epoch in range(100):
         optim_nn.zero_grad()
-        l = loss(get_Phi_, x_cat, ftr - psi)
+        l = loss(get_Phi_, x, ftr - psi)
         l.backward()
         optim_nn.step()
-        if (epoch % 100 - 1) == 0:
+        if (epoch % 25 - 1) == 0:
             print('{:<5d} {:<12.3f} {:<12.3f}'.format(epoch, l, l0))
-    Phi = get_Phi_(x_cat).detach()
+    Phi = get_Phi_(x).detach()
 
     # further reduce rank
     U, S, V = torch.linalg.svd(Phi, full_matrices=False)
@@ -156,7 +159,7 @@ def test_mvlatent():
 
     mse0 = torch.mean((Phi @ G.T - (ftr - psi))**2)
     print('{:<10s} {:<16s}'.format('no. basis', '(msep - mse0) / mse0'))
-    for kap0 in torch.arange(10, kap, 10).to(int):
+    for kap0 in torch.arange(10, kap+1, 10).to(int):
         Up = U[:, :kap0]  # keep
         Sp = S[:kap0]
         Vp = V[:kap0]
@@ -183,11 +186,11 @@ def test_mvlatent():
                        psi=psi, Phi=Up)
     model.double()
     model.requires_grad_()
-    #
+
     ftrpred = model(thetatr)
     print('GP training MSE: {:.3f}'.format(torch.mean((ftr - ftrpred)**2)))
-    optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
-    # optim = torch.optim.AdamW(model.parameters(), lr=10e-2)  #, line_search_fn='strong_wolfe')
+    # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
+    optim = torch.optim.AdamW(model.parameters(), lr=10e-2)  #, line_search_fn='strong_wolfe')
 
     header = ['iter', 'negloglik', 'test mse', 'train mse']
     print('\nGP training:')
@@ -201,7 +204,7 @@ def test_mvlatent():
         mse = model.test_mse(thetate, fte)
         trainmse = model.test_mse(thetatr, ftr)
         # if epoch % 25 == 0:
-        print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format(epoch, lik, mse, trainmse))
+        print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format(epoch, model.lik(), mse, trainmse))
 
 #
 if __name__ == '__main__':
