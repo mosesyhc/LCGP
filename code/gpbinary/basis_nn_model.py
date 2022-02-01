@@ -22,19 +22,23 @@ class BasisGenNNTypeSingle(nn.Module):
 
 
 class BasisGenNNTypeMulti(nn.Module):
-    def __init__(self, kap, x):
+    def __init__(self, kap, x, normalize=True):
         super(BasisGenNNTypeMulti, self).__init__()
         self.x = x
         self.m, self.d = x.shape
         self.kap = kap
         self.models = nn.ModuleList([BasisGenNNTypeSingle(x) for k in range(kap)])
+        self.gs = normalize
 
     def forward(self, x):
-        Phi = torch.zeros(self.m, self.kap)
-        for k, model in enumerate(self.models):
-            Phi[:, k] = model(x).squeeze()
-        orthoPhi = gram_schmidt(Phi)
-        return orthoPhi
+        Phi = torch.cat([model(x) for model in self.models], dim=1)
+        # Phi = torch.zeros(self.m, self.kap)
+        # for k, model in enumerate(self.models):
+        #     Phi[:, k] = model(x).squeeze()
+        if self.gs:
+            Phi = gram_schmidt(Phi)
+
+        return Phi
 
 
 class BasisGenNNType_OLD(nn.Module):
@@ -73,3 +77,16 @@ class BasisGenNN(nn.Module):
 
     def forward(self, x):
         return self.layer(x)
+
+
+def init_weights(m):
+    if isinstance(m, nn.Embedding):
+        nn.init.normal_(m.weight) #, mean=0.0, std=0.1) ## or simply use your layer.reset_parameters()
+    if isinstance(m, nn.Linear):
+        nn.init.normal_(m.weight) #, mean=0.0, std=torch.sqrt(1 / m.in_features))
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)
+    if isinstance(m, nn.Conv1d):
+        nn.init.normal_(m.weight) #, mean=0.0, std=np.sqrt(4 / m.in_channels))
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)

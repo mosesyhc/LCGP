@@ -91,7 +91,7 @@ def test_mvlatent():
     thetatr = theta[tr_inds]
     fte = f[:, te_inds]
     thetate = theta[te_inds]
-    #
+    # SURMISE BLOCK
     # # if False:
     # from surmise.emulation import emulator
     # emu = emulator(x=x.numpy(), theta=thetatr.numpy(),
@@ -132,7 +132,13 @@ def test_mvlatent():
     kap = 50
     # x.cuda()
 
-    get_Phi_ = BasisGenNNTypeMulti(kap, x)
+    from basis_nn_model import init_weights
+
+    nepoch = 100
+    mseresults_w_gs = torch.zeros(nepoch)
+
+    get_Phi_ = BasisGenNNTypeMulti(kap, x, normalize=True)
+    get_Phi_.apply(init_weights)
     # get_Phi_.cuda()
     get_Phi_.double()
 
@@ -141,15 +147,16 @@ def test_mvlatent():
     optim_nn = torch.optim.Adam(get_Phi_.parameters(), lr=10e-4)
     print('Neural network training:')
     print('{:<5s} {:<12s} {:<12s}'.format('iter', 'MSE', 'baseline MSE'))
-    for epoch in range(100):
+    for epoch in range(nepoch):
         optim_nn.zero_grad()
         l = loss(get_Phi_, x, ftr - psi)
         l.backward()
         optim_nn.step()
         if (epoch % 25 - 1) == 0:
             print('{:<5d} {:<12.3f} {:<12.3f}'.format(epoch, l, l0))
+        mseresults_w_gs[epoch] = l
     Phi = get_Phi_(x).detach()
-
+    print(((Phi.T @ Phi - torch.eye(Phi.shape[1]))**2).mean())
     # further reduce rank
     U, S, V = torch.linalg.svd(Phi, full_matrices=False)
     # ind = (S / S.norm()) > 10e-7
@@ -157,9 +164,10 @@ def test_mvlatent():
     G = (torch.linalg.solve(Phi.T @ Phi + 10e-8 * torch.eye(kap), Phi.T @ (ftr - psi))).T
     W = (S.diag() @ V @ G.T).detach().T
 
+    relmses_gs = torch.zeros(kap)
     mse0 = torch.mean((Phi @ G.T - (ftr - psi))**2)
     print('{:<10s} {:<16s}'.format('no. basis', '(msep - mse0) / mse0'))
-    for kap0 in torch.arange(10, kap+1, 10).to(int):
+    for kap0 in torch.arange(1, kap+1).to(int):
         Up = U[:, :kap0]  # keep
         Sp = S[:kap0]
         Vp = V[:kap0]
@@ -167,10 +175,89 @@ def test_mvlatent():
         Wp = (Sp.diag() @ Vp @ G.T).detach().T
         msep = torch.mean((Up @ Wp.T - (ftr - psi))**2)
         relmse = (msep - mse0) / mse0 / ((ftr - psi)**2).mean()
-        print('{:<10d} {:<16.6f}'.format(kap0, relmse))
-        if relmse < 0.01:
-            break
+        if kap0 % 10 == 0:
+            print('{:<10d} {:<16.6f}'.format(kap0, relmse))
+        # if relmse < 0.01:
+        #     break
+        relmses_gs[kap0-1] = relmse
 
+    del get_Phi_, Phi, U, S, V, Up, Sp, Vp, G, W, Wp
+
+
+    ############################################################
+    mseresults_wo_gs = torch.zeros(nepoch)
+
+    get_Phi_woGS = BasisGenNNTypeMulti(kap, x, normalize=False)
+    get_Phi_woGS.apply(init_weights)
+    # get_Phi_.cuda()
+    get_Phi_woGS.double()
+
+    # Neural network to find basis
+    # optim_nn = torch.optim.LBFGS(get_Phi_.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
+    optim_nn = torch.optim.Adam(get_Phi_woGS.parameters(), lr=10e-4)
+    print('Neural network training:')
+    print('{:<5s} {:<12s} {:<12s}'.format('iter', 'MSE', 'baseline MSE'))
+    for epoch in range(nepoch):
+        optim_nn.zero_grad()
+        l = loss(get_Phi_woGS, x, ftr - psi)
+        l.backward()
+        optim_nn.step()
+        if (epoch % 25 - 1) == 0:
+            print('{:<5d} {:<12.3f} {:<12.3f}'.format(epoch, l, l0))
+        mseresults_wo_gs[epoch] = l
+    Phi2 = get_Phi_woGS(x).detach()
+
+    print(((Phi2.T @ Phi2 - torch.eye(Phi2.shape[1]))**2).mean())
+    # further reduce rank
+    U, S, V = torch.linalg.svd(Phi2, full_matrices=False)
+    # ind = (S / S.norm()) > 10e-7
+
+    G = (torch.linalg.solve(Phi2.T @ Phi2 + 10e-8 * torch.eye(kap), Phi2.T @ (ftr - psi))).T
+    W = (S.diag() @ V @ G.T).detach().T
+
+    relmses_wo_gs = torch.zeros(kap)
+    mse0 = torch.mean((Phi2 @ G.T - (ftr - psi))**2)
+    print('{:<10s} {:<16s}'.format('no. basis', '(msep - mse0) / mse0'))
+    for kap0 in torch.arange(1, kap+1).to(int):
+        Up = U[:, :kap0]  # keep
+        Sp = S[:kap0]
+        Vp = V[:kap0]
+
+        Wp = (Sp.diag() @ Vp @ G.T).detach().T
+        msep = torch.mean((Up @ Wp.T - (ftr - psi))**2)
+        relmse = (msep - mse0) / mse0 / ((ftr - psi)**2).mean()
+        if kap0 % 10 == 0:
+            print('{:<10d} {:<16.6f}'.format(kap0, relmse))
+        # if relmse < 0.01:
+        #     break
+        relmses_wo_gs[kap0-1] = relmse
+    ############################################################
+
+    import numpy as np
+    epochres = torch.column_stack((mseresults_w_gs, mseresults_wo_gs))
+    relmseres = torch.column_stack((relmses_gs, relmses_wo_gs))
+    np.savetxt('epoch_mse.txt', epochres.detach().numpy())
+    np.savetxt('rel_testmse.txt', relmseres.detach().numpy())
+
+    import matplotlib.pyplot as plt
+    plt.style.use('seaborn')
+    plt.figure()
+    plt.plot(mseresults_w_gs.detach().numpy(), label='with GS')
+    plt.plot(mseresults_wo_gs.detach().numpy(), label='without GS')
+    plt.ylabel('train MSE')
+    plt.xlabel('epoch')
+    plt.legend()
+    plt.show()
+
+    plt.figure()
+    plt.plot(relmses_gs.detach().numpy(), label='with GS')
+    plt.plot(relmses_wo_gs.detach().numpy(), label='without GS')
+    plt.xlabel(r'$\kappa$')
+    plt.ylabel(r'relative MSE')
+    plt.legend()
+    plt.show()
+
+    raise
 
     print('Truncation error in basis: {:.3E}'.format(((Phi - Up @ Sp.diag() @ Vp)**2).mean()))
     # Phi @ G.T \approx Up @ W.T
@@ -206,6 +293,6 @@ def test_mvlatent():
         # if epoch % 25 == 0:
         print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format(epoch, model.lik(), mse, trainmse))
 
-#
+
 if __name__ == '__main__':
     test_mvlatent()
