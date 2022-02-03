@@ -140,7 +140,7 @@ def test_mvlatent():
     # x.cuda()
 
     nn_lr = 5*10e-5
-    nepoch = 2500
+    nepoch = 250
     mseresults_w_gs = torch.zeros(nepoch)
 
     get_Phi_ = BasisGenNNTypeMulti(kap, x, normalize=True)
