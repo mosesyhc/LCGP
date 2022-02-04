@@ -3,6 +3,15 @@ from torch import nn
 from gram_schmidt import gram_schmidt
 
 
+class Phi_Class(nn.Module):
+    def __init__(self, m, kap):
+        super(Phi_Class, self).__init__()
+        self.Phi = nn.Parameter(torch.randn(m, kap))
+
+    def forward(self):
+        return gram_schmidt(self.Phi)
+
+
 class BasisGenNNTypeSingle(nn.Module):
     def __init__(self, x):
         super(BasisGenNNTypeSingle, self).__init__()
@@ -13,7 +22,9 @@ class BasisGenNNTypeSingle(nn.Module):
             nn.Linear(3*d, 2*d),
             nn.ReLU(),
             nn.Linear(2*d, d),
-            nn.LeakyReLU(),
+            nn.ReLU(),
+            nn.Linear(d, d),
+            nn.ReLU(),
             nn.Linear(d, 1)
         )
 

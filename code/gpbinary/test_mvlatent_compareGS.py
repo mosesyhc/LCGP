@@ -8,6 +8,9 @@ from prediction import pred_gp
 from likelihood import negloglik_mvlatent
 from fayans_support import read_data, get_psi, get_empPhi, read_only_complete_data
 
+import matplotlib.pyplot as plt
+plt.style.use('seaborn-whitegrid')
+
 
 class MVlatentGP(nn.Module):
     def __init__(self, Lmb, G, theta, f, psi, Phi):
@@ -65,6 +68,16 @@ class MVlatentGP(nn.Module):
         return ((fpred - f0) ** 2).mean()
 
 
+def get_bestPhi(f):
+    U, S, V = torch.linalg.svd(f, full_matrices=False)
+
+    return U
+
+
+def returnPhi(Phi):
+    return Phi
+
+
 def test_mvlatent():
     f, x0, theta = read_only_complete_data(r'code/data/')
 
@@ -72,16 +85,10 @@ def test_mvlatent():
     x0 = torch.tensor(x0)
     theta = torch.tensor(theta)
 
-    # f = f.to(device)
-    # x = x.to(device)
-    # theta = theta.to(device)
-
     m, n = f.shape
 
     ntrain = 10
     ntest = 200
-
-    # torch.manual_seed(1)
 
     tempind = torch.randperm(n)
     tr_inds = tempind[:ntrain]
@@ -91,6 +98,7 @@ def test_mvlatent():
     thetatr = theta[tr_inds]
     fte = f[:, te_inds]
     thetate = theta[te_inds]
+
     # SURMISE BLOCK
     # # if False:
     # from surmise.emulation import emulator
@@ -105,13 +113,8 @@ def test_mvlatent():
     # print('surmise training mse: {:.3f}'.format(emutrainmse))
 
     psi = ftr.mean(1).unsqueeze(1)
-    # Phi = get_Phi(x)
-    # print(Phi.shape)
-    # kap = Phi.shape[1]
     d = theta.shape[1]
-
-    # G = (torch.linalg.solve(Phi.T  @ Phi + 10e-8 * torch.eye(kap), Phi.T @ (sigma * ftr - psi))).T
-    # F = (Phi @ G.T + psi) / sigma
+    kap = ntrain
 
     def loss(get_Phi_, x, F):
         Phi = get_Phi_(x)
@@ -130,13 +133,92 @@ def test_mvlatent():
         l = mse(Phi @ G.T, F)
         return l
 
+
+
     x = torch.column_stack((x0[:, 0], x0[:, 1],
                             *[x0[:, 2] == k for k in torch.unique(x0[:, 2])]))
 
     l0 = loss(get_empPhi, x0, ftr - psi)
 
     from basis_nn_model import BasisGenNNTypeMulti
-    kap = ntrain
+
+    # reproducing bestPhi with NN
+    def loss_Phi(get_Phi_, Phi0):
+        Phi = get_Phi_(x)
+        mse = nn.MSELoss(reduction='mean')
+        return mse(Phi, Phi0)
+
+    matchPhi_ = BasisGenNNTypeMulti(kap, x, normalize=True)
+    matchPhi_.double()
+
+
+    from basis_nn_model import Phi_Class
+    def loss_Phi_as_param(class_Phi, Phi0):
+        Phi = class_Phi()
+        mse = nn.MSELoss(reduction='mean')
+        return mse(Phi, Phi0)
+
+    def loss_Phi_as_param_F(class_Phi, F):
+        Phi = class_Phi()
+        Fhat = Phi @ torch.linalg.solve(Phi.T @ Phi, Phi.T) @ F
+        mse = nn.MSELoss(reduction='mean')
+        return mse(Fhat, F)
+
+
+
+
+
+    # get_bestPhi takes F and gives the SVD U
+    print('SVD error: ', loss(get_bestPhi, ftr - psi, ftr - psi))
+
+    Phi0 = get_bestPhi(ftr - psi)
+    #
+    #
+    # # Neural network to match Phi0
+    # print('Neural network training:')
+    # print('{:<5s} {:<12s}'.format('iter', 'MSE bet. Phi'))
+    # for epoch in range(200):
+    #     optim_nn.zero_grad()
+    #     l = loss_Phi(matchPhi_, x, Phi0)
+    #     l.backward()
+    #     optim_nn.step()
+    #     if (epoch % 50 - 1) == 0:
+    #         print('{:<5d} {:<12.6f}'.format(epoch, l))
+    # Phi_match = matchPhi_(x).detach()
+
+    Phi_as_param = Phi_Class(m, kap)
+    optim_nn = torch.optim.Adam(Phi_as_param.parameters(), lr=10e-3)
+
+
+    print('Neural network training:')
+    print('{:<5s} {:<12s}'.format('iter', 'MSE bet. Phi'))
+    for epoch in range(250):
+        optim_nn.zero_grad()
+        l = loss_Phi_as_param_F(Phi_as_param, ftr - psi)
+        l.backward()
+        optim_nn.step()
+        if (epoch % 50 - 1) == 0:
+            print('{:<5d} {:<12.6f}'.format(epoch, l))
+    Phi_match = Phi_as_param().detach()
+
+    plt.figure()
+    plt.hist((Phi0 - Phi_match).reshape(-1).numpy(), bins=30, density=True)
+    plt.xlabel(r'$\Phi - \Phi_0$')
+    plt.ylabel(r'density')
+    plt.show()
+
+    plt.figure()
+    # plt.hist((Phi0 @ Phi0.T @ (ftr - psi) - (ftr - psi)).reshape(-1).numpy(), bins=30, density=True, label='SVD')
+    plt.hist((Phi_match @ torch.linalg.solve(Phi_match.T @ Phi_match,
+              Phi_match.T @ (ftr - psi)) - (ftr - psi)).reshape(-1).numpy(), bins=30, density=True, label='matchNN')
+    plt.xlabel(r'prediction error')
+    plt.ylabel(r'density')
+    plt.show()
+    print('error bet. best Phi and reproduced Phi:', torch.mean((Phi0 - Phi_match)**2))
+    print('Reproducing Phi0 error in prediction of F: ', loss(returnPhi, Phi_match, ftr - psi))
+
+    raise
+
     # x.cuda()
 
     nn_lr = 5*10e-5
@@ -243,8 +325,6 @@ def test_mvlatent():
     np.savetxt('epoch_mse.txt', epochres.detach().numpy())
     np.savetxt('rel_testmse.txt', relmseres.detach().numpy())
 
-    import matplotlib.pyplot as plt
-    plt.style.use('seaborn')
     plt.figure()
     plt.plot(mseresults_w_gs.detach().numpy(), label='with GS')
     plt.plot(mseresults_wo_gs.detach().numpy(), label='without GS')

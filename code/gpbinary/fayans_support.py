@@ -67,18 +67,6 @@ def get_empPhi(x):
                             (x[:, 1] > 75) * (x[:, 2] == 2),
                             (x[:, 1] > 80) * (x[:, 2] == 2)
                             ))
-    #                         tmp[:, 0] ** 2 * (x[:, 2] == 7),
-    #                         tmp[:, 1] ** 2 * (x[:, 2] == 7),
-    #                         tmp[:, 0] * tmp[:, 1] * (x[:, 2] == 7),
-    #                         tmp[:, 0] ** 2 * (x[:, 2] == 3),
-    #                         tmp[:, 1] ** 2 * (x[:, 2] == 3),
-    #                         tmp[:, 0] * tmp[:, 1] * (x[:, 2] == 3),
-    #                         tmp[:, 0] ** 2 * (x[:, 2] == 8),
-    #                         tmp[:, 1] ** 2 * (x[:, 2] == 8),
-    #                         tmp[:, 0] * tmp[:, 1] * (x[:, 2] == 8),
-    #                         ))
     Phi = M
 
-    # newshape = M.shape
-    # Phi = torch.randn(newshape)
     return Phi  # returns m x kappa
