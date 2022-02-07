@@ -114,7 +114,7 @@ def test_mvlatent():
 
     psi = ftr.mean(1).unsqueeze(1)
     d = theta.shape[1]
-    kap = ntrain + 5
+    kap = 20
 
     def loss(get_Phi_, x, F):
         Phi = get_Phi_(x)
@@ -156,9 +156,10 @@ def test_mvlatent():
     optim_nn = torch.optim.Adam(Phi_as_param.parameters(), lr=10e-3)
 
 
+    nepoch_nn = 100
     print('Neural network training:')
     print('{:<5s} {:<12s}'.format('iter', 'train MSE'))
-    for epoch in range(250):
+    for epoch in range(nepoch_nn):
         optim_nn.zero_grad()
         l = loss_Phi_as_param_F(Phi_as_param, ftr - psi)
         l.backward()
@@ -168,13 +169,15 @@ def test_mvlatent():
     Phi_match = Phi_as_param().detach()
 
     if True:
-        plt.style.use(['science', 'grid'])
+        plt.style.use(['science', 'grid', 'no-latex'])
         plt.figure()
         # plt.hist((Phi0 @ Phi0.T @ (ftr - psi) - (ftr - psi)).reshape(-1).numpy(), bins=30, density=True, label='SVD')
         plt.hist((Phi_match @ torch.linalg.solve(Phi_match.T @ Phi_match,
-                  Phi_match.T @ (ftr - psi)) - (ftr - psi)).reshape(-1).numpy(), bins=30, density=True, label='matchNN')
+                  Phi_match.T @ (ftr - psi)) - (ftr - psi)).reshape(-1).numpy(), bins=30,
+                 fill=False, density=True, label='matchNN')
         plt.xlabel(r'prediction error')
         plt.ylabel(r'density')
+        plt.tight_layout()
         plt.show()
     print('Reproducing Phi0 error in prediction of F: ', loss(returnPhi, Phi_match, ftr - psi))
 
@@ -197,11 +200,12 @@ def test_mvlatent():
     print('GP training MSE: {:.3f}'.format(torch.mean((ftr - ftrpred)**2)))
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
     optim = torch.optim.AdamW(model.parameters(), lr=10e-2)  #, line_search_fn='strong_wolfe')
+    nepoch_gp = 100
 
     header = ['iter', 'negloglik', 'test mse', 'train mse']
     print('\nGP training:')
     print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
-    for epoch in range(25):
+    for epoch in range(nepoch_gp):
         optim.zero_grad()
         lik = model.lik()
         lik.backward()
