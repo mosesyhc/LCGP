@@ -3,13 +3,17 @@ from torch import nn
 from gram_schmidt import gram_schmidt
 
 
-class Phi_Class(nn.Module):
-    def __init__(self, m, kap):
-        super(Phi_Class, self).__init__()
+class Basis(nn.Module):
+    def __init__(self, m, kap, normalize=True):
+        super(Basis, self).__init__()
         self.Phi = nn.Parameter(torch.randn(m, kap))
+        self.normalize = normalize
 
     def forward(self):
-        return gram_schmidt(self.Phi)
+        if self.normalize:
+            return gram_schmidt(self.Phi)
+        else:
+            return self.Phi
 
 
 class BasisGenNNTypeSingle(nn.Module):

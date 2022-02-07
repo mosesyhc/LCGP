@@ -1,6 +1,21 @@
 import torch
 
 
+def gram_schmidt_schwart(A):
+    m, n = A.shape
+
+    Q = torch.tensor(A)
+    R = torch.zeros(n, n)
+
+    for k in range(n):
+        for i in range(k):
+            R[i, k] = Q[:, i].T @ Q[:, k]
+            Q[:, k] = Q[:, k] - R[i, k] * Q[:, i]
+        R[k, k] = torch.linalg.norm(Q[:, k])
+        Q[:, k] /= R[k, k]
+
+    return -Q
+
 def gram_schmidt(vv):
     '''
     Returns an orthonormal matrix that spans the same range as the input.
@@ -28,11 +43,20 @@ def gram_schmidt(vv):
     return uu
 
 def test_gs():
-    A = torch.randn((100, 10))
-    Q2 = gram_schmidt(A)
+    A = torch.randn((198, 50))
+    Q = gram_schmidt(A)
 
-    print(torch.mean((Q2.T @ Q2 - torch.eye(Q2.shape[1]))**2))
+    # print(torch.mean((Q.T @ Q - torch.eye(Q.shape[1]))**2))
+
+
+def test_gs_schwart():
+    A = torch.randn((198, 50))
+    Q = gram_schmidt(A)
+
+    # print(torch.mean((Q.T @ Q - torch.eye(Q.shape[1]))**2))
 
 
 if __name__ == '__main__':
-    test_gs()
+    import timeit
+    print(timeit.Timer(test_gs).timeit(number=1000))
+    print(timeit.Timer(test_gs_schwart).timeit(number=1000))
