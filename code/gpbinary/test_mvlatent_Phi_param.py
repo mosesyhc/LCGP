@@ -1,71 +1,11 @@
 import torch
 from torch import nn
+from gp_mvlatent_model import MVlatentGP
+from fayans_support import read_data, get_psi, get_empPhi, read_only_complete_data
+import matplotlib.pyplot as plt
 torch.autograd.set_detect_anomaly(True)
 # torch.cuda.set_device(0)
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-from prediction import pred_gp
-from likelihood import negloglik_mvlatent
-from fayans_support import read_data, get_psi, get_empPhi, read_only_complete_data
-
-import matplotlib.pyplot as plt
-plt.style.use('seaborn-whitegrid')
-
-
-class MVlatentGP(nn.Module):
-    def __init__(self, Lmb, G, theta, f, psi, Phi):
-        super().__init__()
-        self.Lmb = nn.Parameter(Lmb)
-        self.G = nn.Parameter(G, requires_grad=False)
-        self.theta = theta
-        self.f = f
-        self.psi = psi
-        self.Phi = Phi
-        self.kap = Phi.shape[1]
-
-    def forward(self, theta0):
-        Lmb = self.Lmb
-        theta = self.theta
-        G = self.G
-
-        psi = self.psi
-        Phi = self.Phi
-
-        kap = self.kap
-        n0 = theta0.shape[0]
-
-        Gpred = torch.zeros(n0, kap)
-        for k in range(kap):
-            Gpred[:, k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, g=G[:, k])
-        fpred = (psi + Phi @ Gpred.T)
-
-        return fpred
-
-    def lik(self):
-        Lmb = self.Lmb
-        theta = self.theta
-        G = self.G
-
-        f = self.f
-        psi = self.psi
-        Phi = self.Phi
-        return negloglik_mvlatent(Lmb=Lmb, G=G, theta=theta, f=f, psi=psi, Phi=Phi)
-
-    def test_mse(self, theta0, f0):
-        Lmb = self.Lmb
-        theta = self.theta
-        G = self.G
-        kap = self.kap
-        psi = self.psi
-        Phi = self.Phi
-        n0 = theta0.shape[0]
-
-        Gpred = torch.zeros(n0, kap)
-        for k in range(kap):
-            Gpred[:, k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, g=G[:, k])
-        fpred = (psi + Phi @ Gpred.T)
-
-        return ((fpred - f0) ** 2).mean()
 
 
 def get_bestPhi(f):
@@ -114,7 +54,7 @@ def test_mvlatent():
 
     psi = ftr.mean(1).unsqueeze(1)
     d = theta.shape[1]
-    kap = 20
+    kap = 40
 
     def loss(get_Phi_, x, F):
         Phi = get_Phi_(x)
@@ -156,7 +96,7 @@ def test_mvlatent():
     optim_nn = torch.optim.Adam(Phi_as_param.parameters(), lr=10e-3)
 
 
-    nepoch_nn = 100
+    nepoch_nn = 200
     print('Neural network training:')
     print('{:<5s} {:<12s}'.format('iter', 'train MSE'))
     for epoch in range(nepoch_nn):
@@ -178,7 +118,7 @@ def test_mvlatent():
         plt.xlabel(r'prediction error')
         plt.ylabel(r'density')
         plt.tight_layout()
-        plt.show()
+        plt.show(block=False)
     print('Reproducing Phi0 error in prediction of F: ', loss(returnPhi, Phi_match, ftr - psi))
 
     Phi = Phi_match
@@ -191,16 +131,16 @@ def test_mvlatent():
 
     Lmb = torch.randn(kap, d+1)
     model = MVlatentGP(Lmb=Lmb, G=G,
-                       theta=thetatr, f=ftr,
-                       psi=psi, Phi=Phi)
+                       theta=thetatr, f=ftr - psi,
+                       psi=torch.zeros_like(psi), Phi=Phi)
     model.double()
     model.requires_grad_()
 
     ftrpred = model(thetatr)
-    print('GP training MSE: {:.3f}'.format(torch.mean((ftr - ftrpred)**2)))
+    print('GP training MSE: {:.3f}'.format(torch.mean(((ftr - psi) - ftrpred)**2)))
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
-    optim = torch.optim.AdamW(model.parameters(), lr=10e-2)  #, line_search_fn='strong_wolfe')
-    nepoch_gp = 100
+    optim = torch.optim.AdamW(model.parameters(), lr=5*10e-3)  #, line_search_fn='strong_wolfe')
+    nepoch_gp = 250
 
     header = ['iter', 'negloglik', 'test mse', 'train mse']
     print('\nGP training:')
@@ -209,12 +149,12 @@ def test_mvlatent():
         optim.zero_grad()
         lik = model.lik()
         lik.backward()
-        optim.step(lambda: model.lik())
+        optim.step() #lambda: model.lik())
 
-        mse = model.test_mse(thetate, fte)
-        trainmse = model.test_mse(thetatr, ftr)
-        # if epoch % 25 == 0:
-        print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format(epoch, model.lik(), mse, trainmse))
+        mse = model.test_mse(thetate, fte - psi)
+        trainmse = model.test_mse(thetatr, ftr - psi)
+        if epoch % 10 == 0:
+            print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format(epoch, lik, mse, trainmse))
 
 
 if __name__ == '__main__':

@@ -20,14 +20,6 @@ def negloglik_mvbinary(lmb, G, theta, y, psi, Phi):
     return nll
 
 
-def negloglik_mvlatent(Lmb, G, theta, f, psi, Phi):
-    kap = Phi.shape[1]
-
-    D = f - (psi + Phi @ G.T)
-    nll = 1/2 * (D.T @ D).sum()
-    for k in range(kap):
-        nll += negloglik_gp(lmb=Lmb[k], theta=theta, g=G[:, k])
-    return nll
 
 
 def negloglik_link(G, y, psi, Phi):
