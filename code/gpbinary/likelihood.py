@@ -40,9 +40,11 @@ def negloglik_gp(lmb, theta, g, lmbregmean=0, lmbregstd=1):
     fcenter = Vh.T @ g
     n = g.shape[0]
 
-    sig2hat = (n * torch.mean(fcenter ** 2) + 1) / (n + 1)
-    negloglik = 1/2 * torch.sum(torch.log(W)) + n/2 * torch.log(sig2hat)
-    negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)
+    sig2hat = (n * torch.mean(fcenter ** 2) + 10) / (n + 10)
+    negloglik = 1/2 * torch.sum(torch.log(W))  # log-determinant
+    negloglik += n/2 * torch.log(sig2hat)  # log of MLE of scale
+    negloglik += 1/2 * torch.sum(fcenter ** 2 / sig2hat)  # quadratic term
+    negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)  # regularization of hyperparameter
 
 
     # term1 = 1/2 * torch.sum(torch.log(W))

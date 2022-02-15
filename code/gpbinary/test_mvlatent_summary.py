@@ -14,10 +14,6 @@ def get_bestPhi(f):
     return U
 
 
-def returnPhi(Phi):
-    return Phi
-
-
 def test_mvlatent():
     f, x0, theta = read_only_complete_data(r'code/data/')
 
@@ -25,32 +21,33 @@ def test_mvlatent():
     x0 = torch.tensor(x0)
     theta = torch.tensor(theta)
 
-    m, n = f.shape
+    m, n = f.shape  # nloc, nparam
 
     ntrain = 50
     ntest = 200
 
+    torch.manual_seed(0)
     tempind = torch.randperm(n)
     tr_inds = tempind[:ntrain]
     te_inds = tempind[-ntest:]
-
+    # torch.seed()
     ftr = f[:, tr_inds]
     thetatr = theta[tr_inds]
     fte = f[:, te_inds]
     thetate = theta[te_inds]
 
     # SURMISE BLOCK
-    # if False:
-    from surmise.emulation import emulator
-    emu = emulator(x=x0.numpy(), theta=thetatr.numpy(),
-                   f=ftr.numpy(), method='PCGPwM',
-                   args={'warnings': True})
+    if False:
+        from surmise.emulation import emulator
+        emu = emulator(x=x0.numpy(), theta=thetatr.numpy(),
+                       f=ftr.numpy(), method='PCGPwM',
+                       args={'warnings': True})
 
-    emupred = emu.predict(x=x0.numpy(), theta=thetate.numpy())
-    emumse = ((emupred.mean() - fte.numpy()) ** 2).mean()
-    emutrainmse = ((emu.predict().mean() - ftr.numpy())**2).mean()
-    print('surmise mse: {:.3f}'.format(emumse))
-    print('surmise training mse: {:.3f}'.format(emutrainmse))
+        emupred = emu.predict(x=x0.numpy(), theta=thetate.numpy())
+        emumse = ((emupred.mean() - fte.numpy()) ** 2).mean()
+        emutrainmse = ((emu.predict().mean() - ftr.numpy())**2).mean()
+        print('surmise mse: {:.3f}'.format(emumse))
+        print('surmise training mse: {:.3f}'.format(emutrainmse))
 
     psi = ftr.mean(1).unsqueeze(1)
     d = theta.shape[1]
@@ -92,17 +89,6 @@ def test_mvlatent():
             print('{:<5d} {:<12.6f}'.format(epoch, l))
     Phi_match = Phi_as_param().detach()
 
-    if False:
-        plt.style.use(['science', 'grid', 'no-latex'])
-        plt.figure()
-        # plt.hist((Phi0 @ Phi0.T @ (ftr - psi) - (ftr - psi)).reshape(-1).numpy(), bins=30, density=True, label='SVD')
-        plt.hist((Phi_match @ torch.linalg.solve(Phi_match.T @ Phi_match,
-                  Phi_match.T @ (ftr - psi)) - (ftr - psi)).reshape(-1).numpy(), bins=30,
-                 fill=False, density=True, label='matchNN')
-        plt.xlabel(r'prediction error')
-        plt.ylabel(r'density')
-        plt.tight_layout()
-        plt.show(block=False)
     print('Reproducing Phi0 error in prediction of F: ',
           torch.mean((Phi_match @ Phi_match.T @ F - F)**2))
 
@@ -110,23 +96,28 @@ def test_mvlatent():
     G = (Phi.T @ F).T
 
     # Phi @ G.T \approx Up @ W.T
-    print('MSE between Phi @ G.T and (ftr - psi): {:.3f}'.format(torch.mean((Phi @ G.T - (ftr - psi))**2)))
-
+    print('MSE between Phi @ G.T and (ftr - psi): {:.3f}'.format(
+        torch.mean((Phi @ G.T - (ftr - psi))**2)))
     print('Basis size: ', Phi.shape)
 
+    optim_param = {'Lmb': True, 'G': False, 'Phi': False, 'lsigma': True}
     Lmb = torch.randn(kap, d+1)
-    lsigma = torch.randn(0)
+    sigma = torch.Tensor(torch.zeros(1))
     model = MVlatentGP(Lmb=Lmb, G=G, Phi=Phi,
-                       lsigma=lsigma, theta=thetatr,
-                       f=F, psi=torch.zeros_like(psi))
+                       lsigma=sigma, theta=thetatr,
+                       f=F, psi=torch.zeros_like(psi),
+                       optim_param_set=optim_param)
     model.double()
-    model.requires_grad_()
+    # model.requires_grad_()
+
+    # print(list(model.parameters()))
 
     ftrpred = model(thetatr)
     print('GP training MSE: {:.3f}'.format(torch.mean((F - ftrpred)**2)))
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
-    optim = torch.optim.RAdam(model.parameters(), lr=10e-3)  #, line_search_fn='strong_wolfe')
-    nepoch_gp = 500
+    optim = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()),
+                              lr=10e-3)  #, line_search_fn='strong_wolfe')
+    nepoch_gp = 100
 
     header = ['iter', 'negloglik', 'test mse', 'train mse']
     print('\nGP training:')
@@ -139,7 +130,7 @@ def test_mvlatent():
 
         mse = model.test_mse(thetate, fte - psi)
         trainmse = model.test_mse(thetatr, ftr - psi)
-        if epoch % 25 == 0:
+        if epoch % 10 == 0:
             print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format(epoch, lik, mse, trainmse))
 
 

@@ -40,17 +40,17 @@ def test_mvlatent():
     thetate = theta[te_inds]
 
     # SURMISE BLOCK
-    # if False:
-    from surmise.emulation import emulator
-    emu = emulator(x=x0.numpy(), theta=thetatr.numpy(),
-                   f=ftr.numpy(), method='PCGPwM',
-                   args={'warnings': True})
-
-    emupred = emu.predict(x=x0.numpy(), theta=thetate.numpy())
-    emumse = ((emupred.mean() - fte.numpy()) ** 2).mean()
-    emutrainmse = ((emu.predict().mean() - ftr.numpy())**2).mean()
-    print('surmise mse: {:.3f}'.format(emumse))
-    print('surmise training mse: {:.3f}'.format(emutrainmse))
+    # # if False:
+    # from surmise.emulation import emulator
+    # emu = emulator(x=x.numpy(), theta=thetatr.numpy(),
+    #                f=ftr.numpy(), method='PCGPwM',
+    #                args={'warnings': True})
+    #
+    # emupred = emu.predict(x=x.numpy(), theta=thetate.numpy())
+    # emumse = ((emupred.mean() - fte.numpy()) ** 2).mean()
+    # emutrainmse = ((emu.predict().mean() - ftr.numpy())**2).mean()
+    # print('surmise mse: {:.3f}'.format(emumse))
+    # print('surmise training mse: {:.3f}'.format(emutrainmse))
 
     psi = ftr.mean(1).unsqueeze(1)
     d = theta.shape[1]
@@ -78,9 +78,8 @@ def test_mvlatent():
     Phi_as_param = Basis(m, kap, normalize=True)
     optim_nn = torch.optim.Adam(Phi_as_param.parameters(), lr=10e-3)
 
-    print('F shape:', F.shape)
 
-    nepoch_nn = 100
+    nepoch_nn = 500
     print('Neural network training:')
     print('{:<5s} {:<12s}'.format('iter', 'train MSE'))
     for epoch in range(nepoch_nn):
@@ -115,17 +114,14 @@ def test_mvlatent():
     print('Basis size: ', Phi.shape)
 
     Lmb = torch.randn(kap, d+1)
-    lsigma = torch.randn(0)
-    model = MVlatentGP(Lmb=Lmb, G=G, Phi=Phi,
-                       lsigma=lsigma, theta=thetatr,
-                       f=F, psi=torch.zeros_like(psi))
+    model = MVlatentGP(Lmb=Lmb, G=G, Phi=Phi, lsigma=, theta=thetatr, f=F, psi=torch.zeros_like(psi))
     model.double()
     model.requires_grad_()
 
     ftrpred = model(thetatr)
     print('GP training MSE: {:.3f}'.format(torch.mean((F - ftrpred)**2)))
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
-    optim = torch.optim.RAdam(model.parameters(), lr=10e-3)  #, line_search_fn='strong_wolfe')
+    optim = torch.optim.AdamW(model.parameters(), lr=10e-3)  #, line_search_fn='strong_wolfe')
     nepoch_gp = 500
 
     header = ['iter', 'negloglik', 'test mse', 'train mse']
@@ -139,7 +135,7 @@ def test_mvlatent():
 
         mse = model.test_mse(thetate, fte - psi)
         trainmse = model.test_mse(thetatr, ftr - psi)
-        if epoch % 25 == 0:
+        if epoch % 10 == 0:
             print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format(epoch, lik, mse, trainmse))
 
 
