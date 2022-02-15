@@ -27,7 +27,7 @@ def test_mvlatent():
 
     m, n = f.shape
 
-    ntrain = 50
+    ntrain = 20
     ntest = 200
 
     tempind = torch.randperm(n)

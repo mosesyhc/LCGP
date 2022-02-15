@@ -52,7 +52,7 @@ def test_gp():
     header = ['iter', 'negloglik', 'test mse']
     print('{:<5s} {:<12s} {:<12s}'.format(*header))
     print('{:<5s} {:<12.6f} {:<10.3f}'.format(' ', lik, model.test_mse(thetatest, gtest)))
-    for epoch in range(10):
+    for epoch in range(100):
         optim.zero_grad()
         lik = model.lik()
         lik.backward()
@@ -77,7 +77,7 @@ def test_gp():
 
 def test_gp_borehole():
     from test_function import gen_borehole_data
-    theta, f, thetatest, ftest = gen_borehole_data()
+    theta, f, thetatest, ftest = gen_borehole_data(ntrain=25, ntest=1500)
 
     lmb = torch.Tensor(torch.zeros(9))
 
@@ -94,7 +94,7 @@ def test_gp_borehole():
     header = ['iter', 'negloglik', 'test mse']
     print('{:<5s} {:<12s} {:<12s}'.format(*header))
     print('{:<5s} {:<12.6f} {:<10.3f}'.format(' ', lik, model.test_mse(thetatest, ftest)))
-    for epoch in range(5):
+    for epoch in range(50):
         optim.zero_grad()
         lik = model.lik()
         lik.backward()
@@ -109,28 +109,32 @@ def test_gp_borehole():
     print('\ngp mse: {:.3f}'.format(np.mean((fpred.detach().numpy() - ftest.numpy()) ** 2)))
 
     from surmise.emulation import emulator
+    import surmise
+    print(surmise.__file__)
     x = np.array(1).reshape((1, 1))
     emu = emulator(x, theta.numpy(),
                    f.numpy().reshape(1, f.shape[0]),
-                   method='PCGP',
+                   method='PCGPwM',
                    args={'epsilon': 0.0})
     emupred = emu.predict(x=x, theta=thetatest.numpy())
     emumse = ((emupred.mean() - ftest.numpy()) ** 2).mean()
 
     print('\nsurmise mse: {:.3f}'.format(emumse))
 
-    # import matplotlib.pyplot as plt
-    # thetatest = thetatest.numpy().squeeze()
-    # fpred = fpred.detach().numpy().squeeze()
-    # fpredvar = fpredvar.detach().numpy().squeeze()
-    # plt.plot(thetatest[:, 0], fpred, 'k-')
-    # plt.fill_between(thetatest[:, 0], fpred-2*fpredvar, fpred+2*fpredvar, alpha=0.25)
-    # plt.scatter(theta[:, 0], f, marker='o', s=25, c='blue')
-    # plt.xlabel(r'$\theta_0$')
-    # plt.ylabel(r'$f$')
-    # plt.show()
+    import matplotlib.pyplot as plt
+    thetatest = thetatest.numpy().squeeze()
+    fpred = fpred.detach().numpy().squeeze()
+    fpredvar = fpredvar.detach().numpy().squeeze()
+    plt.plot(thetatest[:, 1], fpred, 'k-')
+    plt.fill_between(thetatest[:, 1], fpred-2*fpredvar, fpred+2*fpredvar, alpha=0.25)
+    plt.scatter(theta[:, 1], f, marker='o', s=25, c='blue')
+
+    plt.plot(thetatest[:, 1], emupred.mean().squeeze(), 'r-')
+    plt.xlabel(r'$\theta_0$')
+    plt.ylabel(r'$f$')
+    plt.show()
 
 
 if __name__ == '__main__':
-    test_gp()
+    # test_gp()
     test_gp_borehole()

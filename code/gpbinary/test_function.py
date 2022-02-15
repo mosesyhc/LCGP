@@ -52,7 +52,7 @@ def gen_borehole_data(ntrain=20, ntest=50):
     thetatest = torch.zeros(ntest, 8)
     for k in range(ntest):
         thetatest[k] = torch.tensor(gen_true_theta())
-    ind0 = torch.argsort(thetatest[:, 0])
+    ind0 = torch.argsort(thetatest[:, 1])
     thetatest = thetatest[ind0]
     ftest = borehole(thetatest.T).unsqueeze(1)
     ftest = (ftest - fmean) / fstd

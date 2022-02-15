@@ -46,7 +46,6 @@ def negloglik_gp(lmb, theta, g, lmbregmean=0, lmbregstd=1):
     negloglik += 1/2 * torch.sum(fcenter ** 2 / sig2hat)  # quadratic term
     negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)  # regularization of hyperparameter
 
-
     # term1 = 1/2 * torch.sum(torch.log(W))
     # term2 = n/2 * torch.log(sig2hat)
     # term3 = 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)
