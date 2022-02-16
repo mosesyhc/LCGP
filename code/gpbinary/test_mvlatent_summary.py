@@ -14,7 +14,7 @@ def get_bestPhi(f):
     return U
 
 
-def test_mvlatent():
+def surmise_baseline(seed=None):
     f, x0, theta = read_only_complete_data(r'code/data/')
 
     f = torch.tensor(f)
@@ -26,7 +26,8 @@ def test_mvlatent():
     ntrain = 50
     ntest = 200
 
-    torch.manual_seed(0)
+    if seed is not None:
+        torch.manual_seed(seed)
     tempind = torch.randperm(n)
     tr_inds = tempind[:ntrain]
     te_inds = tempind[-ntest:]
@@ -37,17 +38,41 @@ def test_mvlatent():
     thetate = theta[te_inds]
 
     # SURMISE BLOCK
-    if False:
-        from surmise.emulation import emulator
-        emu = emulator(x=x0.numpy(), theta=thetatr.numpy(),
-                       f=ftr.numpy(), method='PCGPwM',
-                       args={'warnings': True})
+    from surmise.emulation import emulator
+    emu = emulator(x=x0.numpy(), theta=thetatr.numpy(),
+                   f=ftr.numpy(), method='PCGPwM',
+                   args={'warnings': True})
 
-        emupred = emu.predict(x=x0.numpy(), theta=thetate.numpy())
-        emumse = ((emupred.mean() - fte.numpy()) ** 2).mean()
-        emutrainmse = ((emu.predict().mean() - ftr.numpy())**2).mean()
-        print('surmise mse: {:.3f}'.format(emumse))
-        print('surmise training mse: {:.3f}'.format(emutrainmse))
+    emupred = emu.predict(x=x0.numpy(), theta=thetate.numpy())
+    emumse = ((emupred.mean() - fte.numpy()) ** 2).mean()
+    emutrainmse = ((emu.predict().mean() - ftr.numpy())**2).mean()
+    print('surmise mse: {:.3f}'.format(emumse))
+    print('surmise training mse: {:.3f}'.format(emutrainmse))
+
+
+
+def test_mvlatent(seed=None, nepoch_nn=100, nepoch_gp=200, optim_param_set=None):
+    f, x0, theta = read_only_complete_data(r'code/data/')
+
+    f = torch.tensor(f)
+    x0 = torch.tensor(x0)
+    theta = torch.tensor(theta)
+
+    m, n = f.shape  # nloc, nparam
+
+    ntrain = 50
+    ntest = 200
+
+    if seed is not None:
+        torch.manual_seed(seed)
+    tempind = torch.randperm(n)
+    tr_inds = tempind[:ntrain]
+    te_inds = tempind[-ntest:]
+    # torch.seed()
+    ftr = f[:, tr_inds]
+    thetatr = theta[tr_inds]
+    fte = f[:, te_inds]
+    thetate = theta[te_inds]
 
     psi = ftr.mean(1).unsqueeze(1)
     d = theta.shape[1]
@@ -77,7 +102,6 @@ def test_mvlatent():
 
     print('F shape:', F.shape)
 
-    nepoch_nn = 100
     print('Neural network training:')
     print('{:<5s} {:<12s}'.format('iter', 'train MSE'))
     for epoch in range(nepoch_nn):
@@ -97,19 +121,19 @@ def test_mvlatent():
 
     # Phi @ G.T \approx Up @ W.T
     print('MSE between Phi @ G.T and (ftr - psi): {:.3f}'.format(
-        torch.mean((Phi @ G.T - (ftr - psi))**2)))
+        torch.mean((Phi @ G.T - F)**2)))
     print('Basis size: ', Phi.shape)
 
-    optim_param = {'Lmb': True, 'G': False, 'Phi': False, 'lsigma': True}
     Lmb = torch.randn(kap, d+1)
     sigma = torch.Tensor(torch.zeros(1))
     model = MVlatentGP(Lmb=Lmb, G=G, Phi=Phi,
                        lsigma=sigma, theta=thetatr,
                        f=F, psi=torch.zeros_like(psi),
-                       optim_param_set=optim_param)
+                       optim_param_set=optim_param_set)
     model.double()
-    # model.requires_grad_()
 
+    # # .requires_grad_() turns all parameters on.
+    # model.requires_grad_()
     # print(list(model.parameters()))
 
     ftrpred = model(thetatr)
@@ -117,7 +141,6 @@ def test_mvlatent():
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
     optim = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()),
                               lr=10e-3)  #, line_search_fn='strong_wolfe')
-    nepoch_gp = 100
 
     header = ['iter', 'negloglik', 'test mse', 'train mse']
     print('\nGP training:')
@@ -130,9 +153,35 @@ def test_mvlatent():
 
         mse = model.test_mse(thetate, fte - psi)
         trainmse = model.test_mse(thetatr, ftr - psi)
-        if epoch % 10 == 0:
-            print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format(epoch, lik, mse, trainmse))
+        if epoch % 25 == 0:
+            print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format(
+                epoch, lik, mse, trainmse))
 
 
 if __name__ == '__main__':
-    test_mvlatent()
+    seed = torch.randint(0, 10000, (1,))
+    surmise_baseline(seed)
+    test_mvlatent(seed, nepoch_nn=200,
+                  nepoch_gp=250,
+                  optim_param_set={
+                      'Lmb': True,
+                      'G': False,
+                      'Phi': False,
+                      'lsigma': True
+                  })
+    test_mvlatent(seed, nepoch_nn=200,
+                  nepoch_gp=250,
+                  optim_param_set={
+                      'Lmb': True,
+                      'G': True,
+                      'Phi': False,
+                      'lsigma': True
+                  })
+    test_mvlatent(seed, nepoch_nn=200,
+                  nepoch_gp=250,
+                  optim_param_set={
+                      'Lmb': True,
+                      'G': True,
+                      'Phi': True,
+                      'lsigma': True
+                  })

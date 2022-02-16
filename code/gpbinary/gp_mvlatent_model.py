@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from prediction import pred_gp
 from likelihood import negloglik_gp
+from matern_covmat import covmat
 
 
 class MVlatentGP(nn.Module):
@@ -78,17 +79,18 @@ def negloglik_mvlatent(Lmb, G, lsigma, theta, f, psi, Phi):
     kap = Phi.shape[1]
     n = f.shape[1]
 
+    def predmean_gp_(Vh, lmb, theta, thetanew, g):
+        Rinv_g = Vh @ Vh.T @ g
+        R_no = covmat(thetanew, theta, lmb)
+        return R_no @ Rinv_g
+
     nll_gp = torch.zeros(kap)
     Gpred = torch.zeros_like(G)
     for k in range(kap):
-        nll_gp[k] = negloglik_gp(lmb=Lmb[k], theta=theta, g=G[:, k])
-        # Gpred[:, k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta, g=G[:, k])
+        nll_gp[k], Vh = negloglik_gp(lmb=Lmb[k], theta=theta, g=G[:, k])
+        Gpred[:, k] = predmean_gp_(Vh, Lmb[k], theta, theta, G[:, k])
 
-    # update negloglik_gp / pred_gp to minimize function evaluations
-    D = f - (psi + Phi @ G.T)
+    D = f - (psi + Phi @ Gpred.T)
     nll_diff = n * lsigma + 1 / 2 * torch.exp(-2 * lsigma) * (D.T @ D).sum()
-
-    # print(diff2, nll_gp)
-    # print('sigma (log): {:.6f}, mean GP scale (log): {:.6f}'.format(lsigma, torch.mean(Lmb[:, -1])))
     nll = (nll_diff + nll_gp.sum()).squeeze()
     return nll

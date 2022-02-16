@@ -18,7 +18,7 @@ def pred_gp(lmb, theta, thetanew, g):
     R = covmat(theta, theta, lmb)
 
     W, V = torch.linalg.eigh(R)
-    Vh = V / torch.sqrt(W)  # check abs?
+    Vh = V / torch.sqrt(W)
 
     Rinv_g = Vh @ Vh.T @ g
     Rnewold = covmat(thetanew, theta, lmb)
