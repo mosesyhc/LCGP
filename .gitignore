@@ -7,3 +7,5 @@ venv/
 .Rproj.user
 
 code/gpbinary/__pycache__/
+
+literature/blei-VI.pdf

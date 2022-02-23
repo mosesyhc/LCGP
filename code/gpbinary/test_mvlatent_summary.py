@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 torch.autograd.set_detect_anomaly(True)
 # torch.cuda.set_device(0)
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+import numpy as np
 
 
 def get_bestPhi(f):
@@ -14,7 +15,7 @@ def get_bestPhi(f):
     return U
 
 
-def surmise_baseline(seed=None):
+def surmise_baseline(run=None, seed=None):
     f, x0, theta = read_only_complete_data(r'code/data/')
 
     f = torch.tensor(f)
@@ -49,9 +50,14 @@ def surmise_baseline(seed=None):
     print('surmise mse: {:.3f}'.format(emumse))
     print('surmise training mse: {:.3f}'.format(emutrainmse))
 
+    return np.array((run, seed, emumse, emutrainmse))
 
 
-def test_mvlatent(seed=None, nepoch_nn=100, nepoch_gp=200, optim_param_set=None):
+def test_mvlatent(run=None, seed=None, nepoch_nn=100, nepoch_gp=200, optim_param_set=None):
+    # result storage vectors
+    store_Phi_mse = np.zeros((nepoch_nn, 4))
+    store_GP_mse = np.zeros((nepoch_gp, 6))
+
     f, x0, theta = read_only_complete_data(r'code/data/')
 
     f = torch.tensor(f)
@@ -102,13 +108,16 @@ def test_mvlatent(seed=None, nepoch_nn=100, nepoch_gp=200, optim_param_set=None)
 
     print('F shape:', F.shape)
 
-    print('Neural network training:')
+    print('Phi training:')
     print('{:<5s} {:<12s}'.format('iter', 'train MSE'))
     for epoch in range(nepoch_nn):
         optim_nn.zero_grad()
         l = loss(Phi_as_param, ftr - psi)
         l.backward()
         optim_nn.step()
+
+        store_Phi_mse[epoch] = (run, seed, epoch, l.detach().numpy())
+
         if (epoch % 50 - 1) == 0:
             print('{:<5d} {:<12.6f}'.format(epoch, l))
     Phi_match = Phi_as_param().detach()
@@ -138,6 +147,8 @@ def test_mvlatent(seed=None, nepoch_nn=100, nepoch_gp=200, optim_param_set=None)
 
     ftrpred = model(thetatr)
     print('GP training MSE: {:.3f}'.format(torch.mean((F - ftrpred)**2)))
+    print('Optimizing parameters: ', model.optim_param_set)
+
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
     optim = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()),
                               lr=10e-3)  #, line_search_fn='strong_wolfe')
@@ -153,35 +164,64 @@ def test_mvlatent(seed=None, nepoch_nn=100, nepoch_gp=200, optim_param_set=None)
 
         mse = model.test_mse(thetate, fte - psi)
         trainmse = model.test_mse(thetatr, ftr - psi)
+
+        store_GP_mse[epoch] = (run, seed, epoch, lik.detach().numpy(),
+                               mse.detach().numpy(),
+                               trainmse.detach().numpy())
         if epoch % 25 == 0:
             print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format(
                 epoch, lik, mse, trainmse))
 
+    return store_Phi_mse, store_GP_mse
+
 
 if __name__ == '__main__':
-    seed = torch.randint(0, 10000, (1,))
-    surmise_baseline(seed)
-    test_mvlatent(seed, nepoch_nn=200,
-                  nepoch_gp=250,
-                  optim_param_set={
-                      'Lmb': True,
-                      'G': False,
-                      'Phi': False,
-                      'lsigma': True
-                  })
-    test_mvlatent(seed, nepoch_nn=200,
-                  nepoch_gp=250,
-                  optim_param_set={
-                      'Lmb': True,
-                      'G': True,
-                      'Phi': False,
-                      'lsigma': True
-                  })
-    test_mvlatent(seed, nepoch_nn=200,
-                  nepoch_gp=250,
-                  optim_param_set={
-                      'Lmb': True,
-                      'G': True,
-                      'Phi': True,
-                      'lsigma': True
-                  })
+    nepoch_nn = 100
+    nepoch_gp = 300
+    nrun = 1
+    results = {'surmise': list(),
+               'optimTFFT_Phi': list(),
+               'optimTFFT_GP': list(),
+               'optimTTFT_Phi': list(),
+               'optimTTFT_GP': list()}
+
+    for run in range(nrun):
+        seed = torch.randint(0, 10000, (1,)).numpy()[0]
+        results['surmise'].append(surmise_baseline(run, seed))
+        Phi_mse1, GP_mse1 = \
+            test_mvlatent(run, seed, nepoch_nn=nepoch_nn,
+                          nepoch_gp=nepoch_gp,
+                          optim_param_set={
+                              'Lmb': True,
+                              'G': False,
+                              'Phi': False,
+                              'lsigma': True
+                          })
+        results['optimTFFT_Phi'].append(Phi_mse1)
+        results['optimTFFT_GP'].append(GP_mse1)
+
+        Phi_mse2, GP_mse2 = \
+            test_mvlatent(run, seed, nepoch_nn=nepoch_nn,
+                          nepoch_gp=nepoch_gp,
+                          optim_param_set={
+                              'Lmb': True,
+                              'G': True,
+                              'Phi': False,
+                              'lsigma': True
+                          })
+        results['optimTTFT_Phi'].append(Phi_mse2)
+        results['optimTTFT_GP'].append(GP_mse2)
+    # test_mvlatent(run, seed, nepoch_nn=nepoch_nn,
+    #               nepoch_gp=nepoch_gp,
+    #               optim_param_set={
+    #                   'Lmb': True,
+    #                   'G': True,
+    #                   'Phi': True,
+    #                   'lsigma': True
+    #               })
+
+    for key, item in results.items():
+        results[key] = np.array(item)
+
+    from datetime import datetime
+    np.save('testresults_mvlatent_{:s}.npy'.format(datetime.today().strftime('%Y%m%d%H%M')), results)

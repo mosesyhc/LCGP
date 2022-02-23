@@ -77,7 +77,7 @@ class MVlatentGP(nn.Module):
 
 def negloglik_mvlatent(Lmb, G, lsigma, theta, f, psi, Phi):
     kap = Phi.shape[1]
-    n = f.shape[1]
+    m, n = f.shape
 
     def predmean_gp_(Vh, lmb, theta, thetanew, g):
         Rinv_g = Vh @ Vh.T @ g
@@ -91,6 +91,6 @@ def negloglik_mvlatent(Lmb, G, lsigma, theta, f, psi, Phi):
         Gpred[:, k] = predmean_gp_(Vh, Lmb[k], theta, theta, G[:, k])
 
     D = f - (psi + Phi @ Gpred.T)
-    nll_diff = n * lsigma + 1 / 2 * torch.exp(-2 * lsigma) * (D.T @ D).sum()
+    nll_diff = n * m * lsigma + 1 / 2 * torch.exp(-2 * lsigma) * (D.T @ D).sum()
     nll = (nll_diff + nll_gp.sum()).squeeze()
     return nll
