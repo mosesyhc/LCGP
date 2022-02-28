@@ -114,7 +114,7 @@ def test_mvlatent():
     print('Basis size: ', Phi.shape)
 
     Lmb = torch.randn(kap, d+1)
-    model = MVlatentGP(Lmb=Lmb, G=G, Phi=Phi, lsigma=, theta=thetatr, f=F, psi=torch.zeros_like(psi))
+    model = MVlatentGP(Lmb=Lmb, G=G, Phi=Phi, lsigma=lsigma, theta=thetatr, f=F, psi=torch.zeros_like(psi))
     model.double()
     model.requires_grad_()
 
