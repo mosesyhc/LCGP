@@ -4,8 +4,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 plt.style.use(['science'])
 
-res_file = r'C:\Users\moses\Desktop\git\binary-hd-emulator\code\test_results\elbo_20220302\testresults_mvnelbo_202203021720.npy'
-dtext = r'202203021720'
+res_file = r'C:\Users\moses\Desktop\git\binary-hd-emulator\code\test_results\elbo_20220302\testresults_mvnelbo_202203030838.npy'
+dtext = r'202203030838'
 d = np.load(res_file, allow_pickle=True)[()]
 df_Phi0 = pd.DataFrame(np.concatenate(d['optim_Phi'], axis=0),
                   columns=('run', 'seed', 'epoch', 'mse'))
@@ -23,7 +23,7 @@ sns.lineplot(x='epoch', y='mse', data=df_Phi)
 plt.yscale('log')
 plt.xlabel('Epoch')
 plt.ylabel(r'$\lVert (\Phi \Phi^T - I)F \rVert^2$')
-plt.ylim(10e-2, 40)
+plt.ylim(1, 40)
 plt.tight_layout()
 plt.savefig(r'code/fig/error_Phi_{:s}.png'.format(dtext), dpi=150)
 plt.close()
@@ -49,7 +49,7 @@ plt.hlines(surmise_testmse, 0, max(df_G['epoch']), linestyles=':')
 plt.yscale('log')
 plt.xlabel('Epoch')
 plt.ylabel('Test MSE')
-plt.ylim(10e-1, 10)
+plt.ylim(8, 25)
 plt.legend(title='')
 plt.tight_layout()
 plt.savefig(r'code/fig/error_elbo_{:s}.png'.format(dtext), dpi=150)
@@ -62,7 +62,7 @@ plt.hlines(surmise_trainmse, 0, max(df_G['epoch']), linestyles=':')
 plt.yscale('log')
 plt.xlabel('Epoch')
 plt.ylabel('Train MSE')
-plt.ylim(10e-2, 10e0)
+plt.ylim(0.5, 10)
 plt.legend(title='')
 plt.tight_layout()
 plt.savefig(r'code/fig/error_elbotrain_{:s}.png'.format(dtext), dpi=150)
