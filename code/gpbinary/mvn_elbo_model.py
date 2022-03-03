@@ -6,7 +6,8 @@ from prediction import pred_gp
 
 
 class MVN_elbo(nn.Module):
-    def __init__(self, Mu, V, Lmb, lsigma2, psi, Phi, F, theta, initLmb=True):
+    def __init__(self, Mu, V, Lmb, lsigma2, psi, Phi, F, theta, initLmb=True,
+                 optimMu=True, optimV=True):
         super().__init__()
         self.kap = Phi.shape[1]
         if initLmb:
@@ -15,8 +16,10 @@ class MVN_elbo(nn.Module):
             lmb = torch.cat((lmb, torch.Tensor([0])))
             Lmb = lmb.repeat(self.kap, 1)
         self.Lmb = nn.Parameter(Lmb)
-        self.Mu = nn.Parameter(Mu) #, requires_grad=False)
-        self.V = nn.Parameter(V) #, requires_grad=False)
+        self.Mu = nn.Parameter(Mu, requires_grad=optimMu)
+        if not optimV:
+            V = torch.zeros_like(V)
+        self.V = nn.Parameter(V, requires_grad=optimV)
         self.lsigma2 = nn.Parameter(lsigma2)
         self.psi = psi
         self.Phi = Phi
@@ -62,9 +65,10 @@ class MVN_elbo(nn.Module):
             R_no = covmat(thetanew, theta, lmb)
             return R_no @ Rinv_g
 
-        negelbo = -1/2 * torch.sum(torch.log(V)) + \
-            1/2 * torch.exp(-lsigma2) * torch.sum(torch.diag(Phi.T @ Phi) @ V) + \
+        negelbo = 1/2 * torch.exp(-lsigma2) * torch.sum(torch.diag(Phi.T @ Phi) @ V) + \
             m*n/2 * lsigma2
+        if V.requires_grad:
+            negelbo += -1/2 * torch.sum(torch.log(V))
 
         Mupred = torch.zeros((kap, n))
         for k in range(kap):
