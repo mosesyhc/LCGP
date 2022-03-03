@@ -2,15 +2,17 @@ import torch
 from torch import nn
 from mvn_elbo_model import MVN_elbo
 from fayans_support import read_only_complete_data
+
 torch.set_default_dtype(torch.double)
 import matplotlib.pyplot as plt
 import numpy as np
+
 torch.autograd.set_detect_anomaly(True)
 from test_surmise_Phi import surmise_baseline
 
 
-def test_mvn_elbo(run=None, seed=None, nepoch_nn=100, nepoch_elbo=400,
-                 optimMu=True, optimV=True):
+def test_mvn_elbo(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=100, nepoch_elbo=400,
+                  optimMu=True, optimV=True):
     # result storage vectors
     store_Phi_mse = np.zeros((nepoch_nn, 4))
     store_elbo_mse = np.zeros((nepoch_elbo, 6))
@@ -22,9 +24,6 @@ def test_mvn_elbo(run=None, seed=None, nepoch_nn=100, nepoch_elbo=400,
     theta = torch.tensor(theta)
 
     m, n = f.shape  # nloc, nparam
-
-    ntrain = 50
-    ntest = 200
 
     if seed is not None:
         torch.manual_seed(seed)
@@ -39,7 +38,6 @@ def test_mvn_elbo(run=None, seed=None, nepoch_nn=100, nepoch_elbo=400,
 
     psi = ftr.mean(1).unsqueeze(1)
     d = theta.shape[1]
-    kap = 20
 
     x = torch.column_stack((x0[:, 0], x0[:, 1],
                             *[x0[:, 2] == k for k in torch.unique(x0[:, 2])]))
@@ -79,9 +77,9 @@ def test_mvn_elbo(run=None, seed=None, nepoch_nn=100, nepoch_elbo=400,
 
     Phi = Phi_match
     print('Basis size: ', Phi.shape)
-    np.savetxt('Phi_seed0.txt', Phi.numpy())
+    # np.savetxt('Phi_seed0.txt', Phi.numpy())
 
-    Phi = torch.tensor(np.loadtxt('Phi_seed0.txt'))
+    # Phi = torch.tensor(np.loadtxt('Phi_seed0.txt'))
 
     Lmb = torch.zeros(kap, d + 1)
     Mu = Phi.T @ F
@@ -101,7 +99,7 @@ def test_mvn_elbo(run=None, seed=None, nepoch_nn=100, nepoch_elbo=400,
     print('ELBO model training MSE: {:.3f}'.format(torch.mean((F - ftrpred) ** 2)))
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
     optim = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()),
-                              lr=10e-3)  # , line_search_fn='strong_wolfe')
+                              lr=2 * 10e-3)  # , line_search_fn='strong_wolfe')
     header = ['iter', 'neg elbo', 'test mse', 'train mse']
     print('\nELBO training:')
     print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
@@ -127,8 +125,11 @@ def test_mvn_elbo(run=None, seed=None, nepoch_nn=100, nepoch_elbo=400,
 
 if __name__ == '__main__':
     nepoch_nn = 100
-    nepoch_elbo = 300
-    nrun = 5
+    nepoch_elbo = 200
+    ntrain = 25
+    ntest = 100
+    kap = 6
+    nrun = 1
     results = {
         'surmise': list(),
         'optim_Phi': list(),
@@ -141,29 +142,37 @@ if __name__ == '__main__':
 
     for run in range(nrun):
         seed = torch.randint(0, 10000, (1,)).numpy()[0]
-        results['surmise'].append(surmise_baseline(run, seed))
+        results['surmise'].append(surmise_baseline(
+            ntrain=ntrain, ntest=ntest,
+            run=run, seed=seed))
 
         Phi_mse1, elbo_mse1 = \
-            test_mvn_elbo(run, seed, nepoch_nn=nepoch_nn,
-                          nepoch_elbo=nepoch_elbo,
-                          optimMu=False,
-                          optimV=False)
+            test_mvn_elbo(
+                ntrain=ntrain, ntest=ntest, kap=kap,
+                run=run, seed=seed, nepoch_nn=nepoch_nn,
+                nepoch_elbo=nepoch_elbo,
+                optimMu=False,
+                optimV=False)
         results['optim_Phi'].append(Phi_mse1)
         results['optim_elbo'].append(elbo_mse1)
 
         Phi_mse2, elbo_mse2 = \
-            test_mvn_elbo(run, seed, nepoch_nn=nepoch_nn,
-                          nepoch_elbo=nepoch_elbo,
-                          optimMu=True,
-                          optimV=False)
+            test_mvn_elbo(
+                ntrain=ntrain, ntest=ntest, kap=kap,
+                run=run, seed=seed, nepoch_nn=nepoch_nn,
+                nepoch_elbo=nepoch_elbo,
+                optimMu=True,
+                optimV=False)
         results['optimMu_Phi'].append(Phi_mse2)
         results['optimMu_elbo'].append(elbo_mse2)
 
         Phi_mse3, elbo_mse3 = \
-            test_mvn_elbo(run, seed, nepoch_nn=nepoch_nn,
-                          nepoch_elbo=nepoch_elbo,
-                          optimMu=True,
-                          optimV=True)
+            test_mvn_elbo(
+                ntrain=ntrain, ntest=ntest, kap=kap,
+                run=run, seed=seed, nepoch_nn=nepoch_nn,
+                nepoch_elbo=nepoch_elbo,
+                optimMu=True,
+                optimV=True)
         results['optimMuV_Phi'].append(Phi_mse3)
         results['optimMuV_elbo'].append(elbo_mse3)
 
@@ -172,4 +181,5 @@ if __name__ == '__main__':
 
     dir = r'C:\Users\moses\Desktop\git\binary-hd-emulator\code\test_results\elbo_20220302'
     from datetime import datetime
+
     np.save(dir + r'\testresults_mvnelbo_{:s}.npy'.format(datetime.today().strftime('%Y%m%d%H%M')), results)

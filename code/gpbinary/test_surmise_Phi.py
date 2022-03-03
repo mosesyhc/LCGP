@@ -3,7 +3,7 @@ import numpy as np
 from fayans_support import read_only_complete_data
 
 
-def surmise_baseline(run=None, seed=None):
+def surmise_baseline(ntrain, ntest, run=None, seed=None):
     f, x0, theta = read_only_complete_data(r'code/data/')
 
     f = torch.tensor(f)
@@ -11,9 +11,6 @@ def surmise_baseline(run=None, seed=None):
     theta = torch.tensor(theta)
 
     m, n = f.shape  # nloc, nparam
-
-    ntrain = 50
-    ntest = 200
 
     if seed is not None:
         torch.manual_seed(seed)
