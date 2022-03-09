@@ -94,8 +94,8 @@ def test_mvn_elbo_autolatent(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=
     ftrpred = model(thetatr)
     print('ELBO model training MSE: {:.3f}'.format(torch.mean((F - ftrpred) ** 2)))
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
-    optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-                              lr=2.5 * 10e-3)  # , line_search_fn='strong_wolfe')
+    optim = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()),
+                              lr=5 * 10e-3)  # , line_search_fn='strong_wolfe')
     header = ['iter', 'neg elbo', 'test mse', 'train mse']
     print('\nELBO training:')
     print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
@@ -121,11 +121,11 @@ def test_mvn_elbo_autolatent(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=
 
 if __name__ == '__main__':
     nepoch_nn = 120
-    nepoch_elbo = 150
-    ntrain = 50
+    nepoch_elbo = 250
+    ntrain = 30
     ntest = 100
-    kap = 15
-    nrun = 3
+    kap = 10
+    nrun = 5
     results = {
         'surmise': list(),
         'optim_Phi': list(),
