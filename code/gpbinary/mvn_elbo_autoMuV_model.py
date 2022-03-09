@@ -5,9 +5,8 @@ from likelihood import negloglik_gp
 from prediction import pred_gp
 
 
-class MVN_elbo(nn.Module):
-    def __init__(self, Mu, V, Lmb, lsigma2, psi, Phi, F, theta, initLmb=True,
-                 optimMu=True, optimV=True):
+class MVN_elbo_autoMuV(nn.Module):
+    def __init__(self, Lmb, lsigma2, psi, Phi, F, theta, initLmb=True):
         super().__init__()
         self.kap = Phi.shape[1]
         if initLmb:
@@ -16,14 +15,13 @@ class MVN_elbo(nn.Module):
             lmb = torch.cat((lmb, torch.Tensor([0])))
             Lmb = lmb.repeat(self.kap, 1)
         self.Lmb = nn.Parameter(Lmb)
-        self.Mu = nn.Parameter(Mu, requires_grad=optimMu)
-        self.V = nn.Parameter(V, requires_grad=optimV)
         self.lsigma2 = nn.Parameter(lsigma2)
         self.psi = psi
         self.Phi = Phi
         self.F = F
         self.theta = theta
         self.m, self.n = F.shape
+        self.Mu =
 
     def forward(self, theta0):
         Lmb = self.Lmb
