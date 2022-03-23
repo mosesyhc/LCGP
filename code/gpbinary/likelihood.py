@@ -1,6 +1,6 @@
 import torch
 import torch.distributions.normal as Normal
-from matern_covmat import covmat
+from matern_covmat import covmat, cov_sp
 norm = Normal.Normal(loc=0, scale=1)
 
 
@@ -31,9 +31,9 @@ def negloglik_link(G, y, psi, Phi):
 
 
 def negloglik_gp(lmb, theta, g, lmbregmean=0, lmbregstd=1):
-    R = covmat(theta, theta, lmb)
+    C = covmat(theta, theta, lmb)
 
-    W, V = torch.linalg.eigh(R)
+    W, V = torch.linalg.eigh(C)
     Vh = V / torch.sqrt(W)
     fcenter = Vh.T @ g
     n = g.shape[0]
@@ -45,3 +45,23 @@ def negloglik_gp(lmb, theta, g, lmbregmean=0, lmbregstd=1):
     negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)  # regularization of hyperparameter
 
     return negloglik, Vh
+
+
+def negloglik_gp_sp(lmb, theta, thetai, g, lmbregmean=0, lmbregstd=1):
+    C, C_inv, logdetC = cov_sp(theta, thetai, lmb)
+    # R = covmat(theta, theta, lmb)
+    #
+    # W, V = torch.linalg.eigh(R)
+    # Vh = V / torch.sqrt(W)
+    # fcenter = Vh.T @ g
+    quad = g.T @ C_inv @ g
+    n = g.shape[0]
+
+    sig2hat = (quad + 10) / (n + 10)
+    negloglik = 1/2 * logdetC  # log-determinant
+    negloglik += n/2 * torch.log(sig2hat)  # log of MLE of scale
+    negloglik += 1/2 * quad / sig2hat  # quadratic term
+    negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)  # regularization of hyperparameter
+
+    return negloglik #, Vh
+

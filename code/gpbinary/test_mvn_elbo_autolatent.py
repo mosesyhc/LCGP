@@ -72,8 +72,8 @@ def test_mvn_elbo_autolatent(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=
             print('{:<5d} {:<12.6f}'.format(epoch, l))
     Phi_match = Phi_as_param().detach()
 
-    print('Reproducing Phi0 error in prediction of F: ',
-          torch.mean((Phi_match @ Phi_match.T @ F - F) ** 2))
+    mse_recovery = torch.mean((Phi_match @ Phi_match.T @ F - F) ** 2)
+    print('Reproducing Phi0 error in prediction of F: ', mse_recovery)
 
     Phi = Phi_match
     print('Basis size: ', Phi.shape)
@@ -81,7 +81,7 @@ def test_mvn_elbo_autolatent(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=
     # Phi = torch.tensor(np.loadtxt('Phi_seed0.txt'))
 
     Lmb = torch.zeros(kap, d + 1)
-    lsigma2 = torch.Tensor([0])
+    lsigma2 = 0.2 * torch.Tensor(torch.log(mse_recovery))
     model = MVN_elbo_autolatent(Lmb=Lmb,
                      lsigma2=lsigma2, psi=torch.zeros_like(psi),
                      Phi=Phi, F=F, theta=thetatr, initLmb=True)
@@ -90,12 +90,12 @@ def test_mvn_elbo_autolatent(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=
     # # .requires_grad_() turns all parameters on.
     # model.requires_grad_()
     # print(list(model.parameters()))
-
-    ftrpred = model(thetatr)
-    print('ELBO model training MSE: {:.3f}'.format(torch.mean((F - ftrpred) ** 2)))
+    #
+    # ftrpred = model(thetatr)
+    # print('ELBO model training MSE: {:.3f}'.format(torch.mean((F - ftrpred) ** 2)))
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
     optim = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()),
-                              lr=5 * 10e-3)  # , line_search_fn='strong_wolfe')
+                              lr=8 * 10e-3)  # , line_search_fn='strong_wolfe')
     header = ['iter', 'neg elbo', 'test mse', 'train mse']
     print('\nELBO training:')
     print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
@@ -121,11 +121,11 @@ def test_mvn_elbo_autolatent(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=
 
 if __name__ == '__main__':
     nepoch_nn = 120
-    nepoch_elbo = 250
+    nepoch_elbo = 300
     ntrain = 30
     ntest = 100
     kap = 10
-    nrun = 5
+    nrun = 3
     results = {
         'surmise': list(),
         'optim_Phi': list(),
