@@ -94,17 +94,18 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     lsigma2 = torch.Tensor(torch.log(mse_Phi))
     model = MVN_elbo_autolatent_sp(Lmb=Lmb, initLmb=True,
                      lsigma2=lsigma2, psi=torch.zeros_like(psi),
-                     Phi=Phi, F=F, theta=thetatr, thetai=thetai)
+                     Phi=Phi, F=F, theta=thetatr, thetai=thetatr)
     model.double()
-    #
-    # from matern_covmat import covmat
-    # from mvn_elbo_autolatent_sp_model import cov_sp
-    #
-    # C = covmat(theta[:50], theta[:50], Lmb[0])
+
+    from matern_covmat import covmat
+    from mvn_elbo_autolatent_sp_model import cov_sp
+
+    # C = covmat(theta[:m], theta[:m], Lmb[0])
     # C_inv = torch.linalg.inv(C)
     # logdet_C = torch.linalg.slogdet(C).logabsdet
-    # C_sp, C_sp_inv, logdet_C_sp = cov_sp(theta[:50], theta[:50], Lmb[0])
+    # C_sp, C_sp_inv, logdet_C_sp = cov_sp(theta[:m], theta[100:125], Lmb[0])
     #
+    # print(C.shape)
     # print(((C - C_sp)**2).sum())
     # print(((C_inv - C_sp_inv)**2).sum())
     # print(logdet_C, logdet_C_sp)
@@ -117,7 +118,7 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     # print('ELBO model training MSE: {:.3f}'.format(torch.mean((F - ftrpred) ** 2)))
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
     optim = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()),
-                              lr=8 * 10e-3)  # , line_search_fn='strong_wolfe')
+                              lr=10e-4)  # , line_search_fn='strong_wolfe')
     header = ['iter', 'neg elbo', 'test mse', 'train mse']
     print('\nELBO training:')
     print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))

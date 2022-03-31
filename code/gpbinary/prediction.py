@@ -41,12 +41,13 @@ def pred_gp_sp(lmb, theta, thetanew, thetai, g):
     :return:
     '''
 
+
     C, C_inv, _ = cov_sp(theta=theta, thetai=thetai, lmb=lmb)
     # covariance matrix R for the training thetas
-    # R = covmat(theta, theta, lmb)
+    R = covmat(theta, theta, lmb)
 
-    # W, V = torch.linalg.eigh(R)
-    # Vh = V / torch.sqrt(W)
+    W, V = torch.linalg.eigh(R)
+    Vh = V / torch.sqrt(W)
 
     Cinv_g = C_inv @ g
     Cnewold = covmat(thetanew, theta, lmb)
