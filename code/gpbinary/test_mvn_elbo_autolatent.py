@@ -72,8 +72,9 @@ def test_mvn_elbo_autolatent(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=
             print('{:<5d} {:<12.6f}'.format(epoch, l))
     Phi_match = Phi_as_param().detach()
 
-    mse_recovery = torch.mean((Phi_match @ Phi_match.T @ F - F) ** 2)
-    print('Reproducing Phi0 error in prediction of F: ', mse_recovery)
+    mse_Phi = torch.mean((Phi_match @ Phi_match.T @ F - F) ** 2)
+    print('Reproducing Phi0 error in prediction of F: ',
+          mse_Phi)
 
     Phi = Phi_match
     print('Basis size: ', Phi.shape)
@@ -81,7 +82,11 @@ def test_mvn_elbo_autolatent(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=
     # Phi = torch.tensor(np.loadtxt('Phi_seed0.txt'))
 
     Lmb = torch.zeros(kap, d + 1)
-    lsigma2 = 0.2 * torch.Tensor(torch.log(mse_recovery))
+
+    # print(np.log(np.var(Phi.T @ F,1)).shape)
+    Lmb[:,d] = 2+torch.log(torch.var(Phi.T @ F,1))
+
+    lsigma2 = torch.Tensor(torch.log(mse_Phi))
     model = MVN_elbo_autolatent(Lmb=Lmb,
                      lsigma2=lsigma2, psi=torch.zeros_like(psi),
                      Phi=Phi, F=F, theta=thetatr, initLmb=True)
@@ -120,12 +125,12 @@ def test_mvn_elbo_autolatent(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=
 
 
 if __name__ == '__main__':
-    nepoch_nn = 120
-    nepoch_elbo = 300
+    nepoch_nn = 100
+    nepoch_elbo = 250
     ntrain = 30
     ntest = 100
     kap = 10
-    nrun = 3
+    nrun = 1
     results = {
         'surmise': list(),
         'optim_Phi': list(),
@@ -145,9 +150,9 @@ if __name__ == '__main__':
         results['optim_Phi_autolatent'].append(Phi_mse1)
         results['optim_elbo_autolatent'].append(elbo_mse1)
 
-        results['surmise'].append(surmise_baseline(
-            ntrain=ntrain, ntest=ntest,
-            run=run, seed=seed, Phi=Phi))
+        # results['surmise'].append(surmise_baseline(
+        #     ntrain=ntrain, ntest=ntest,
+        #     run=run, seed=seed, Phi=Phi))
 
         Phi_mse2, elbo_mse2 = \
             test_mvn_elbo(
@@ -157,11 +162,11 @@ if __name__ == '__main__':
         results['optim_Phi'].append(Phi_mse2)
         results['optim_elbo'].append(elbo_mse2)
 
-
-    for key, item in results.items():
-        results[key] = np.array(item)
-
-    dir = r'C:\Users\moses\Desktop\git\binary-hd-emulator\code\test_results\elbo_20220308'
-    from datetime import datetime
-
-    np.save(dir + r'\testresults_mvnelbo_{:s}.npy'.format(datetime.today().strftime('%Y%m%d%H%M')), results)
+    #
+    # for key, item in results.items():
+    #     results[key] = np.array(item)
+    #
+    # dir = r'C:\Users\moses\Desktop\git\binary-hd-emulator\code\test_results\elbo_20220308'
+    # from datetime import datetime
+    #
+    # np.save(dir + r'\testresults_mvnelbo_{:s}.npy'.format(datetime.today().strftime('%Y%m%d%H%M')), results)
