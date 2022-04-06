@@ -11,6 +11,8 @@ torch.autograd.set_detect_anomaly(True)
 from test_mvn_elbo import test_mvn_elbo
 from test_surmise_Phi import surmise_baseline
 
+from sklearn.cluster import KMeans
+from sklearn.metrics import pairwise_distances
 
 def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=100, nepoch_elbo=400):
     # result storage vectors
@@ -24,6 +26,7 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     theta = torch.tensor(theta)
 
     m, n = f.shape  # nloc, nparam
+    d = theta.shape[1]
 
     if seed is not None:
         torch.manual_seed(seed)
@@ -36,8 +39,17 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     fte = f[:, te_inds]
     thetate = theta[te_inds]
 
+    # choose inducing points
+    ni = 20
+    kmeans_theta = KMeans(n_clusters=ni).fit(thetatr)
+    thetai = torch.Tensor(kmeans_theta.cluster_centers_)
+    D = pairwise_distances(thetatr, thetai)
+    overlap_inds = torch.where(torch.tensor(D) == 0)[1]
+    print(overlap_inds)
+    for i in overlap_inds:
+        thetai[i] += torch.normal(torch.zeros(d), 0.1 * thetai.std(0))
+
     psi = ftr.mean(1).unsqueeze(1)
-    d = theta.shape[1]
 
     x = torch.column_stack((x0[:, 0], x0[:, 1],
                             *[x0[:, 2] == k for k in torch.unique(x0[:, 2])]))
@@ -79,7 +91,7 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     print('Reproducing Phi0 error in prediction of F: ', mse_Phi)
 
     # Pick random inducing points from data for now
-    thetai = theta[torch.randint(0, theta.shape[0], size=(30,))]
+    # thetai = theta[torch.randint(0, theta.shape[0], size=(30,))]
 
     Phi = Phi_match
     print('Basis size: ', Phi.shape)
@@ -94,7 +106,7 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     lsigma2 = torch.Tensor(torch.log(mse_Phi))
     model = MVN_elbo_autolatent_sp(Lmb=Lmb, initLmb=True,
                      lsigma2=lsigma2, psi=torch.zeros_like(psi),
-                     Phi=Phi, F=F, theta=thetatr, thetai=thetatr)
+                     Phi=Phi, F=F, theta=thetatr, thetai=thetai)
     model.double()
 
     from matern_covmat import covmat
@@ -117,8 +129,8 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     # ftrpred = model(thetatr)
     # print('ELBO model training MSE: {:.3f}'.format(torch.mean((F - ftrpred) ** 2)))
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
-    optim = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()),
-                              lr=10e-4)  # , line_search_fn='strong_wolfe')
+    optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
+                              lr=10e-3)  # , line_search_fn='strong_wolfe')
     header = ['iter', 'neg elbo', 'test mse', 'train mse']
     print('\nELBO training:')
     print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
@@ -145,9 +157,9 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
 if __name__ == '__main__':
     nepoch_nn = 100
     nepoch_elbo = 300
-    ntrain = 50
-    ntest = 100
-    kap = 10
+    ntrain = 100
+    ntest = 50
+    kap = 20
     nrun = 3
     results = {
         'surmise': list(),

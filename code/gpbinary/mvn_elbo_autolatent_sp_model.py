@@ -41,11 +41,11 @@ class MVN_elbo_autolatent_sp(nn.Module):
         ghat = torch.zeros(kap, n0)
         ghat_sp = torch.zeros_like(ghat)
         for k in range(kap):
-            ghat[k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, g=Mu[k])
+            # ghat[k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, g=Mu[k])
             ghat_sp[k], _ = pred_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, thetanew=theta0, g=Mu[k])
-            print('implementation diff in pred:', ((ghat[k] - ghat_sp[k])**2).mean())
+            # print('implementation diff in pred:', ((ghat[k] - ghat_sp[k])**2).mean())
 
-        print('diff in f pred:', ((Phi @ ghat_sp - Phi @ ghat)**2).mean())
+        # print('diff in f pred:', ((Phi @ ghat_sp - Phi @ ghat)**2).mean())
         fhat = psi + Phi @ ghat_sp
         return fhat
 
@@ -83,9 +83,9 @@ class MVN_elbo_autolatent_sp(nn.Module):
             V[k] = 1 / torch.exp(-lsigma2) + torch.diag(C_k_inv)
             Mu[k] = torch.linalg.solve(torch.eye(n) + torch.exp(lsigma2) * C_k_inv, Phi[:, k] @ (F - psi))
 
-            negloggp_k, _ = negloglik_gp(lmb=Lmb[k], theta=theta, g=Mu[k].clone())
+            # negloggp_k, _ = negloglik_gp(lmb=Lmb[k], theta=theta, g=Mu[k].clone())
             negloggp_sp_k = negloglik_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, g=Mu[k].clone())
-            print('implementation diff in neglog:', (negloggp_k - negloggp_sp_k)**2)
+            # print('implementation diff in neglog:', (negloggp_k - negloggp_sp_k)**2)
             negelbo += negloggp_sp_k
 
 
