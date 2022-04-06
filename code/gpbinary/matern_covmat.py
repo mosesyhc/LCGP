@@ -51,7 +51,7 @@ def cov_sp(theta, thetai, lmb):  # assuming x1 = x2 = theta
     C_r = c_full_i @ C_iinv @ c_full_i.T
 
     diag = torch.diag(C_full - C_r)
-    # diag = torch.clip(diag, 0.0, torch.inf) + 10e-8 # only matters when thetai is a subset of theta
+    # diag = torch.clip(diag, 0.0, torch.inf) # + 10e-8 # only matters when thetai is a subset of theta
     diag_inv = 1 / diag
 
     C_sp = C_r + torch.diag(diag)
