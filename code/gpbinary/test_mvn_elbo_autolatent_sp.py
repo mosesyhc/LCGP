@@ -46,8 +46,8 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     D = pairwise_distances(thetatr, thetai)
     overlap_inds = torch.where(torch.tensor(D) == 0)[1]
     print(overlap_inds)
-    for i in overlap_inds:
-        thetai[i] += torch.normal(torch.zeros(d), 0.1 * thetai.std(0))
+    # for i in overlap_inds:
+    #     thetai[i] += torch.normal(torch.zeros(d), 0.1 * thetai.std(0))
 
     psi = ftr.mean(1).unsqueeze(1)
 
@@ -157,7 +157,7 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
 if __name__ == '__main__':
     nepoch_nn = 100
     nepoch_elbo = 300
-    ntrain = 100
+    ntrain = 50
     ntest = 50
     kap = 20
     nrun = 3
