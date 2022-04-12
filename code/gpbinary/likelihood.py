@@ -47,8 +47,8 @@ def negloglik_gp(lmb, theta, g, lmbregmean=0, lmbregstd=1):
     return negloglik, Vh
 
 
-def negloglik_gp_sp(lmb, theta, thetai, g, lmbregmean=0, lmbregstd=1):
-    C, C_inv, logdetC = cov_sp(theta, thetai, lmb)
+def negloglik_gp_sp(lmb, theta, thetai, lsigma2, g, lmbregmean=0, lmbregstd=1):
+    C, C_inv, logdetC = cov_sp(theta, thetai, lsigma2, lmb)
     # R = covmat(theta, theta, lmb)
     #
     # W, V = torch.linalg.eigh(R)

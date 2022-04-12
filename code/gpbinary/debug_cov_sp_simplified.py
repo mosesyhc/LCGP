@@ -87,7 +87,7 @@ from mvn_elbo_autolatent_sp_model import cov_sp
 ###########################################################
 
 optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-                         lr=10e-3)
+                         lr=10e-4)
 header = ['iter', 'neg elbo', 'test mse', 'train mse']
 print('\nELBO training:')
 print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))

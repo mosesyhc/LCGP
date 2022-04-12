@@ -26,7 +26,7 @@ def covmat(x1, x2, lmb):
     return C
 
 
-def cov_sp(theta, thetai, lmb):  # assuming x1 = x2 = theta
+def cov_sp(theta, thetai, lsigma2, lmb):  # assuming x1 = x2 = theta
     '''
     Returns the Nystr{\"o}m approximation of a covariance matrix,
     its inverse, and the log of its determinant.
@@ -50,20 +50,20 @@ def cov_sp(theta, thetai, lmb):  # assuming x1 = x2 = theta
 
     C_r = c_full_i @ C_iinv @ c_full_i.T
 
-    diag = torch.diag(C_full - C_r)
+    diag = torch.diag(C_full - C_r) + torch.exp(lsigma2)
     # diag = torch.clip(diag, 0.0, torch.inf) # + 10e-8 # only matters when thetai is a subset of theta
     diag_inv = 1 / diag
 
     C_sp = C_r + torch.diag(diag)
 
-    D_inv = torch.diag(diag_inv)
-    R = (C_i + c_full_i.T @ D_inv @ c_full_i)
+    Lmb_inv = torch.diag(diag_inv)
+    R = (C_i + (c_full_i.T * diag_inv) @ c_full_i)
 
     W_R, U_R = torch.linalg.eigh(R)
     W_Rinv = 1 / W_R
     Rinv = U_R @ torch.diag(W_Rinv) @ U_R.T
 
-    C_sp_inv = D_inv - D_inv @ c_full_i @ Rinv @ c_full_i.T @ D_inv
+    C_sp_inv = Lmb_inv - Lmb_inv @ c_full_i @ Rinv @ c_full_i.T @ Lmb_inv  # improve to p x p matrices
 
     # print(torch.log(W_R), torch.log(W_i), torch.log(diag))
 

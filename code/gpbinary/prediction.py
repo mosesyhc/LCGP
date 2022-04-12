@@ -30,7 +30,7 @@ def pred_gp(lmb, theta, thetanew, g):
 
 
 
-def pred_gp_sp(lmb, theta, thetanew, thetai, g):
+def pred_gp_sp(lmb, theta, thetanew, thetai, lsigma2, g):
     '''
     Test in test_gp.py.
 
@@ -42,7 +42,7 @@ def pred_gp_sp(lmb, theta, thetanew, thetai, g):
     '''
 
 
-    C, C_inv, _ = cov_sp(theta=theta, thetai=thetai, lmb=lmb)
+    C, C_inv, _ = cov_sp(theta=theta, thetai=thetai, lsigma2=lsigma2, lmb=lmb)
     # covariance matrix R for the training thetas
     R = covmat(theta, theta, lmb)
 
