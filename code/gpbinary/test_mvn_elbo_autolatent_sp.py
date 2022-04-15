@@ -19,7 +19,7 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     store_Phi_mse = np.zeros((nepoch_nn, 4))
     store_elbo_mse = np.zeros((nepoch_elbo, 6))
 
-    f, x0, theta = read_only_complete_data(r'code/data/')
+    f, x0, theta = read_only_complete_data(r'code/data/fayans_data')
 
     f = torch.tensor(f)
     x0 = torch.tensor(x0)

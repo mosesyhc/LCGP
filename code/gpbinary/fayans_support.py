@@ -1,10 +1,13 @@
 import torch
-# torch.cuda.set_device(0)
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 import torch.distributions.normal as Normal
 norm = Normal.Normal(0, 1)
 import numpy as np
 
+
+def read_test_data(dir):
+    testf = np.loadtxt(dir + r'testf.txt')
+    testtheta = np.loadtxt(dir + r'testtheta.txt')
+    return testf, testtheta
 
 def read_data(dir):
     f = np.loadtxt(dir + r'f.txt')

@@ -8,8 +8,11 @@ from prediction import pred_gp, pred_gp_sp
 class MVN_elbo_autolatent_sp(nn.Module):
     def __init__(self, Lmb, lsigma2, psi, Phi, F, theta, thetai, initLmb=True):
         super().__init__()
+        if psi.ndim < 2:
+            psi = psi.unsqueeze(1)
         self.kap = Phi.shape[1]
         self.m, self.n = F.shape
+        self.p = thetai.shape[0]
         if initLmb:
             lmb = torch.Tensor(0.5 * torch.log(torch.Tensor([theta.shape[1]])) +
                                 torch.log(torch.std(theta, 0)))
@@ -17,8 +20,8 @@ class MVN_elbo_autolatent_sp(nn.Module):
             Lmb = lmb.repeat(self.kap, 1)
             Lmb[:, -1] = torch.log(torch.var(Phi.T @ (F - psi), 1))
         self.Lmb = nn.Parameter(Lmb)
-        self.lsigma2 = lsigma2
-        self.Mu = torch.zeros(self.kap, self.n)
+        self.lsigma2 = nn.Parameter(lsigma2)
+        self.M = torch.zeros(self.kap, self.n)
         self.V = torch.zeros(self.kap, self.n)
         self.psi = psi
         self.Phi = Phi
@@ -28,7 +31,7 @@ class MVN_elbo_autolatent_sp(nn.Module):
 
     def forward(self, theta0):
         Lmb = self.Lmb
-        Mu = self.Mu
+        M = self.M
         lsigma2 = self.lsigma2
 
         psi = self.psi
@@ -42,19 +45,17 @@ class MVN_elbo_autolatent_sp(nn.Module):
         ghat = torch.zeros(kap, n0)
         ghat_sp = torch.zeros_like(ghat)
         for k in range(kap):
-            # ghat[k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, g=Mu[k])
-            ghat_sp[k], _ = pred_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, thetanew=theta0, lsigma2=lsigma2, g=Mu[k])
-            # print('implementation diff in pred:', ((ghat[k] - ghat_sp[k])**2).mean())
+            ghat_sp[k], _ = pred_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, thetanew=theta0, lsigma2=lsigma2, g=M[k])
 
-        # print('diff in f pred:', ((Phi @ ghat_sp - Phi @ ghat)**2).mean())
         fhat = psi + Phi @ ghat_sp
         return fhat
 
     def negelbo(self):
         Lmb = self.Lmb
-        Mu = self.Mu
+        M = self.M
         V = self.V
         lsigma2 = self.lsigma2
+        sigma2 = torch.exp(lsigma2)
 
         psi = self.psi
         Phi = self.Phi
@@ -65,42 +66,31 @@ class MVN_elbo_autolatent_sp(nn.Module):
         m = self.m
         n = self.n
         kap = self.kap
+        p = self.p
 
-        def predmean_gp_(Vh, lmb, theta, thetanew, g):
-            Rinv_g = Vh @ Vh.T @ g
-            R_no = covmat(thetanew, theta, lmb)
-            return R_no @ Rinv_g
-
-        Vinv = torch.zeros_like(V)
         negelbo = torch.zeros(1)
         for k in range(kap):
-            # C_k = covmat(theta, theta, Lmb[k])
-            # W_k, U_k = torch.linalg.eigh(C_k)
-            # Winv_k = 1 / W_k
+            Lmb_inv_diag, Qk_half, logdet_Ck = cov_sp(theta, thetai, lsigma2, Lmb[k])
 
-            C_k_sp, C_k_inv, logdet_C_k = cov_sp(theta, thetai, lsigma2, Lmb[k])
-            # print('|C_k - C_k_sp|:', ((C_k - C_k_sp)**2).mean())
+            Dinv_k_diag = 1 / (sigma2 * Lmb_inv_diag + 1)
+            Sk = torch.eye(p) - sigma2 * (Qk_half.T * Dinv_k_diag) @ Qk_half
+            W_Sk, U_Sk = torch.linalg.eigh(Sk)
+            Tk_half = (Dinv_k_diag * Qk_half.T).T @ U_Sk / torch.sqrt(torch.abs(W_Sk)) @ U_Sk.T
 
-            V[k] = 1 / torch.exp(-lsigma2) + torch.diag(C_k_inv)
-            Mu[k] = torch.linalg.solve(torch.eye(n) + torch.exp(lsigma2) * C_k_inv, Phi[:, k] @ (F - psi))  # change Mu to M
+            V[k] = 1 / (1 / sigma2 + Lmb_inv_diag - torch.diag(Qk_half @ Qk_half.T))  #
+            M[k] = Dinv_k_diag * (Phi[:, k] * (F - psi).T).sum(1) + sigma2 * Tk_half @ Tk_half.T @ (Phi[:, k] * (F - psi).T).sum(1)
 
-
-            # negloggp_k, _ = negloglik_gp(lmb=Lmb[k], theta=theta, g=Mu[k].clone())
-            negloggp_sp_k = negloglik_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, lsigma2=lsigma2, g=Mu[k].clone())
-            # print('implementation diff in neglog:', (negloggp_k - negloggp_sp_k)**2)
+            negloggp_sp_k = negloglik_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, lsigma2=lsigma2, g=M[k].clone())
             negelbo += negloggp_sp_k
 
-
-
-        residF = F - (psi + Phi @ Mu)
+        residF = F - (psi + Phi @ M)
         negelbo += m*n/2 * lsigma2
         negelbo += 1/2 * torch.exp(-lsigma2) * (residF.T @ residF).sum()
         negelbo -= 1/2 * torch.log(V).sum()
 
-        self.Mu = Mu
+        self.M = M
         self.V = V
         return negelbo.squeeze()
-
 
     def test_mse(self, theta0, f0):
         fhat = self.forward(theta0)

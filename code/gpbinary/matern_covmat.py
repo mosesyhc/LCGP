@@ -51,22 +51,17 @@ def cov_sp(theta, thetai, lsigma2, lmb):  # assuming x1 = x2 = theta
     C_r = c_full_i @ C_iinv @ c_full_i.T
 
     diag = torch.diag(C_full - C_r) + torch.exp(lsigma2)
-    # diag = torch.clip(diag, 0.0, torch.inf) # + 10e-8 # only matters when thetai is a subset of theta
-    diag_inv = 1 / diag
+    Lmb_inv_diag = 1 / diag
 
-    C_sp = C_r + torch.diag(diag)
-
-    Lmb_inv = torch.diag(diag_inv)
-    R = (C_i + (c_full_i.T * diag_inv) @ c_full_i)
+    R = C_i + (c_full_i.T * Lmb_inv_diag) @ c_full_i  # p x p
 
     W_R, U_R = torch.linalg.eigh(R)
-    W_Rinv = 1 / W_R
-    Rinv = U_R @ torch.diag(W_Rinv) @ U_R.T
+    Q_half = (Lmb_inv_diag * c_full_i.T).T @ (U_R * torch.sqrt(1 / torch.abs(W_R))) @ U_R.T
+    # Rinv_half = U_R @ torch.diag(torch.sqrt(1 / W_R)) @ U_R.T  # = Q_half = Lmb_inv @ c_full_i @ R_invhalf
 
-    C_sp_inv = Lmb_inv - Lmb_inv @ c_full_i @ Rinv @ c_full_i.T @ Lmb_inv  # improve to p x p matrices
-
-    # print(torch.log(W_R), torch.log(W_i), torch.log(diag))
+    # C_sp_inv = torch.diag(Lmb_inv_diag) - Q_half @ Q_half.T
+    # C_sp_inv = Lmb_inv - Lmb_inv @ c_full_i @ Rinv @ c_full_i.T @ Lmb_inv  # improve to p x p matrices
 
     logdet_C_sp = torch.log(W_R).sum() - torch.log(W_i).sum() + torch.log(diag).sum()
 
-    return C_sp, C_sp_inv, logdet_C_sp
+    return Lmb_inv_diag, Q_half, logdet_C_sp

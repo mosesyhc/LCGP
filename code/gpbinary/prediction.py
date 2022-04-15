@@ -42,17 +42,14 @@ def pred_gp_sp(lmb, theta, thetanew, thetai, lsigma2, g):
     '''
 
 
-    C, C_inv, _ = cov_sp(theta=theta, thetai=thetai, lsigma2=lsigma2, lmb=lmb)
-    # covariance matrix R for the training thetas
-    R = covmat(theta, theta, lmb)
+    Lmb_inv_diag, Q_half, _ = cov_sp(theta=theta, thetai=thetai, lsigma2=lsigma2, lmb=lmb)
 
-    W, V = torch.linalg.eigh(R)
-    Vh = V / torch.sqrt(W)
+    # C_inv = torch.diag(Lmb_inv_diag) - Q_half @ Q_half.T
 
-    Cinv_g = C_inv @ g
+    Cinv_g = Lmb_inv_diag * g - Q_half @ (Q_half.T * g).sum(1)
     Cnewold = covmat(thetanew, theta, lmb)
     Cnewnew = covmat(thetanew, thetanew, lmb)
 
     predmean = Cnewold @ Cinv_g
-    predvar = Cnewnew - Cnewold @ C_inv @ Cnewold.T
+    predvar = Cnewnew - Cnewold @ (torch.diag(Lmb_inv_diag) - Q_half @ Q_half.T) @ Cnewold.T
     return predmean, predvar.diag()

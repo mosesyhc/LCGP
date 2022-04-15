@@ -11,12 +11,12 @@ from sklearn.metrics import pairwise_distances
 
 
 nepoch_nn = 100
-nepoch_elbo = 300
+nepoch_elbo = 100
 ntrain = 50
 ntest = 50
 kap = 20
 
-f, x0, theta = read_only_complete_data(r'code/data/')
+f, x0, theta = read_only_complete_data(r'code/data/fayans_data/')
 
 f = torch.tensor(f)
 x0 = torch.tensor(x0)
@@ -87,20 +87,21 @@ from mvn_elbo_autolatent_sp_model import cov_sp
 ###########################################################
 
 optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-                         lr=10e-4)
-header = ['iter', 'neg elbo', 'test mse', 'train mse']
+                         lr=10e-3)
+header = ['iter', 'neg elbo', 'gradient', 'test mse', 'train mse']
 print('\nELBO training:')
-print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
+print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
 for epoch in range(nepoch_elbo):
     optim.zero_grad()
     negelbo = model.negelbo()
     negelbo.backward(retain_graph=True)
     optim.step()  # lambda: model.lik())
 
-    mse = model.test_mse(thetate, fte - psi)
-    trainmse = model.test_mse(thetatr, F)
+    if epoch % 5 == 0:
+        mse = model.test_mse(thetate, fte - psi)
+        trainmse = model.test_mse(thetatr, F)
 
-    print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format
-          (epoch, negelbo, mse, trainmse))
+        print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format
+              (epoch, negelbo, mse, trainmse))
 
 

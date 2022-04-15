@@ -48,17 +48,17 @@ def negloglik_gp(lmb, theta, g, lmbregmean=0, lmbregstd=1):
 
 
 def negloglik_gp_sp(lmb, theta, thetai, lsigma2, g, lmbregmean=0, lmbregstd=1):
-    C, C_inv, logdetC = cov_sp(theta, thetai, lsigma2, lmb)
+    Lmb_inv_diag, Qk_half, logdet_Ck = cov_sp(theta, thetai, lsigma2, lmb)
     # R = covmat(theta, theta, lmb)
     #
     # W, V = torch.linalg.eigh(R)
     # Vh = V / torch.sqrt(W)
     # fcenter = Vh.T @ g
-    quad = g.T @ C_inv @ g
+    quad = g.T @ (Lmb_inv_diag * g - Qk_half @ (Qk_half.T * g).sum(1))
     n = g.shape[0]
 
     sig2hat = (quad + 10) / (n + 10)
-    negloglik = 1/2 * logdetC  # log-determinant
+    negloglik = 1/2 * logdet_Ck  # log-determinant
     negloglik += n/2 * torch.log(sig2hat)  # log of MLE of scale
     negloglik += 1/2 * quad / sig2hat  # quadratic term
     negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)  # regularization of hyperparameter
