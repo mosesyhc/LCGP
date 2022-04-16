@@ -4,9 +4,12 @@ from gram_schmidt import gram_schmidt
 
 
 class Basis(nn.Module):
-    def __init__(self, m, kap, normalize=True):
+    def __init__(self, m, kap, normalize=True, inputdata=None):
         super(Basis, self).__init__()
-        self.Phi = nn.Parameter(torch.randn(m, kap))
+        if inputdata is not None:
+            self.Phi = nn.Parameter(torch.linalg.svd(inputdata)[0][:, :kap])
+        else:
+            self.Phi = nn.Parameter(torch.eye(m)[:, :kap])
         self.normalize = normalize
 
     def forward(self):
