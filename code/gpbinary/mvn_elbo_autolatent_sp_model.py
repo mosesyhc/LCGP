@@ -25,7 +25,10 @@ class MVN_elbo_autolatent_sp(nn.Module):
         self.V = torch.zeros(self.kap, self.n)
         self.psi = psi
         self.Phi = Phi
-        self.F = F
+        self.Fraw = F
+        self.Fmean = F.mean(1)
+        self.Fstd = F.std(1)
+        self.F = ((F.T - F.mean(1)) / F.std(1)).T
         self.theta = theta
         self.thetai = thetai
 
@@ -47,7 +50,8 @@ class MVN_elbo_autolatent_sp(nn.Module):
         for k in range(kap):
             ghat_sp[k], _ = pred_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, thetanew=theta0, lsigma2=lsigma2, g=M[k])
 
-        fhat = psi + Phi @ ghat_sp
+        fhatstd = psi + Phi @ ghat_sp
+        fhat = ((fhatstd.T * self.Fstd) + self.Fmean).T
         return fhat
 
     def negelbo(self):
