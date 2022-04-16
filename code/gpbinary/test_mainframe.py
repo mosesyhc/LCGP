@@ -7,6 +7,7 @@ from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
 dir = r'code/data/borehole_data/'
 testf, testtheta = read_test_data(dir)
 
+import matplotlib.pyplot as plt
 
 def optim_Phi(F, kap, maxiter_nn=10000):
     from basis_nn_model import Basis
@@ -24,7 +25,7 @@ def optim_Phi(F, kap, maxiter_nn=10000):
         return mse(Fhat, F)
 
     # get_bestPhi takes F and gives the SVD U
-    Phi_as_param = Basis(m, kap, normalize=True)
+    Phi_as_param = Basis(m, kap, normalize=True) #, inputdata=F)
     optim_nn = torch.optim.SGD(Phi_as_param.parameters(), lr=1e-2)
     epoch = 0
     l_prev = torch.inf
@@ -67,17 +68,18 @@ def optim_IPGPVI(F, Phi, Phi_loss, thetatr, thetai, maxiter_gp=1000):
         negelbo.backward(retain_graph=True)
         optim.step()  # lambda: model.lik())
 
-        make_dot(model(thetatr), params=dict((model.named_parameters())), show_attrs=True, show_saved=True)
-
-        break
         epoch += 1
         if epoch > maxiter_gp:
             break
 
-        trainmse = model.test_mse(thetatr, F)
+        pred = model(thetatr)
+        plt.plot((pred - F).detach().numpy())
+
+        break
+        # trainmse = model.test_mse(thetatr, F)
 
         # if epoch % 10 == 0:
-        print('{:<5d} {:<12.3f}  {:<12.3f}'.format(epoch, negelbo, trainmse))
+        print('{:<5d} {:<12.6f}  {:<12.6f}'.format(epoch, negelbo, trainmse))
 
     return negelbo
 
@@ -99,19 +101,21 @@ ftr = f[:, train_ind]
 thetatr = theta[train_ind]
 
 # choose inducing points
-n_inducing = 50
+n_inducing = 200
 kmeans_theta = KMeans(n_clusters=n_inducing, algorithm='full').fit(thetatr)
 thetai = torch.tensor(kmeans_theta.cluster_centers_)
 
 psi = ftr.mean(1).unsqueeze(1)
 F = ftr - psi
+# Frng = torch.max(F, axis=0).values - torch.min(F, axis=0).values
+# F /= Frng
 
 kap = 5
-# Phi, Phi_loss = optim_Phi(F, kap)
-Phi, _, _ = torch.linalg.svd(F)
-Phi = Phi[:, :kap]
-Phi_loss = torch.mean(((Phi @ Phi.T @ F) - F)**2)
-print('Phi loss: {:.3f}'.format(Phi_loss))
+Phi, Phi_loss = optim_Phi(F, kap)
+# Phi, _, _ = torch.linalg.svd(F, full_matrices=False)
+# Phi = Phi[:, :kap]
+# Phi_loss = torch.mean((Phi @ Phi.T @ F - F)**2)
+# print('Phi loss: {:.6f}'.format(Phi_loss))
 
-negelbo = optim_IPGPVI(F, Phi, Phi_loss, thetatr, thetai, maxiter_gp=1000)
+negelbo = optim_IPGPVI(F=F, Phi=Phi, Phi_loss=Phi_loss, thetatr=thetatr, thetai=thetai, maxiter_gp=1000)
 
