@@ -3,7 +3,7 @@ from matern_covmat import covmat, cov_sp
 torch.set_default_dtype(torch.float64)
 
 
-def pred_gp(lmb, theta, thetanew, g):
+def pred_gp(lmb, theta, thetanew, lsigma2, g):
     '''
     Test in test_gp.py.
 
@@ -15,7 +15,7 @@ def pred_gp(lmb, theta, thetanew, g):
     '''
 
     # covariance matrix R for the training thetas
-    C = covmat(theta, theta, lmb)
+    C = covmat(theta, theta, lmb) + torch.diag(torch.exp(lsigma2) * torch.ones(theta.shape[0]))
 
     W, V = torch.linalg.eigh(C)
     Vh = V / torch.sqrt(W)

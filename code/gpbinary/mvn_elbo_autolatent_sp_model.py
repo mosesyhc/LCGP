@@ -13,24 +13,24 @@ class MVN_elbo_autolatent_sp(nn.Module):
         self.kap = Phi.shape[1]
         self.m, self.n = F.shape
         self.p = thetai.shape[0]
-        if initLmb:
-            lmb = torch.Tensor(0.5 * torch.log(torch.Tensor([theta.shape[1]])) +
-                                torch.log(torch.std(theta, 0)))
-            lmb = torch.cat((lmb, torch.Tensor([0])))
-            Lmb = lmb.repeat(self.kap, 1)
-            Lmb[:, -1] = torch.log(torch.var(Phi.T @ (F - psi), 1))
-        self.Lmb = nn.Parameter(Lmb)
         self.lsigma2 = nn.Parameter(lsigma2)
         self.M = torch.zeros(self.kap, self.n)
         self.V = torch.zeros(self.kap, self.n)
         self.psi = psi
         self.Phi = Phi
-        self.Fraw = F
+        self.Fraw = F.clone()
         self.Fmean = F.mean(1)
         self.Fstd = F.std(1)
-        self.F = ((F.T - F.mean(1)) / F.std(1)).T
+        self.F = F # ((F.T - self.Fmean) / self.Fstd).T
         self.theta = theta
         self.thetai = thetai
+        if initLmb:
+            lmb = torch.Tensor(0.5 * torch.log(torch.Tensor([theta.shape[1]])) +
+                                torch.log(torch.std(theta, 0)))
+            lmb = torch.cat((lmb, torch.Tensor([0])))
+            Lmb = lmb.repeat(self.kap, 1)
+            Lmb[:, -1] = torch.log(torch.var(Phi.T @ (self.F - self.psi), 1))
+        self.Lmb = nn.Parameter(Lmb)
 
     def forward(self, theta0):
         Lmb = self.Lmb
@@ -45,13 +45,13 @@ class MVN_elbo_autolatent_sp(nn.Module):
         kap = self.kap
         n0 = theta0.shape[0]
 
-        ghat = torch.zeros(kap, n0)
-        ghat_sp = torch.zeros_like(ghat)
+        ghat_sp = torch.zeros(kap, n0)
+        # ghat = torch.zeros_like(ghat_sp)
         for k in range(kap):
             ghat_sp[k], _ = pred_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, thetanew=theta0, lsigma2=lsigma2, g=M[k])
-
-        fhatstd = psi + Phi @ ghat_sp
-        fhat = ((fhatstd.T * self.Fstd) + self.Fmean).T
+            # ghat[k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, lsigma2=lsigma2, g=M[k])
+        fhat = psi + Phi @ ghat_sp
+        # fhat = ((fhat.T * self.Fstd) + self.Fmean).T
         return fhat
 
     def negelbo(self):
@@ -74,6 +74,7 @@ class MVN_elbo_autolatent_sp(nn.Module):
 
         negelbo = torch.zeros(1)
         for k in range(kap):
+
             Lmb_inv_diag, Qk_half, logdet_Ck = cov_sp(theta, thetai, lsigma2, Lmb[k])
 
             Dinv_k_diag = 1 / (sigma2 * Lmb_inv_diag + 1)

@@ -48,7 +48,6 @@ def optim_Phi(F, kap, maxiter_nn=10000):
 
 
 def optim_IPGPVI(F, Phi, Phi_loss, thetatr, thetai, maxiter_gp=1000):
-    from torchviz import make_dot
     m, _ = F.shape
 
     lsigma2 = torch.Tensor(torch.log(Phi_loss))
@@ -72,11 +71,8 @@ def optim_IPGPVI(F, Phi, Phi_loss, thetatr, thetai, maxiter_gp=1000):
         if epoch > maxiter_gp:
             break
 
-        pred = model(thetatr)
-        plt.plot((pred - F).detach().numpy())
-
-        break
-        # trainmse = model.test_mse(thetatr, F)
+        # pred = model(thetatr)
+        trainmse = model.test_mse(thetatr, F)
 
         # if epoch % 10 == 0:
         print('{:<5d} {:<12.6f}  {:<12.6f}'.format(epoch, negelbo, trainmse))
@@ -105,17 +101,18 @@ n_inducing = 200
 kmeans_theta = KMeans(n_clusters=n_inducing, algorithm='full').fit(thetatr)
 thetai = torch.tensor(kmeans_theta.cluster_centers_)
 
+thetai = thetatr.clone()
 psi = ftr.mean(1).unsqueeze(1)
 F = ftr - psi
 # Frng = torch.max(F, axis=0).values - torch.min(F, axis=0).values
 # F /= Frng
 
 kap = 5
-Phi, Phi_loss = optim_Phi(F, kap)
-# Phi, _, _ = torch.linalg.svd(F, full_matrices=False)
-# Phi = Phi[:, :kap]
-# Phi_loss = torch.mean((Phi @ Phi.T @ F - F)**2)
-# print('Phi loss: {:.6f}'.format(Phi_loss))
+# Phi, Phi_loss = optim_Phi(F, kap)
+Phi, _, _ = torch.linalg.svd(F, full_matrices=False)
+Phi = Phi[:, :kap]
+Phi_loss = torch.mean((Phi @ Phi.T @ F - F)**2)
+print('Phi loss: {:.6f}'.format(Phi_loss))
 
 negelbo = optim_IPGPVI(F=F, Phi=Phi, Phi_loss=Phi_loss, thetatr=thetatr, thetai=thetai, maxiter_gp=1000)
 
