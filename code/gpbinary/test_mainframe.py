@@ -3,6 +3,8 @@ import torch.nn as nn
 from fayans_support import read_data, read_test_data
 from sklearn.cluster import KMeans
 from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
+torch.set_default_dtype(torch.double)
+
 
 dir = r'code/data/borehole_data/'
 testf, testtheta = read_test_data(dir)
@@ -47,20 +49,22 @@ def optim_Phi(F, kap, maxiter_nn=10000):
     return Phi_as_param().detach(), l.detach()
 
 
-def optim_IPGPVI(F, Phi, Phi_loss, thetatr, thetai, maxiter_gp=1000):
+def optim_IPGPVI(F, Phi, Phi_loss, psi, thetatr, thetai, fte, thetate, maxiter_gp=1000):
     m, _ = F.shape
 
-    lsigma2 = torch.Tensor(torch.log(Phi_loss))
+    # lsigma2 = torch.Tensor(torch.log(Phi_loss)) # torch.max(torch.Tensor((1e-3,)), )
     model = MVN_elbo_autolatent_sp(Lmb=None, initLmb=True,
-                                   lsigma2=lsigma2, psi=torch.zeros(m),
+                                   lsigma2=None, initsigma2=True,
+                                   psi=torch.zeros_like(psi),
                                    Phi=Phi, F=F, theta=thetatr, thetai=thetai)
+    model.double()
 
     optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                              lr=1e-3)  # , line_search_fn='strong_wolfe')
-    header = ['iter', 'neg elbo', 'train mse']
+    header = ['iter', 'neg elbo', 'mse', 'train mse']
     epoch = 0
     print('\nELBO training:')
-    print('{:<5s} {:<12s} {:<12s}'.format(*header))
+    print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
     while True:
         optim.zero_grad()
         negelbo = model.negelbo()
@@ -73,20 +77,26 @@ def optim_IPGPVI(F, Phi, Phi_loss, thetatr, thetai, maxiter_gp=1000):
 
         # pred = model(thetatr)
         trainmse = model.test_mse(thetatr, F)
+        mse = model.test_mse(thetate, fte - psi)
 
         # if epoch % 10 == 0:
-        print('{:<5d} {:<12.6f}  {:<12.6f}'.format(epoch, negelbo, trainmse))
-
+        print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format
+              (epoch, negelbo, mse, trainmse))
     return negelbo
 
 
 # def test_sp(n_inducing, part, kap=5):
 part = 1
 f, x0, theta = read_data(dir)
+fte, thetate = read_test_data(dir)
+
 
 f = torch.tensor(f)
 x = torch.tensor(x0)
 theta = torch.tensor(theta)
+
+fte = torch.tensor(fte)
+thetate = torch.tensor(thetate)
 
 m, n = f.shape  # nloc, nparam
 
@@ -97,22 +107,59 @@ ftr = f[:, train_ind]
 thetatr = theta[train_ind]
 
 # choose inducing points
-n_inducing = 200
-kmeans_theta = KMeans(n_clusters=n_inducing, algorithm='full').fit(thetatr)
-thetai = torch.tensor(kmeans_theta.cluster_centers_)
+# n_inducing = 200
+# kmeans_theta = KMeans(n_clusters=n_inducing, algorithm='full').fit(thetatr)
+# thetai = torch.tensor(kmeans_theta.cluster_centers_)
 
 thetai = thetatr.clone()
 psi = ftr.mean(1).unsqueeze(1)
+
 F = ftr - psi
 # Frng = torch.max(F, axis=0).values - torch.min(F, axis=0).values
 # F /= Frng
 
-kap = 5
+kap = 8
 # Phi, Phi_loss = optim_Phi(F, kap)
 Phi, _, _ = torch.linalg.svd(F, full_matrices=False)
 Phi = Phi[:, :kap]
 Phi_loss = torch.mean((Phi @ Phi.T @ F - F)**2)
-print('Phi loss: {:.6f}'.format(Phi_loss))
+print('Phi loss:', Phi_loss)
 
-negelbo = optim_IPGPVI(F=F, Phi=Phi, Phi_loss=Phi_loss, thetatr=thetatr, thetai=thetai, maxiter_gp=1000)
+
+m, _ = F.shape
+
+# lsigma2 = torch.Tensor(torch.log(Phi_loss)) # torch.max(torch.Tensor((1e-3,)), )
+model = MVN_elbo_autolatent_sp(Lmb=None, initLmb=True,
+                               lsigma2=None, initsigma2=True,
+                               psi=torch.zeros_like(psi),
+                               Phi=Phi, F=F, theta=thetatr, thetai=thetai)
+model.double()
+
+optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
+                         lr=1e-3)  # , line_search_fn='strong_wolfe')
+header = ['iter', 'neg elbo', 'mse', 'train mse']
+epoch = 0
+print('\nELBO training:')
+print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
+while True:
+    optim.zero_grad()
+    negelbo = model.negelbo()
+    negelbo.backward(retain_graph=True)
+    optim.step()  # lambda: model.lik())
+
+    epoch += 1
+    # if epoch > maxiter_gp:
+    #     break
+
+    # pred = model(thetatr)
+    trainmse = model.test_mse(thetatr, F)
+    mse = model.test_mse(thetate, fte - psi)
+
+    # if epoch % 10 == 0:
+    print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format
+          (epoch, negelbo, mse, trainmse))
+
+# negelbo = optim_IPGPVI(F=F, Phi=Phi, Phi_loss=Phi_loss, psi=psi,
+#                        thetatr=thetatr, thetai=thetai, maxiter_gp=1000,
+#                        fte=fte, thetate=thetate)
 
