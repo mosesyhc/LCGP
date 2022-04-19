@@ -14,7 +14,7 @@ nepoch_nn = 100
 nepoch_elbo = 100
 ntrain = 50
 ntest = 50
-kap = 20
+kap = 40
 
 f, x0, theta = read_only_complete_data(r'code/data/fayans_data/')
 
@@ -29,10 +29,11 @@ tempind = torch.randperm(n)
 tr_inds = tempind[:ntrain]
 te_inds = tempind[-ntest:]
 
+xcols = torch.arange(50)
 torch.manual_seed(0)
-ftr = f[:, tr_inds]
+ftr = f[:, tr_inds][xcols]
 thetatr = theta[tr_inds]
-fte = f[:, te_inds]
+fte = f[:, te_inds][xcols]
 thetate = theta[te_inds]
 
 # choose inducing points
@@ -45,11 +46,19 @@ print(overlap_inds)
 # for i in overlap_inds:
 #     thetai[i] += torch.normal(torch.zeros(d), 0.1 * thetai.std(0))
 
+thetai = thetatr.clone()
 psi = ftr.mean(1).unsqueeze(1)
 
 x = torch.column_stack((x0[:, 0], x0[:, 1],
                         *[x0[:, 2] == k for k in torch.unique(x0[:, 2])]))
 F = ftr - psi
+Frng = torch.max(F, axis=0).values - torch.min(F, axis=0).values
+# print(Frng)
+
+# fte -= psi
+# ftr /= Frng
+# fte /= Frng
+
 # use SVD to save time
 Phi_match, _, _ = torch.linalg.svd(F, full_matrices=False)
 Phi_match = Phi_match[:, :kap]
@@ -59,14 +68,14 @@ print('Reproducing Phi0 error in prediction of F: ', mse_Phi)
 
 Phi = Phi_match
 print('Basis size: ', Phi.shape)
-lmb = torch.Tensor(0.5 * torch.log(torch.Tensor([theta.shape[1]])) +
-                   torch.log(torch.std(theta, 0)))
-lmb = torch.cat((lmb, torch.Tensor([0])))
-Lmb = lmb.repeat(kap, 1)
-Lmb[:, -1] = torch.log(torch.var(Phi.T @ (F - psi), 1))
+# lmb = torch.Tensor(0.5 * torch.log(torch.Tensor([theta.shape[1]])) +
+#                    torch.log(torch.std(theta, 0)))
+# lmb = torch.cat((lmb, torch.Tensor([0])))
+# Lmb = lmb.repeat(kap, 1)
+# Lmb[:, -1] = torch.log(torch.var(Phi.T @ (F - psi), 1))
 lsigma2 = torch.Tensor(torch.log(mse_Phi))
-model = MVN_elbo_autolatent_sp(Lmb=Lmb, initLmb=True,
-                 lsigma2=lsigma2, psi=torch.zeros_like(psi),
+model = MVN_elbo_autolatent_sp(Lmb=None, initLmb=True,
+                 lsigma2=None, psi=torch.zeros_like(psi),
                  Phi=Phi, F=F, theta=thetatr, thetai=thetai)
 model.double()
 
@@ -88,9 +97,9 @@ from mvn_elbo_autolatent_sp_model import cov_sp
 
 optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                          lr=10e-3)
-header = ['iter', 'neg elbo', 'gradient', 'test mse', 'train mse']
+header = ['iter', 'neg elbo', 'test mse', 'train mse']
 print('\nELBO training:')
-print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
+print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
 for epoch in range(nepoch_elbo):
     optim.zero_grad()
     negelbo = model.negelbo()
