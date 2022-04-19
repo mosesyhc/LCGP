@@ -6,21 +6,20 @@ from prediction import pred_gp, pred_gp_sp
 
 
 class MVN_elbo_autolatent_sp(nn.Module):
-    def __init__(self, Lmb, lsigma2, psi, Phi, F, theta, thetai, initLmb=True):
+    def __init__(self, Lmb, lsigma2, psi, Phi, F, theta, thetai, initLmb=True, initsigma2=True):
         super().__init__()
         if psi.ndim < 2:
             psi = psi.unsqueeze(1)
         self.kap = Phi.shape[1]
         self.m, self.n = F.shape
         self.p = thetai.shape[0]
-        self.lsigma2 = nn.Parameter(lsigma2)
         self.M = torch.zeros(self.kap, self.n)
         self.V = torch.zeros(self.kap, self.n)
         self.psi = psi
         self.Phi = Phi
-        self.Fraw = F.clone()
-        self.Fmean = F.mean(1)
-        self.Fstd = F.std(1)
+        # self.Fraw = F.clone()
+        # self.Fmean = F.mean(1)
+        # self.Fstd = F.std(1)
         self.F = F # ((F.T - self.Fmean) / self.Fstd).T
         self.theta = theta
         self.thetai = thetai
@@ -31,6 +30,11 @@ class MVN_elbo_autolatent_sp(nn.Module):
             Lmb = lmb.repeat(self.kap, 1)
             Lmb[:, -1] = torch.log(torch.var(Phi.T @ (self.F - self.psi), 1))
         self.Lmb = nn.Parameter(Lmb)
+        if initsigma2:
+            lsigma2 = nn.Parameter(torch.log(((Phi @ Phi.T @ self.F - self.F)**2).mean()))
+        self.lsigma2 = lsigma2
+
+        print(lsigma2)
 
     def forward(self, theta0):
         Lmb = self.Lmb
@@ -75,17 +79,18 @@ class MVN_elbo_autolatent_sp(nn.Module):
         negelbo = torch.zeros(1)
         for k in range(kap):
 
-            Lmb_inv_diag, Qk_half, logdet_Ck = cov_sp(theta, thetai, lsigma2, Lmb[k])
+            Delta_inv_diag, Qk_half, logdet_Ck = cov_sp(theta, thetai, lsigma2, Lmb[k])
 
-            Dinv_k_diag = 1 / (sigma2 * Lmb_inv_diag + 1)
+            Dinv_k_diag = 1 / (sigma2 * Delta_inv_diag + 1)
             Sk = torch.eye(p) - sigma2 * (Qk_half.T * Dinv_k_diag) @ Qk_half
             W_Sk, U_Sk = torch.linalg.eigh(Sk)
-            Tk_half = (Dinv_k_diag * Qk_half.T).T @ U_Sk / torch.sqrt(torch.abs(W_Sk)) @ U_Sk.T
+            Tk_half = (Dinv_k_diag * Qk_half.T).T @ U_Sk / torch.sqrt(W_Sk) @ U_Sk.T
 
-            V[k] = 1 / (1 / sigma2 + Lmb_inv_diag - torch.diag(Qk_half @ Qk_half.T))  #
+            V[k] = 1 / (1 / sigma2 + Delta_inv_diag - torch.diag(Qk_half @ Qk_half.T))  #
             M[k] = Dinv_k_diag * (Phi[:, k] * (F - psi).T).sum(1) + sigma2 * Tk_half @ Tk_half.T @ (Phi[:, k] * (F - psi).T).sum(1)
 
-            negloggp_sp_k = negloglik_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, lsigma2=lsigma2, g=M[k].clone())
+            negloggp_sp_k = negloglik_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, lsigma2=lsigma2, g=M[k].clone(),
+                                            Delta_inv_diag=Delta_inv_diag, Q_half=Qk_half, logdet_C=logdet_Ck)
             negelbo += negloggp_sp_k
 
         residF = F - (psi + Phi @ M)
