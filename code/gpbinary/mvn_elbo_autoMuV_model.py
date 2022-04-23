@@ -21,7 +21,7 @@ class MVN_elbo_autoMuV(nn.Module):
         self.F = F
         self.theta = theta
         self.m, self.n = F.shape
-        self.Mu =
+        self.Mu = torch.zeros((Phi.shape[1], self.n))
 
     def forward(self, theta0):
         Lmb = self.Lmb
