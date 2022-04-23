@@ -84,12 +84,13 @@ class MVN_elbo_autolatent_sp(nn.Module):
             W_Sk, U_Sk = torch.linalg.eigh(Sk)
             Tk_half = (Dinv_k_diag * Qk_half.T).T @ U_Sk / torch.sqrt(W_Sk) @ U_Sk.T
 
-            V[k] = 1 / (1 / sigma2 + Delta_inv_diag - torch.diag(Qk_half @ Qk_half.T))  #
             Mk = Dinv_k_diag * (Phi[:, k] * F.T).sum(1) + sigma2 * Tk_half @ Tk_half.T @ (Phi[:, k] * F.T).sum(1)
 
             negloggp_sp_k = negloglik_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, lsigma2=lsigma2, g=Mk,
                                             Delta_inv_diag=Delta_inv_diag, Q_half=Qk_half, logdet_C=logdet_Ck)
             negelbo += negloggp_sp_k
+            M[k] = Mk
+            V[k] = 1 / (1 / sigma2 + Delta_inv_diag - torch.diag(Qk_half @ Qk_half.T))  #
 
         residF = F - (Phi @ M)
         negelbo += m*n/2 * lsigma2
