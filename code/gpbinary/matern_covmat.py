@@ -1,8 +1,9 @@
 import torch
 
 
-def covmat(x1, x2, lmb):
+def covmat(x1, x2, lmb, diag_only=False):
     '''
+    :param diag_only:
     :param x1:
     :param x2:
     :param lmb:
@@ -14,15 +15,21 @@ def covmat(x1, x2, lmb):
     assert x2.dim() == 2, 'input x2 should be 2-dimensional, (n_param, dim_param)'
     d = lmb.shape[0]
 
-    V = torch.zeros((x1.shape[0], x2.shape[0]))
-    C = torch.ones((x1.shape[0], x2.shape[0])) * torch.exp(lmb[d-1])
+    if diag_only:
+        assert torch.isclose(x1, x2).all(), 'diag_only should only be called when x1 and x2 are identical.'
+        c = torch.exp(lmb[d-1]) * torch.ones(x1.shape[0])
+        return c
 
-    for j in range(d-1):
-        S = torch.abs(x1[:, j].reshape(-1, 1) - x2[:, j]) / torch.exp(lmb[j])
-        C *= (1 + S)
-        V -= S
+    else:
+        V = torch.zeros((x1.shape[0], x2.shape[0]))
+        C = torch.ones((x1.shape[0], x2.shape[0])) * torch.exp(lmb[d-1])
 
-    C *= torch.exp(V)
+        for j in range(d-1):
+            S = torch.abs(x1[:, j].reshape(-1, 1) - x2[:, j]) / torch.exp(lmb[j])
+            C *= (1 + S)
+            V -= S
+
+        C *= torch.exp(V)
     return C
 
 
@@ -42,7 +49,7 @@ def cov_sp(theta, thetai, lsigma2, lmb):  # assuming x1 = x2 = theta
 
     c_full_i = covmat(theta, thetai, lmb=lmb)
     C_i = covmat(thetai, thetai, lmb=lmb)
-    C_full = covmat(theta, theta, lmb=lmb)
+    C_full_diag = covmat(theta, theta, lmb=lmb, diag_only=True)
 
     W_i, U_i = torch.linalg.eigh(C_i)
     W_iinv = 1 / W_i
@@ -50,8 +57,9 @@ def cov_sp(theta, thetai, lsigma2, lmb):  # assuming x1 = x2 = theta
 
     C_r = c_full_i @ C_iinv @ c_full_i.T
 
-    diag = torch.diag(C_full - C_r) + torch.exp(lsigma2)
+    diag = C_full_diag - torch.diag(C_r) + torch.exp(lsigma2)
     Delta_inv_diag = 1 / diag
+
 
     R = C_i + (c_full_i.T * Delta_inv_diag) @ c_full_i  # p x p
 
