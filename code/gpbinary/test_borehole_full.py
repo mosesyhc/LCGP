@@ -76,22 +76,19 @@ thetatr = theta[train_ind]
 # thetai = thetatr.clone()
 psi = ftr.mean(1).unsqueeze(1)
 
-# F = ftr - psi
-F = (ftr - psi) / ftr.std(1).unsqueeze(1)
-fte = (fte - psi) / ftr.std(1).unsqueeze(1)
+F = ftr - psi
+fte -= psi
+# F = (ftr - psi) / ftr.std(1).unsqueeze(1)
+# fte = (fte - psi) / ftr.std(1).unsqueeze(1)
 
 # Frng = torch.max(F, axis=0).values - torch.min(F, axis=0).values
 # F /= Frng
 
 kap = 4
 Phi, Phi_loss = optim_Phi(F, kap)
-# Phi, _, _ = torch.linalg.svd(F, full_matrices=False)
-# Phi = Phi[:, :kap]
-# Phi_loss = torch.mean((Phi @ Phi.T @ F - F)**2)
 print('Phi loss:', Phi_loss)
 m, _ = F.shape
 
-# lsigma2 = torch.Tensor(torch.log(Phi_loss)) # torch.max(torch.Tensor((1e-3,)), )
 model = MVN_elbo_autolatent(Lmb=None, initLmb=True,
                             lsigma2=None, initsigma2=True,
                             psi=torch.zeros_like(psi),
@@ -113,15 +110,12 @@ print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
 while True:
     optim.zero_grad()
     negelbo = model.negelbo()
-    negelbo.backward(retain_graph=True)
-    # from torchviz import make_dot
-    # make_dot(negelbo, params=dict(list(model.named_parameters())),
-    #          show_attrs=True, show_saved=True).render('negelbo_cg_retainTrue', format='png')
-
+    negelbo.backward()
     optim.step()  # lambda: model.lik())
 
     if epoch % 10 == 0:
         with torch.no_grad():
+            model.create_MV()
             trainmse = model.test_mse(thetatr, F)
             mse = model.test_mse(thetate, fte)
 
@@ -137,43 +131,3 @@ while True:
     negelbo_prev = negelbo.clone().detach()
 
 np.savetxt('time_full.txt', save_time)
-# negelbo = optim_IPGPVI(F=F, Phi=Phi, Phi_loss=Phi_loss, psi=psi,
-#                        thetatr=thetatr, thetai=thetai, maxiter_gp=1000,
-#                        fte=fte, thetate=thetate)
-
-
-
-# def optim_IPGPVI(F, Phi, Phi_loss, psi, thetatr, thetai, fte, thetate, maxiter_gp=1000):
-#     m, _ = F.shape
-#
-#     # lsigma2 = torch.Tensor(torch.log(Phi_loss)) # torch.max(torch.Tensor((1e-3,)), )
-#     model = MVN_elbo_autolatent_sp(Lmb=None, initLmb=True,
-#                                    lsigma2=None, initsigma2=True,
-#                                    # psi=torch.zeros_like(psi),
-#                                    Phi=Phi, F=F, theta=thetatr, thetai=thetai)
-#     model.double()
-#
-#     optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-#                              lr=1e-3)  # , line_search_fn='strong_wolfe')
-#     header = ['iter', 'neg elbo', 'mse', 'train mse']
-#     epoch = 0
-#     print('\nELBO training:')
-#     print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
-#     while True:
-#         optim.zero_grad()
-#         negelbo = model.negelbo()
-#         negelbo.backward(retain_graph=True)
-#         optim.step()  # lambda: model.lik())
-#
-#         epoch += 1
-#         if epoch > maxiter_gp:
-#             break
-#
-#         # pred = model(thetatr)
-#         trainmse = model.test_mse(thetatr, F)
-#         mse = model.test_mse(thetate, fte - psi)
-#
-#         # if epoch % 10 == 0:
-#         print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format
-#               (epoch, negelbo, mse, trainmse))
-#     return negelbo

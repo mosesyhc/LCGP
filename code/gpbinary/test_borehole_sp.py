@@ -8,6 +8,7 @@ torch.autograd.set_detect_anomaly(True)
 from optim_rules import convergence_f, convergence_g
 import matplotlib.pyplot as plt
 
+
 def optim_Phi(F, kap, maxiter_nn=10000):
     from basis_nn_model import Basis
     from optim_rules import convergence_f

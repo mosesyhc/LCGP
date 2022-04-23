@@ -14,6 +14,7 @@ from test_surmise_Phi import surmise_baseline
 from sklearn.cluster import KMeans
 from sklearn.metrics import pairwise_distances
 
+
 def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=100, nepoch_elbo=400):
     # result storage vectors
     store_Phi_mse = np.zeros((nepoch_nn, 4))
@@ -105,8 +106,9 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     Lmb[:, -1] = torch.log(torch.var(Phi.T @ (F - psi), 1))
     lsigma2 = torch.Tensor(torch.log(mse_Phi))
     model = MVN_elbo_autolatent_sp(Lmb=Lmb, initLmb=True,
-                     lsigma2=lsigma2, psi=torch.zeros_like(psi),
-                     Phi=Phi, F=F, theta=thetatr, thetai=thetai)
+                                   lsigma2=lsigma2, initsigma2=True,
+                                   # psi=torch.zeros_like(psi),
+                                   Phi=Phi, F=F, theta=thetatr, thetai=thetai)
     model.double()
 
     from matern_covmat import covmat
@@ -130,7 +132,7 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     # print('ELBO model training MSE: {:.3f}'.format(torch.mean((F - ftrpred) ** 2)))
     # optim = torch.optim.LBFGS(model.parameters(), lr=10e-2, line_search_fn='strong_wolfe')
     optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-                              lr=10e-3)  # , line_search_fn='strong_wolfe')
+                             lr=10e-3)  # , line_search_fn='strong_wolfe')
     header = ['iter', 'neg elbo', 'test mse', 'train mse']
     print('\nELBO training:')
     print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
@@ -191,7 +193,6 @@ if __name__ == '__main__':
                 nepoch_elbo=nepoch_elbo, optimMu=False, optimV=False)
         results['optim_Phi'].append(Phi_mse2)
         results['optim_elbo'].append(elbo_mse2)
-
 
     for key, item in results.items():
         results[key] = np.array(item)
