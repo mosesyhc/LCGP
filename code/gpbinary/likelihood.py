@@ -42,7 +42,7 @@ def negloglik_gp(lmb, theta, g, lmbregmean=0, lmbregstd=1):
     negloglik = 1/2 * torch.sum(torch.log(W))  # log-determinant
     negloglik += n/2 * torch.log(sig2hat)  # log of MLE of scale
     negloglik += 1/2 * torch.sum(fcenter ** 2 / sig2hat)  # quadratic term
-    negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)  # regularization of hyperparameter
+    # negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)  # regularization of hyperparameter
 
     return negloglik, Vh
 
@@ -56,14 +56,21 @@ def negloglik_gp_sp(lmb, theta, thetai, lsigma2, g, lmbregmean=0, lmbregstd=1,
     # W, V = torch.linalg.eigh(R)
     # Vh = V / torch.sqrt(W)
     # fcenter = Vh.T @ g
-    quad = g.T @ (Delta_inv_diag * g - Q_half @ (Q_half.T * g).sum(1))
+
     n = g.shape[0]
+    Q_half_g = (Q_half.T * g).sum(1)
+    Delta_inv_diag_g = Delta_inv_diag * g
+
+    quad2 = g.T @ Q_half @ Q_half_g
+    quad1 = g.T @ Delta_inv_diag_g
+
+    quad = quad1 - quad2
 
     sig2hat = (quad + 10) / (n + 10)
     negloglik = 1/2 * logdet_C  # log-determinant
     negloglik += n/2 * torch.log(sig2hat)  # log of MLE of scale
     negloglik += 1/2 * quad / sig2hat  # quadratic term
-    negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)  # regularization of hyperparameter
+    # negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)  # regularization of hyperparameter
 
     return negloglik #, Vh
 
