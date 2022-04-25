@@ -8,19 +8,12 @@ from prediction import pred_gp, pred_gp_sp
 class MVN_elbo_autolatent_sp(nn.Module):
     def __init__(self, Lmb, lsigma2, Phi, F, theta, thetai, initLmb=True, initsigma2=True):  #psi
         super().__init__()
-        # if psi.ndim < 2:
-        #     psi = psi.unsqueeze(1)
         self.kap = Phi.shape[1]
         self.m, self.n = F.shape
         self.p = thetai.shape[0]
         self.M = torch.zeros(self.kap, self.n)
-        # self.V = torch.zeros(self.kap, self.n)
-        # self.psi = psi
         self.Phi = Phi
-        self.Fraw = F.clone()
-        self.Fmean = F.mean(1).unsqueeze(1)
-        self.Fstd = F.std(1).unsqueeze(1)
-        self.F = (F - self.Fmean) / self.Fstd
+        self.F = F
         self.theta = theta
         self.thetai = thetai
         if initLmb:
@@ -37,8 +30,6 @@ class MVN_elbo_autolatent_sp(nn.Module):
     def forward(self, theta0):
         Lmb = self.Lmb
         lsigma2 = self.lsigma2
-
-        # psi = self.psi
         Phi = self.Phi
         theta = self.theta
         thetai = self.thetai
@@ -48,10 +39,8 @@ class MVN_elbo_autolatent_sp(nn.Module):
 
         M = self.M
         ghat_sp = torch.zeros(kap, n0)
-        # ghat = torch.zeros_like(ghat_sp)
         for k in range(kap):
             ghat_sp[k], _ = pred_gp_sp(lmb=Lmb[k], theta=theta, thetai=thetai, thetanew=theta0, lsigma2=lsigma2, g=M[k])
-            # ghat[k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, lsigma2=lsigma2, g=M[k])
         fhat = Phi @ ghat_sp
         fhat = (fhat * self.Fstd) + self.Fmean
         return fhat
@@ -60,8 +49,6 @@ class MVN_elbo_autolatent_sp(nn.Module):
         Lmb = self.Lmb
         lsigma2 = self.lsigma2
         sigma2 = torch.exp(lsigma2.detach())
-
-        # psi = self.psi
         Phi = self.Phi
         F = self.F
         theta = self.theta
@@ -125,3 +112,12 @@ class MVN_elbo_autolatent_sp(nn.Module):
     def test_mse(self, theta0, f0):
         fhat = self.forward(theta0)
         return ((fhat - f0) ** 2).mean()
+
+    def standardize_F(self):
+        if self.F is not None:
+            F = self.F
+            self.Fraw = F.clone()
+            self.Fmean = F.mean(1).unsqueeze(1)
+            self.Fstd = F.std(1).unsqueeze(1)
+            self.F = (F - self.Fmean) / self.Fstd
+
