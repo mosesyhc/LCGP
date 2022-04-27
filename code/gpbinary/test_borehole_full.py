@@ -89,8 +89,8 @@ Phi, Phi_loss = optim_Phi(F, kap)
 print('Phi loss:', Phi_loss)
 m, _ = F.shape
 
-model = MVN_elbo_autolatent(Lmb=None, initLmb=True,
-                            lsigma2=None, initsigma2=True,
+model = MVN_elbo_autolatent(lLmb=None, initlLmb=True,
+                            lsigma2=None, initlsigma2=True,
                             psi=torch.zeros_like(psi),
                             Phi=Phi, F=F, theta=thetatr)
 model.double()

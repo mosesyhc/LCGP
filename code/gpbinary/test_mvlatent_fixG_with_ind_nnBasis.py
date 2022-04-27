@@ -33,7 +33,7 @@ class MVlatentGP(nn.Module):
 
         Gpred = torch.zeros(n0, kap)
         for k in range(kap):
-            Gpred[:, k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, g=G[:, k])
+            Gpred[:, k], _ = pred_gp(llmb=Lmb[k], theta=theta, thetanew=theta0, g=G[:, k])
         fpred = (psi + Phi @ Gpred.T)
 
         return fpred
@@ -59,7 +59,7 @@ class MVlatentGP(nn.Module):
 
         Gpred = torch.zeros(n0, kap)
         for k in range(kap):
-            Gpred[:, k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, g=G[:, k])
+            Gpred[:, k], _ = pred_gp(llmb=Lmb[k], theta=theta, thetanew=theta0, g=G[:, k])
         fpred = (psi + Phi @ Gpred.T)
 
         return ((fpred - f0) ** 2).mean()

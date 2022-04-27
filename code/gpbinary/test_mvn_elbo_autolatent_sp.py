@@ -105,8 +105,8 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
     Lmb = lmb.repeat(kap, 1)
     Lmb[:, -1] = torch.log(torch.var(Phi.T @ (F - psi), 1))
     lsigma2 = torch.Tensor(torch.log(mse_Phi))
-    model = MVN_elbo_autolatent_sp(Lmb=Lmb, initLmb=True,
-                                   lsigma2=lsigma2, initsigma2=True,
+    model = MVN_elbo_autolatent_sp(lLmb=Lmb, initlLmb=True,
+                                   lsigma2=lsigma2, initlsigma2=True,
                                    # psi=torch.zeros_like(psi),
                                    Phi=Phi, F=F, theta=thetatr, thetai=thetai)
     model.double()

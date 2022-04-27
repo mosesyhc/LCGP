@@ -74,9 +74,9 @@ print('Basis size: ', Phi.shape)
 # Lmb = lmb.repeat(kap, 1)
 # Lmb[:, -1] = torch.log(torch.var(Phi.T @ (F - psi), 1))
 lsigma2 = torch.Tensor(torch.log(mse_Phi))
-model = MVN_elbo_autolatent_sp(Lmb=None, initLmb=True,
-                 lsigma2=None, psi=torch.zeros_like(psi),
-                 Phi=Phi, F=F, theta=thetatr, thetai=thetai)
+model = MVN_elbo_autolatent_sp(lLmb=None, initlLmb=True,
+                               lsigma2=None, psi=torch.zeros_like(psi),
+                               Phi=Phi, F=F, theta=thetatr, thetai=thetai)
 model.double()
 
 ###########################################################

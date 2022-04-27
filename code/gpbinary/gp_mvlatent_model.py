@@ -42,7 +42,7 @@ class MVlatentGP(nn.Module):
 
         Gpred = torch.zeros(n0, kap)
         for k in range(kap):
-            Gpred[:, k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, g=G[:, k])
+            Gpred[:, k], _ = pred_gp(llmb=Lmb[k], theta=theta, thetanew=theta0, g=G[:, k])
         fpred = (psi + Phi @ Gpred.T)
 
         return fpred
@@ -69,7 +69,7 @@ class MVlatentGP(nn.Module):
 
         Gpred = torch.zeros(n0, kap)
         for k in range(kap):
-            Gpred[:, k], _ = pred_gp(lmb=Lmb[k], theta=theta, thetanew=theta0, g=G[:, k])
+            Gpred[:, k], _ = pred_gp(llmb=Lmb[k], theta=theta, thetanew=theta0, g=G[:, k])
         fpred = (psi + Phi @ Gpred.T)
 
         return ((fpred - f0) ** 2).mean()
@@ -87,7 +87,7 @@ def negloglik_mvlatent(Lmb, G, lsigma, theta, f, psi, Phi):
     nll_gp = torch.zeros(kap)
     Gpred = torch.zeros_like(G)
     for k in range(kap):
-        nll_gp[k], Vh = negloglik_gp(lmb=Lmb[k], theta=theta, g=G[:, k])
+        nll_gp[k], Vh = negloglik_gp(llmb=Lmb[k], theta=theta, g=G[:, k])
         Gpred[:, k] = predmean_gp_(Vh, Lmb[k], theta, theta, G[:, k])
 
     D = f - (psi + Phi @ Gpred.T)

@@ -87,9 +87,9 @@ def test_mvn_elbo_autolatent(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=
     Lmb[:,d] = 2+torch.log(torch.var(Phi.T @ F,1))
 
     lsigma2 = torch.Tensor(torch.log(mse_Phi))
-    model = MVN_elbo_autolatent(Lmb=Lmb,
-                     lsigma2=lsigma2, psi=torch.zeros_like(psi),
-                     Phi=Phi, F=F, theta=thetatr, initLmb=True)
+    model = MVN_elbo_autolatent(lLmb=Lmb,
+                                lsigma2=lsigma2, psi=torch.zeros_like(psi),
+                                Phi=Phi, F=F, theta=thetatr, initlLmb=True)
     model.double()
 
     # # .requires_grad_() turns all parameters on.

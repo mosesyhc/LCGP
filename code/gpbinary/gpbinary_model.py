@@ -55,7 +55,7 @@ def pred(lmb, G, sigma, thetanew, theta, psi, Phi):
     # loop through kap dim of G
     G0 = torch.zeros(n0, kap)
     for k in range(kap):
-        G0[:, k], _ = pred_gp(lmb=lmb[:, k], theta=theta, thetanew=thetanew, g=G[:, k])
+        G0[:, k], _ = pred_gp(llmb=lmb[:, k], theta=theta, thetanew=thetanew, g=G[:, k])
 
     z0 = (psi + Phi @ G0.T) / sigma
     ypred = z0 > 0

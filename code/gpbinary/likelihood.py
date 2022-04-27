@@ -30,8 +30,8 @@ def negloglik_link(G, y, psi, Phi):
     return negloglik
 
 
-def negloglik_gp(lmb, theta, g, lmbregmean=0, lmbregstd=1):
-    C = covmat(theta, theta, lmb)
+def negloglik_gp(llmb, theta, g, lmbregmean=0, lmbregstd=1):
+    C = covmat(theta, theta, llmb)
 
     W, V = torch.linalg.eigh(C)
     Vh = V / torch.sqrt(W)
@@ -47,10 +47,10 @@ def negloglik_gp(lmb, theta, g, lmbregmean=0, lmbregstd=1):
     return negloglik, Vh
 
 
-def negloglik_gp_sp(lmb, theta, thetai, lsigma2, g, lmbregmean=0, lmbregstd=1,
+def negloglik_gp_sp(llmb, theta, thetai, lsigma2, g, lmbregmean=0, lmbregstd=1,
                     Delta_inv_diag=None, Q_half=None, logdet_C=None):
     if Delta_inv_diag is None or Q_half is None or logdet_C is None:
-        Delta_inv_diag, Q_half, logdet_C = cov_sp(theta, thetai, lsigma2, lmb)
+        Delta_inv_diag, Q_half, logdet_C = cov_sp(theta, thetai, lsigma2, llmb)
     # R = covmat(theta, theta, lmb)
     #
     # W, V = torch.linalg.eigh(R)
