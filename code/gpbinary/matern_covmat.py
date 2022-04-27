@@ -1,31 +1,32 @@
 import torch
+from hyperparameter_tuning import parameter_clamping
 
 
-def covmat(x1, x2, lmb, diag_only=False):
+def covmat(x1, x2, llmb, diag_only=False):
     '''
     :param diag_only:
     :param x1:
     :param x2:
-    :param lmb:
+    :param llmb:
     :return:
     '''
 
     # assumes tensors are supplied
     assert x1.dim() == 2, 'input x1 should be 2-dimensional, (n_param, dim_param)'
     assert x2.dim() == 2, 'input x2 should be 2-dimensional, (n_param, dim_param)'
-    d = lmb.shape[0]
+    d = llmb.shape[0]
 
     if diag_only:
         assert torch.isclose(x1, x2).all(), 'diag_only should only be called when x1 and x2 are identical.'
-        c = torch.exp(lmb[d-1]) * torch.ones(x1.shape[0])
+        c = torch.exp(llmb[d - 1]) * torch.ones(x1.shape[0])
         return c
 
     else:
         V = torch.zeros((x1.shape[0], x2.shape[0]))
-        C = torch.ones((x1.shape[0], x2.shape[0])) * torch.exp(lmb[d-1])
+        C = torch.ones((x1.shape[0], x2.shape[0])) * torch.exp(llmb[d - 1])
 
         for j in range(d-1):
-            S = torch.abs(x1[:, j].reshape(-1, 1) - x2[:, j]) / torch.exp(lmb[j])
+            S = torch.abs(x1[:, j].reshape(-1, 1) - x2[:, j]) / torch.exp(llmb[j])
             C *= (1 + S)
             V -= S
 
@@ -33,23 +34,20 @@ def covmat(x1, x2, lmb, diag_only=False):
     return C
 
 
-def cov_sp(theta, thetai, lsigma2, lmb):  # assuming x1 = x2 = theta
+def cov_sp(theta, thetai, lsigma2, llmb):  # assuming x1 = x2 = theta
     '''
     Returns the Nystr{\"o}m approximation of a covariance matrix,
     its inverse, and the log of its determinant.
 
     :param theta:
     :param thetai:
-    :param lmb:
+    :param llmb:
     :return:
     '''
 
-    # If thetai is a subset of theta,
-    # caution on negative non-zero residuals that causes log(-ve) to be nan.
-
-    c_full_i = covmat(theta, thetai, lmb=lmb)
-    C_i = covmat(thetai, thetai, lmb=lmb)
-    C_full_diag = covmat(theta, theta, lmb=lmb, diag_only=True)
+    c_full_i = covmat(theta, thetai, llmb=llmb)
+    C_i = covmat(thetai, thetai, llmb=llmb)
+    C_full_diag = covmat(theta, theta, llmb=llmb, diag_only=True)
 
     W_i, U_i = torch.linalg.eigh(C_i)
     W_iinv = 1 / W_i
