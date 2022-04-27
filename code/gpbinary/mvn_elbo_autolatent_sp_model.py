@@ -123,8 +123,9 @@ class MVN_elbo_autolatent_sp(nn.Module):
             self.M[k] = Mk
 
     def test_mse(self, theta0, f0):
-        fhat = self.forward(theta0)
-        return ((fhat - f0) ** 2).mean()
+        with torch.no_grad():
+            fhat = self.forward(theta0)
+            return ((fhat - f0) ** 2).mean()
 
     def test_rmse(self, theta0, f0):
         return torch.sqrt(self.test_mse(theta0=theta0, f0=f0))

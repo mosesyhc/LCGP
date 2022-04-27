@@ -3,15 +3,15 @@ import optim_rules
 from optim_rules import convergence_f, convergence_g
 
 
-def optim_elbo(model, maxiter=500, lr=8e-3):
-    optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-                             lr=lr)
+def optim_elbo(model, maxiter=2500, lr=8e-3):
+    optim = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()),
+                              lr=lr)
 
     epoch = 0
     flag = None
     negelbo_prev = torch.inf
     while True:
-        optim.zero_grad(set_to_none=True)
+        optim.zero_grad(set_to_none=True)  # from guide: Alternatively, starting from PyTorch 1.7, call model or optimizer.zero_grad(set_to_none=True).
         negelbo = model.negelbo()
         negelbo.backward()
         optim.step()

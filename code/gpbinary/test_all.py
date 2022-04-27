@@ -6,7 +6,7 @@ from fayans_support import read_data, read_test_data
 from sklearn.cluster import KMeans
 from mvn_elbo_autolatent_model import MVN_elbo_autolatent
 from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
-torch.autograd.set_detect_anomaly(True)
+# torch.autograd.set_detect_anomaly(True)  ## turn off anomaly detection
 
 from optim_basis_Phi import optim_Phi
 from optim_elbo import optim_elbo
