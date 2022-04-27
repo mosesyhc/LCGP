@@ -1,7 +1,7 @@
 import torch
 
-FTOL = 1e-06
-GTOL = 1e-05
+FTOL = 1e-04
+GTOL = 1e-03
 
 
 def convergence_f(f_prev, f_curr):

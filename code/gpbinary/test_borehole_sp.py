@@ -1,51 +1,16 @@
 import torch
 import torch.nn as nn
+from optim_basis_Phi import optim_Phi
+
 from fayans_support import read_data, read_test_data
 from sklearn.cluster import KMeans
 from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
 torch.set_default_dtype(torch.double)
 torch.autograd.set_detect_anomaly(True)
+
+import optim_rules
 from optim_rules import convergence_f, convergence_g
 import matplotlib.pyplot as plt
-
-
-def optim_Phi(F, kap, maxiter_nn=10000):
-    from basis_nn_model import Basis
-    from optim_rules import convergence_f
-
-    m, _ = F.shape
-
-    def loss(class_Phi, F):
-        Phi = class_Phi()
-        if class_Phi.normalize:
-            Fhat = Phi @ Phi.T @ F
-        else:
-            Fhat = Phi @ torch.linalg.solve(Phi.T @ Phi, Phi.T) @ F
-        mse = nn.MSELoss(reduction='mean')
-        return mse(Fhat, F)
-
-    # get_bestPhi takes F and gives the SVD U
-    Phi_as_param = Basis(m, kap, normalize=True) #, inputdata=F)
-    optim_nn = torch.optim.SGD(Phi_as_param.parameters(), lr=1e-2)
-    epoch = 0
-    l_prev = torch.inf
-    while True:
-        optim_nn.zero_grad()
-        l = loss(Phi_as_param, F)
-        l.backward()
-        optim_nn.step()
-
-        epoch += 1
-        if epoch > maxiter_nn:
-            break
-        elif convergence_f(l_prev, l):
-            break
-
-        l_prev = l.detach()
-
-    print('Phi loss: {:.3f} after {:d} iterations'.format(l, epoch))
-    return Phi_as_param().detach(), l.detach()
-
 
 # def test_sp(n_inducing, part, kap=5):
 part = 1
@@ -70,7 +35,7 @@ ftr = f[:, train_ind]
 thetatr = theta[train_ind]
 
 # choose inducing points
-n_inducing = int(thetatr.shape[0]/ 2)
+n_inducing = int(thetatr.shape[0] / 3)
 kmeans_theta = KMeans(n_clusters=n_inducing, algorithm='full').fit(thetatr)
 thetai = torch.tensor(kmeans_theta.cluster_centers_)
 
@@ -85,6 +50,7 @@ fte = (fte - psi) / ftr.std(1).unsqueeze(1)
 # F /= Frng
 
 kap = 4
+print('optimizing Phi ... ')
 Phi, Phi_loss = optim_Phi(F, kap)
 # Phi, _, _ = torch.linalg.svd(F, full_matrices=False)
 # Phi = Phi[:, :kap]
@@ -93,22 +59,21 @@ print('Phi loss:', Phi_loss)
 m, _ = F.shape
 
 # lsigma2 = torch.Tensor(torch.log(Phi_loss)) # torch.max(torch.Tensor((1e-3,)), )
-model = MVN_elbo_autolatent_sp(Lmb=None, initLmb=True,
-                               lsigma2=None, initsigma2=True,
-                               # psi=torch.zeros_like(psi),
+model = MVN_elbo_autolatent_sp(lLmb=None, initlLmb=True,
+                               lsigma2=None, initlsigma2=True,
                                Phi=Phi, F=F, theta=thetatr, thetai=thetai)
 model.double()
 
 optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-                         lr=1e-3)  # , line_search_fn='strong_wolfe')
+                         lr=8e-3)  # , line_search_fn='strong_wolfe')
 header = ['iter', 'neg elbo', 'mse', 'train mse']
 epoch = 0
 negelbo_prev = torch.inf
 
 import numpy as np
 import time
-save_time = np.zeros(51)
-save_time[0] = time.time()
+# save_time = np.zeros(51)
+# save_time[0] = time.time()
 print('\nn = {:d}, p = {:d}'.format(thetatr.shape[0], thetai.shape[0]))
 
 print('\nELBO training:')
@@ -116,12 +81,8 @@ print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
 while True:
     optim.zero_grad(set_to_none=True)
     negelbo = model.negelbo()
-    negelbo.backward() #retain_graph=True)
-    # from torchviz import make_dot
-    # make_dot(negelbo, params=dict(list(model.named_parameters())),
-    #          show_attrs=True, show_saved=True).render('negelbo_cg_retainTrue', format='png')
-
-    optim.step()  # lambda: model.lik())
+    negelbo.backward()
+    optim.step()
 
     if epoch % 10 == 0:
         with torch.no_grad():
@@ -131,54 +92,24 @@ while True:
 
             print('{:<5d} {:<12.3f} {:<12.6f} {:<12.6f}'.format
                   (epoch, negelbo, mse, trainmse))
+        # save_time[epoch // 100] = time.time()
     elif convergence_f(negelbo_prev, negelbo):
+        print('FTOL <= {:.3E}'.format(optim_rules.FTOL))
+        break
+
+    elif convergence_g(model.parameters()):
+        print('GTOL <= {:.3E}'.format(optim_rules.GTOL))
+        break
+
+    elif epoch >= 1000:
         break
 
     epoch += 1
-    save_time[epoch] = time.time()
-    if epoch >= 50:
-        break
     negelbo_prev = negelbo.clone().detach()
 
-
-# np.savetxt('time_ip_{:d}.txt'.format(thetai.shape[0]), save_time)
-# negelbo = optim_IPGPVI(F=F, Phi=Phi, Phi_loss=Phi_loss, psi=psi,
-#                        thetatr=thetatr, thetai=thetai, maxiter_gp=1000,
-#                        fte=fte, thetate=thetate)
-
-
-
-# def optim_IPGPVI(F, Phi, Phi_loss, psi, thetatr, thetai, fte, thetate, maxiter_gp=1000):
-#     m, _ = F.shape
+# print('{:.3f} seconds after {:d} iterations'.format(time.time() - save_time[0], epoch))
+# print(save_time)
 #
-#     # lsigma2 = torch.Tensor(torch.log(Phi_loss)) # torch.max(torch.Tensor((1e-3,)), )
-#     model = MVN_elbo_autolatent_sp(Lmb=None, initLmb=True,
-#                                    lsigma2=None, initsigma2=True,
-#                                    # psi=torch.zeros_like(psi),
-#                                    Phi=Phi, F=F, theta=thetatr, thetai=thetai)
-#     model.double()
-#
-#     optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-#                              lr=1e-3)  # , line_search_fn='strong_wolfe')
-#     header = ['iter', 'neg elbo', 'mse', 'train mse']
-#     epoch = 0
-#     print('\nELBO training:')
-#     print('{:<5s} {:<12s} {:<12s} {:<12s}'.format(*header))
-#     while True:
-#         optim.zero_grad()
-#         negelbo = model.negelbo()
-#         negelbo.backward(retain_graph=True)
-#         optim.step()  # lambda: model.lik())
-#
-#         epoch += 1
-#         if epoch > maxiter_gp:
-#             break
-#
-#         # pred = model(thetatr)
-#         trainmse = model.test_mse(thetatr, F)
-#         mse = model.test_mse(thetate, fte - psi)
-#
-#         # if epoch % 10 == 0:
-#         print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f}'.format
-#               (epoch, negelbo, mse, trainmse))
-#     return negelbo
+# import matplotlib.pyplot as plt
+# plt.plot(save_time - save_time[0])
+# plt.show()
