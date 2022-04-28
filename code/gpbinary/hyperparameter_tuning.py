@@ -5,7 +5,7 @@ C_LLMB = 0.4925
 C_LSIGMA2 = 0.224
 
 
-def clam_lmb(x, c=C_LLMB):
+def clam_llmb(x, c=C_LLMB):
     return 2.5 * torch.tanh(c*(x))
 
 
@@ -41,21 +41,29 @@ def parameter_clamping(t, trng, c):
 
 
 if __name__ == '__main__':
-    x = torch.column_stack((torch.arange(-14, 7, 0.5), torch.arange(-14, 7, 0.5)))
+    x = torch.column_stack((torch.arange(-5, 5, 0.5), torch.arange(-14, 1, 0.5*3/2)))
     trng = torch.row_stack((torch.tensor((-2.5, 2.5)), torch.tensor((-12, -1))))
 
     import matplotlib.pyplot as plt
     plt.style.use(['science', 'grid'])
+    fig, ax = plt.subplots(1, 2, figsize=(8, 5))
+    for i in torch.arange(0.01, 0.9, 0.005):
+        ax[0].plot(x[:, 0], clam_llmb(x[:, 0], i), alpha=0.05, color='blue')
+        ax[1].plot(x[:, 1], clam_lsigma2(x[:, 1], i), alpha=0.05, color='green')
 
-    for i in torch.arange(0.05, 0.75, 0.005):
-        plt.plot(x[:, 0], clam_lmb(x[:, 0], i), alpha=0.15, color='grey')
-        plt.plot(x[:, 1], clam_lsigma2(x[:, 1], i), alpha=0.15, color='grey')
-    plt.plot(x, x, linewidth=2.5, color='k', linestyle='dotted')
-    # plt.scatter(x[:, 0], clam_lmb(x[:, 0], C_LLMB), color='r') #, label=r'c = {:.4f}'.format(C_LLMB))
-    # plt.scatter(x[:, 1], clam_lsigma2(x[:, 1], C_LSIGMA2), color='r') #, label=r'c = {:.4f}'.format(C_LSIGMA2))
-    plt.plot(x, parameter_clamping(x, trng, c=torch.tensor((C_LLMB, C_LSIGMA2))),
-             label=(r'llmb', r'lsigma2'),  linewidth=2, alpha=0.75)
-    plt.vlines(torch.tensor(((-12, -2.5), (-1, 2.5))), -14, 7, color=('g', 'b'), linestyle='dashed')
-    plt.legend()
+    ax[0].plot(x[:, 0], x[:, 0], linewidth=2.5, color='k', linestyle='dotted')
+    ax[0].plot(x[:, 0], parameter_clamping(x[:, 0], trng[0], c=C_LLMB),
+             label=(r'$\log(\lambda_{k, l})$'), color='blue', linewidth=2, alpha=1)
+    ax[0].vlines(torch.tensor((-2.5, 2.5)), -5, 5, linestyle='dashed')
+    ax[0].set_xlabel(r'$\log(\lambda_{k, l})$')
+    # ax[0].legend()
+
+    ax[1].plot(x[:, 1], x[:, 1], linewidth=2.5, color='k', linestyle='dotted')
+    ax[1].plot(x[:, 1], parameter_clamping(x[:, 1], trng[1], c=C_LSIGMA2),
+             label=(r'$\log(\sigma^2)$'), color='green', linewidth=2, alpha=1)
+    ax[1].vlines(torch.tensor((-12, -1)), -14, 1, color='green', linestyle='dashed')
+    ax[1].set_xlabel(r'$\log(\sigma^2)$')
+    # ax[1].legend()
+
     plt.tight_layout()
-
+    plt.savefig(r'code\fig\clamping.png', dpi=150)
