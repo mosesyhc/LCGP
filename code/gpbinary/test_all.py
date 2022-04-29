@@ -60,7 +60,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         rmsete = model.test_rmse(thetate, fte)
 
     elif method == 'MVIP':
-        lr = 8e-3
+        lr = 5e-3
         p = int(n * ip_frac)
 
         kmeans_theta = KMeans(n_clusters=p, algorithm='full').fit(thetatr)
@@ -68,7 +68,10 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         model = MVN_elbo_autolatent_sp(lLmb=None, initlLmb=True,
                                        lsigma2=None, initlsigma2=True,
                                        Phi=Phi, F=ftr, theta=thetatr, thetai=thetai)
-        model, niter, flag = optim_elbo(model, lr=lr)
+        model, niter, flag = optim_elbo(model,
+                                        ftr=ftr, thetatr=thetatr,
+                                        fte=fte, thetate=thetate,
+                                        lr=lr)
 
         time_tr1 = time.time()
         model.create_MV()
@@ -150,8 +153,8 @@ if __name__ == '__main__':
 
     ### list of methods
     method_list = ['MVIP', 'MVGP', 'surmise']
-    n_list = [200, 400, 800] #, 1600] 200,
-    ip_frac_list = [1/8, 1/4, 1/2, 1]
+    n_list = [400, 800] #, 1600] 200,
+    ip_frac_list = [1/4, 1/2, 1] # 1/8, 1/4,
 
     ### replication,
     nrep = 1

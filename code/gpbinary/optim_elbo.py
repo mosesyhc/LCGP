@@ -3,7 +3,7 @@ import optim_rules
 from optim_rules import convergence_f, convergence_g
 
 
-def optim_elbo(model, maxiter=2500, lr=8e-3):
+def optim_elbo(model, ftr, thetatr, fte, thetate, maxiter=2500, lr=8e-3):
     optim = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()),
                               lr=lr)
 
@@ -15,6 +15,15 @@ def optim_elbo(model, maxiter=2500, lr=8e-3):
         negelbo = model.negelbo()
         negelbo.backward()
         optim.step()
+
+        if epoch % 10 == 0:
+            with torch.no_grad():
+                model.create_MV()
+                trainmse = model.test_mse(thetatr, ftr)
+                mse = model.test_mse(thetate, fte)
+
+                print('{:<5d} {:<12.3f} {:<12.6f} {:<12.6f}'.format
+                      (epoch, negelbo, mse, trainmse))
 
         if convergence_f(negelbo_prev, negelbo):
             print('FTOL <= {:.3E}'.format(optim_rules.FTOL))
