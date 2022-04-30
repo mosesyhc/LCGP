@@ -52,7 +52,8 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         model = MVN_elbo_autolatent(lLmb=None, initlLmb=True,
                                     lsigma2=None, initlsigma2=True,
                                     Phi=Phi, F=ftr, theta=thetatr)
-        model, niter, flag = optim_elbo(model, lr=lr)
+        model, niter, flag = optim_elbo(model, ftr, thetatr, fte, thetate, Phi=Phi,
+                                        maxiter=100, lr=lr)
 
         time_tr1 = time.time()
         model.create_MV()
@@ -70,11 +71,15 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
                                        Phi=Phi, F=ftr, theta=thetatr, thetai=thetai)
         model, niter, flag = optim_elbo(model,
                                         ftr=ftr, thetatr=thetatr,
-                                        fte=fte, thetate=thetate,
+                                        fte=fte, thetate=thetate, Phi=Phi,
+                                        maxiter=100,
                                         lr=lr)
 
         time_tr1 = time.time()
-        model.create_MV()
+        # import matplotlib.pyplot as plt
+        # plt.scatter(Mvar.detach().numpy(), S.detach().numpy())
+        # plt.show()
+
         rmsetr = model.test_rmse(thetatr, ftr)
         rmsete = model.test_rmse(thetate, fte)
 
@@ -102,25 +107,30 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
     )
 
 
-def build_surmise(ftr, thetatr, Phi):
+def build_surmise(ftr, thetatr, Phi=None):
     from surmise.emulation import emulator
     import numpy as np
-    offset = ftr.mean(1)
-    scale = np.ones(ftr.shape[0])
-    S = np.ones(Phi.shape[1])
-    fs = ((ftr.T - offset) / scale).T
-    extravar = torch.mean((fs - Phi @ Phi.T @ fs) ** 2, 1) * (scale ** 2)
-    standardpcinfo = {'offset': offset.numpy(),
-                      'scale': scale,
-                      'U': Phi.numpy(),
-                      'S': S,
-                      'fs': fs.T.numpy(),
-                      'extravar': extravar.numpy()}
+    if Phi is None:
+        emu = emulator(x=x0.numpy(), theta=thetatr.numpy(),
+                       f=ftr.numpy(), method='PCGPwM',
+                       args={'warnings': True})
+    else:
+        offset = ftr.mean(1)
+        scale = np.ones(ftr.shape[0])
+        S = np.ones(Phi.shape[1])
+        fs = ((ftr.T - offset) / scale).T
+        extravar = torch.mean((fs - Phi @ Phi.T @ fs) ** 2, 1) * (scale ** 2)
+        standardpcinfo = {'offset': offset.numpy(),
+                          'scale': scale,
+                          'U': Phi.numpy(),
+                          'S': S,
+                          'fs': fs.T.numpy(),
+                          'extravar': extravar.numpy()}
 
-    emu = emulator(x=x0.numpy(), theta=thetatr.numpy(),
-                   f=ftr.numpy(), method='PCGPwM',
-                   args={'warnings': True,
-                         'standardpcinfo': standardpcinfo})
+        emu = emulator(x=x0.numpy(), theta=thetatr.numpy(),
+                       f=ftr.numpy(), method='PCGPwM',
+                       args={'warnings': True,
+                             'standardpcinfo': standardpcinfo})
 
     return emu
 
@@ -173,7 +183,9 @@ if __name__ == '__main__':
             torch.seed()
 
             # construct basis
+            # Phi, Phi_mse = optim_Phi(ftr, kap)
             Phi, Phi_mse = optim_Phi(ftr, kap)
+            # print('S^2/n', S**2/n)
 
             for method in method_list:
                 print('rep: {:d}, method: {:s}, n: {:d}'.format(rep, method, n))
