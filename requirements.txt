@@ -3,3 +3,5 @@ numpy
 scipy
 matplotlib
 surmise
+sklearn
+pandas
