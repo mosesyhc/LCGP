@@ -142,4 +142,8 @@ class MVN_elbo_autolatent_sp(nn.Module):
         # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)), c=C_LLMB)).T
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, -1)), c=C_LSIGMA2)
+
+        # print(torch.log(torch.var(self.Phi.T @ self.F, 1)))
+        # lLmb[:, -1] += torch.log(torch.var(self.Phi.T @ self.F, 1))
+        # print(lLmb[:, -1].size(), torch.log(torch.var(self.Phi.T @ self.F, 1)).size())
         return lLmb, lsigma2
