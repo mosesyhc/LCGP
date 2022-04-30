@@ -6,9 +6,7 @@ from fayans_support import read_data, read_test_data
 from sklearn.cluster import KMeans
 from mvn_elbo_autolatent_model import MVN_elbo_autolatent
 from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
-# torch.autograd.set_detect_anomaly(True)  ## turn off anomaly detection
 
-from optim_basis_Phi import optim_Phi
 from optim_elbo import optim_elbo
 
 
@@ -21,7 +19,8 @@ res_struct = dict.fromkeys(['method', 'rep',
 
 
 def test_single(method, n, seed, ftr, thetatr, fte, thetate,
-                Phi, rep=None, ip_frac=None, precision_double=True):
+                Phi, rep=None, ip_frac=None, precision_double=True,
+                output_csv=False):
     res = res_struct.copy()
     if precision_double:
         torch.set_default_dtype(torch.float64)
@@ -52,7 +51,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         model = MVN_elbo_autolatent(lLmb=None, initlLmb=True,
                                     lsigma2=None, initlsigma2=True,
                                     Phi=Phi, F=ftr, theta=thetatr)
-        model, niter, flag = optim_elbo(model, ftr, thetatr, fte, thetate, Phi=Phi,
+        model, niter, flag = optim_elbo(model, ftr, thetatr, fte, thetate,
                                         maxiter=100, lr=lr)
 
         time_tr1 = time.time()
@@ -71,7 +70,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
                                        Phi=Phi, F=ftr, theta=thetatr, thetai=thetai)
         model, niter, flag = optim_elbo(model,
                                         ftr=ftr, thetatr=thetatr,
-                                        fte=fte, thetate=thetate, Phi=Phi,
+                                        fte=fte, thetate=thetate,
                                         maxiter=100,
                                         lr=lr)
 
@@ -101,10 +100,11 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
 
     print(rmsetr, rmsete)
 
-    df = pd.DataFrame.from_dict(res)
-    df.to_csv(res_dir + r'rep{:d}_n{:d}_p{:d}_{:s}_seed{:d}_{:s}.csv'.format(
-        rep, n, p, method, int(seed), datetime.today().strftime('%Y%m%d%H%M%S'))
-    )
+    if output_csv:
+        df = pd.DataFrame.from_dict(res)
+        df.to_csv(res_dir + r'rep{:d}_n{:d}_p{:d}_{:s}_seed{:d}_{:s}.csv'.format(
+            rep, n, p, method, int(seed), datetime.today().strftime('%Y%m%d%H%M%S'))
+        )
 
 
 def build_surmise(ftr, thetatr, Phi=None):
@@ -176,7 +176,7 @@ if __name__ == '__main__':
             seed = torch.randint(0, 10000, (1,))
 
             ### train, test data
-            torch.manual_seed(seed)
+            torch.manual_seed(int(seed))
             tr_ind = torch.randperm(n_all)[:n]
             ftr = f[:, tr_ind]
             thetatr = theta[tr_ind]
@@ -184,8 +184,13 @@ if __name__ == '__main__':
 
             # construct basis
             # Phi, Phi_mse = optim_Phi(ftr, kap)
-            Phi, Phi_mse = optim_Phi(ftr, kap)
+            # Phi, Phi_mse = optim_Phi(ftr, kap)
             # print('S^2/n', S**2/n)
+            Phi, S, _ = torch.linalg.svd(ftr, full_matrices=False)
+            Phi = Phi[:, :kap]
+            S = S[:kap]
+
+            Phi_mse = ((Phi @ Phi.T @ ftr)**2).mean()
 
             for method in method_list:
                 print('rep: {:d}, method: {:s}, n: {:d}'.format(rep, method, n))
