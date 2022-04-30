@@ -7,7 +7,11 @@ class Basis(nn.Module):
     def __init__(self, m, kap, normalize=True, inputdata=None):
         super(Basis, self).__init__()
         if inputdata is not None:
-            self.Phi = nn.Parameter(torch.linalg.svd(inputdata)[0][:, :kap])
+            Phi, S, _ = torch.linalg.svd(inputdata)
+            Phi = Phi[:, :kap]
+            S = S[:kap]
+            self.Phi = nn.Parameter(Phi)
+            self.S = S
         else:
             self.Phi = nn.Parameter(torch.eye(m)[:, :kap])
         self.normalize = normalize
