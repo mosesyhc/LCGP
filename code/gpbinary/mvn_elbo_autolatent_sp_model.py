@@ -21,6 +21,9 @@ class MVN_elbo_autolatent_sp(nn.Module):
         self.Fmean = None
         self.standardize_F()
 
+        # for debug, keep ghat in fhat = Phi @ ghat
+        self.ghat = None
+
         self.theta = theta
         self.thetai = thetai
         if initlLmb:
@@ -51,6 +54,7 @@ class MVN_elbo_autolatent_sp(nn.Module):
         for k in range(kap):
             ghat_sp[k], _ = pred_gp_sp(llmb=lLmb[k], theta=theta, thetai=thetai, thetanew=theta0, lsigma2=lsigma2, g=M[k])
         fhat = Phi @ ghat_sp
+        self.ghat = ghat_sp
         fhat = (fhat * self.Fstd) + self.Fmean
         return fhat
 
@@ -130,6 +134,11 @@ class MVN_elbo_autolatent_sp(nn.Module):
     def test_rmse(self, theta0, f0):
         return torch.sqrt(self.test_mse(theta0=theta0, f0=f0))
 
+    def test_individual_error(self, theta0, f0):
+        with torch.no_grad():
+            fhat = self.forward(theta0)
+            return torch.sqrt((fhat - f0)**2).mean(0)
+
     def standardize_F(self):
         if self.F is not None:
             F = self.F
@@ -140,10 +149,7 @@ class MVN_elbo_autolatent_sp(nn.Module):
 
     def parameter_clamp(self, lLmb, lsigma2):
         # clamping
-        lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)), c=C_LLMB)).T
-        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, -1)), c=C_LSIGMA2)
+        lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
+        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, -1)))
 
-        # print(torch.log(torch.var(self.Phi.T @ self.F, 1)))
-        # lLmb[:, -1] += torch.log(torch.var(self.Phi.T @ self.F, 1))
-        # print(lLmb[:, -1].size(), torch.log(torch.var(self.Phi.T @ self.F, 1)).size())
         return lLmb, lsigma2

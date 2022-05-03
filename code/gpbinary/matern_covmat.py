@@ -62,7 +62,7 @@ def cov_sp(theta, thetai, lsigma2, llmb):  # assuming x1 = x2 = theta
     R = C_i + (c_full_i.T * Delta_inv_diag) @ c_full_i  # p x p
 
     W_R, U_R = torch.linalg.eigh(R)
-    Q_half = (Delta_inv_diag * c_full_i.T).T @ (U_R * torch.sqrt(1 / W_R)) @ U_R.T
+    Q_half = (Delta_inv_diag * c_full_i.T).T @ (U_R * torch.sqrt(1 / W_R.abs())) @ U_R.T
     # Rinv_half = U_R @ torch.diag(torch.sqrt(1 / W_R)) @ U_R.T  # = Q_half = Lmb_inv @ c_full_i @ R_invhalf
 
     # C_sp_inv = torch.diag(Delta_inv_diag) - Q_half @ Q_half.T

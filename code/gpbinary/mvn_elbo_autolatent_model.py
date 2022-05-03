@@ -114,8 +114,8 @@ class MVN_elbo_autolatent(nn.Module):
 
     def parameter_clamp(self, lLmb, lsigma2):
         # clamping
-        lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)), c=C_LLMB)).T
-        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, -1)), c=C_LSIGMA2)
+        lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
+        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, -1)))
         return lLmb, lsigma2
 
     def standardize_F(self):

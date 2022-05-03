@@ -9,6 +9,7 @@ from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
 
 from optim_elbo import optim_elbo
 
+from matern_covmat import cov_sp, covmat
 
 res_struct = dict.fromkeys(['method', 'rep',
                             'n', 'p', 'seed',
@@ -60,11 +61,12 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         rmsete = model.test_rmse(thetate, fte)
 
     elif method == 'MVIP':
-        lr = 5e-3
+        lr = 5e-4
         p = int(n * ip_frac)
 
         kmeans_theta = KMeans(n_clusters=p, algorithm='full').fit(thetatr)
         thetai = torch.tensor(kmeans_theta.cluster_centers_)
+
         model = MVN_elbo_autolatent_sp(lLmb=None, initlLmb=True,
                                        lsigma2=None, initlsigma2=True,
                                        Phi=Phi, F=ftr, theta=thetatr, thetai=thetai)
@@ -73,6 +75,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
                                         fte=fte, thetate=thetate,
                                         maxiter=100,
                                         lr=lr)
+
 
         time_tr1 = time.time()
         # import matplotlib.pyplot as plt

@@ -26,7 +26,7 @@ def diff(res, n, p, lsigma2):
     C = covmat(x1=theta, x2=theta, llmb=llmb)
 
     suppI = (Dd.diag() - Qh @ Qh.T) @ C
-    d_mean_I = torch.sqrt(((torch.eye(n) - suppI)**2).mean())
+    d_mean_I = torch.abs(torch.eye(n) - suppI).median()
     d_max_I = torch.sqrt(((torch.eye(n) - suppI)**2).max())
 
     res['d_theta'] = d_theta
