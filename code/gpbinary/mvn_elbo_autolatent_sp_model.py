@@ -3,15 +3,35 @@ import torch.nn as nn
 from matern_covmat import cov_sp
 from likelihood import negloglik_gp_sp
 from prediction import pred_gp_sp
-from hyperparameter_tuning import parameter_clamping, C_LLMB, C_LSIGMA2
+from hyperparameter_tuning import parameter_clamping
 
 
 class MVN_elbo_autolatent_sp(nn.Module):
-    def __init__(self, Phi, F, theta, thetai, lLmb=None, lsigma2=None, initlLmb=True, initlsigma2=True):  #psi
+    def __init__(self, Phi, F, theta, p=None, thetai=None,
+                 lLmb=None, lsigma2=None, initlLmb=True, initlsigma2=True,
+                 init_thetai=False, choice_thetai='LHS'):  #psi
         super().__init__()
+        if p is None and thetai is None:
+            raise ValueError('Specify either p, (number of inducing points),'
+                             ' or thetai, (inducing points).')
+        if p is None:
+            self.p = thetai.shape[0]
+            self.thetai = thetai
+        else:
+            self.p = p
+            if choice_thetai == 'LHS':  # assume [0, 1]^d
+                from scipy.stats.qmc import LatinHypercube
+                sampler = LatinHypercube(d=theta.shape[1])
+                self.thetai = sampler.random(p)
+            elif choice_thetai == 'kmeans':
+                from sklearn.cluster import KMeans
+                kmeans_gen = KMeans(p).fit(theta)
+                self.thetai = kmeans_gen.cluster_centers_
+            else:
+                raise ValueError('Currently only LHS or kmeans is supported for choosing inducing points')
+
         self.kap = Phi.shape[1]
         self.m, self.n = F.shape
-        self.p = thetai.shape[0]
         self.M = torch.zeros(self.kap, self.n)
         self.Phi = Phi
 
@@ -21,11 +41,8 @@ class MVN_elbo_autolatent_sp(nn.Module):
         self.Fmean = None
         self.standardize_F()
 
-        # for debug, keep ghat in fhat = Phi @ ghat
-        self.ghat = None
-
         self.theta = theta
-        self.thetai = thetai
+        self.d = theta.shape[1]
         if initlLmb:
             llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([theta.shape[1]])) +
                                torch.log(torch.std(theta, 0)))
@@ -54,7 +71,6 @@ class MVN_elbo_autolatent_sp(nn.Module):
         for k in range(kap):
             ghat_sp[k], _ = pred_gp_sp(llmb=lLmb[k], theta=theta, thetai=thetai, thetanew=theta0, lsigma2=lsigma2, g=M[k])
         fhat = Phi @ ghat_sp
-        self.ghat = ghat_sp
         fhat = (fhat * self.Fstd) + self.Fmean
         return fhat
 

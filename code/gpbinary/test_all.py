@@ -7,7 +7,7 @@ from sklearn.cluster import KMeans
 from mvn_elbo_autolatent_model import MVN_elbo_autolatent
 from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
 
-from optim_elbo import optim_elbo
+from optim_elbo import optim_elbo, optim_elbo_lbfgs
 
 from matern_covmat import cov_sp, covmat
 
@@ -70,12 +70,17 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         model = MVN_elbo_autolatent_sp(lLmb=None, initlLmb=True,
                                        lsigma2=None, initlsigma2=True,
                                        Phi=Phi, F=ftr, theta=thetatr, thetai=thetai)
-        model, niter, flag = optim_elbo(model,
-                                        ftr=ftr, thetatr=thetatr,
-                                        fte=fte, thetate=thetate,
-                                        maxiter=100,
-                                        lr=lr)
+        # model, niter, flag = optim_elbo(model,
+        #                                 ftr=ftr, thetatr=thetatr,
+        #                                 fte=fte, thetate=thetate,
+        #                                 maxiter=100,
+        #                                 lr=lr)
 
+        model, niter, flag = optim_elbo_lbfgs(model,
+                                              ftr=ftr, thetatr=thetatr,
+                                              fte=fte, thetate=thetate,
+                                              maxiter=100,
+                                              lr=lr)
 
         time_tr1 = time.time()
         # import matplotlib.pyplot as plt

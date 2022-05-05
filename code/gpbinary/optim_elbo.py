@@ -1,8 +1,10 @@
 import torch
-from optim_rules import convergence_f, convergence_g
+from optim_rules import convergence_f, convergence_g, convergence_f_abs
 
 
-def optim_elbo(model, ftr, thetatr, fte, thetate, maxiter=2500, lr=8e-3):
+def optim_elbo(model,
+               # ftr, thetatr, fte, thetate,
+               maxiter=2500, lr=8e-3):
     optim = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()),
                               lr=lr)
 
@@ -18,15 +20,15 @@ def optim_elbo(model, ftr, thetatr, fte, thetate, maxiter=2500, lr=8e-3):
             break
         negelbo.backward()
         optim.step()
-
-        if epoch % 10 == 0:
-            with torch.no_grad():
-                model.create_MV()
-                trainmse = model.test_mse(thetatr, ftr)
-                mse = model.test_mse(thetate, fte)
-
-                print('{:<5d} {:<12.3f} {:<12.6f} {:<12.6f}'.format
-                      (epoch, negelbo, mse, trainmse))
+        #
+        # if epoch % 10 == 0:
+        #     with torch.no_grad():
+        #         model.create_MV()
+        #         trainmse = model.test_mse(thetatr, ftr)
+        #         mse = model.test_mse(thetate, fte)
+        #
+        #         print('{:<5d} {:<12.3f} {:<12.6f} {:<12.6f}'.format
+        #               (epoch, negelbo, mse, trainmse))
 
         if convergence_f(negelbo_prev, negelbo, ftol=1e-6):
             print('FTOL <= {:.3E}'.format(1e-6))
@@ -42,4 +44,46 @@ def optim_elbo(model, ftr, thetatr, fte, thetate, maxiter=2500, lr=8e-3):
 
         epoch += 1
         negelbo_prev = negelbo.clone().detach()
+    return model, epoch, flag
+
+
+def optim_elbo_lbfgs(model,
+                     # ftr, thetatr, fte, thetate,
+                     maxiter=250, lr=8e-3):
+    optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+
+    def closure():
+        optim.zero_grad()
+        negelbo = model.negelbo()
+        return negelbo
+    loss_prev = torch.inf
+    loss = closure()
+    loss.backward()
+
+    epoch = 0
+    while True:
+        options = {'closure': closure, 'current_loss': loss}
+        loss, _, lr, _, _, _, _, _ = optim.step(options)
+
+        # if epoch % 1 == 0:
+        #     with torch.no_grad():
+        #         model.create_MV()
+        #         trainmse = model.test_mse(thetatr, ftr)
+        #         mse = model.test_mse(thetate, fte)
+        #
+        #         print('{:<5d} {:<12.3f} {:<12.3f} {:<12.6f} {:<12.6f}'.format
+        #               (epoch, loss, loss_prev - loss, mse, trainmse))
+
+        if epoch >= maxiter:
+            flag = 'MAX_ITER'
+            break
+
+        if convergence_f_abs(loss_prev, loss, ftol=model.d/10):
+            print('FTOL <= {:.3E}'.format(model.d/10))
+            flag = 'F_CONV'
+            break
+
+        epoch += 1
+
+        loss_prev = loss.clone().detach()
     return model, epoch, flag
