@@ -55,19 +55,30 @@ def cov_sp(theta, thetai, llmb):  # assuming x1 = x2 = theta
 
     C_r = c_full_i @ C_iinv @ c_full_i.T
 
-    diag = C_full_diag - torch.diag(C_r) + torch.exp(lsigma2)
+    nugconst0 = -10
+    diag = C_full_diag - (1 - torch.exp(torch.tensor((nugconst0,)))) * torch.diag(C_r)  #
     Delta_inv_diag = 1 / diag
-
 
     R = C_i + (c_full_i.T * Delta_inv_diag) @ c_full_i  # p x p
 
     W_R, U_R = torch.linalg.eigh(R)
-    Q_half = (Delta_inv_diag * c_full_i.T).T @ (U_R * torch.sqrt(1 / W_R.abs())) @ U_R.T
-    # Rinv_half = U_R @ torch.diag(torch.sqrt(1 / W_R)) @ U_R.T  # = Q_half = Lmb_inv @ c_full_i @ R_invhalf
+    while W_R.min() < 1e-16:
+        nugconst0 += 1
+        diag = C_full_diag - (1 - torch.exp(torch.tensor((nugconst0,)))) * torch.diag(C_r)  #
+        Delta_inv_diag = 1 / diag
 
-    # C_sp_inv = torch.diag(Delta_inv_diag) - Q_half @ Q_half.T
-    # C_sp_inv = Lmb_inv - Lmb_inv @ c_full_i @ Rinv @ c_full_i.T @ Lmb_inv  # improve to p x p matrices
+        R = C_i + (c_full_i.T * Delta_inv_diag) @ c_full_i  # p x p
 
-    logdet_C_sp = torch.log(W_R).sum() - torch.log(W_i).sum() + torch.log(diag).sum()
+        W_R, U_R = torch.linalg.eigh(R)
 
-    return Delta_inv_diag, Q_half, logdet_C_sp
+    Q_Rinvh = (Delta_inv_diag * c_full_i.T).T @ (U_R * torch.sqrt(1 / W_R)) @ U_R.T
+    # Rinv_half = U_R @ torch.diag(torch.sqrt(1 / W_R)) @ U_R.T
+    # Q_Rinvh = Delta_inv @ c_full_i @ R_invhalf
+
+    # C_sp_inv = torch.diag(Delta_inv_diag) - Q_Rinvh @ Q_Rinvh.T
+    # C_sp_inv = Delta_inv - Delta_inv @ c_full_i @ Rinv @ c_full_i.T @ Delta_inv  # improve to p x p matrices
+
+    logdet_C_sp = torch.log(W_R).sum() - torch.log(W_Ci).sum() + torch.log(diag).sum()
+    # if torch.isnan(logdet_C_sp):
+    #     print('here')
+    return Delta_inv_diag, Q_Rinvh, logdet_C_sp, c_full_i, C_i
