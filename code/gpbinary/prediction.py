@@ -3,7 +3,7 @@ from matern_covmat import covmat, cov_sp
 torch.set_default_dtype(torch.float64)
 
 
-def pred_gp(llmb, theta, thetanew, lsigma2, g):
+def pred_gp(llmb, theta, thetanew, g):
     '''
     Test in test_gp.py.
 
@@ -15,7 +15,7 @@ def pred_gp(llmb, theta, thetanew, lsigma2, g):
     '''
 
     # covariance matrix R for the training thetas
-    C = covmat(theta, theta, llmb) + torch.diag(torch.exp(lsigma2) * torch.ones(theta.shape[0]))
+    C = covmat(theta, theta, llmb)
 
     W, V = torch.linalg.eigh(C)
     Vh = V / torch.sqrt(W)
@@ -30,7 +30,7 @@ def pred_gp(llmb, theta, thetanew, lsigma2, g):
 
 
 
-def pred_gp_sp(llmb, theta, thetanew, thetai, lsigma2, g):
+def pred_gp_sp(llmb, theta, thetanew, thetai, g):
     '''
     Test in test_gp.py.
 
@@ -42,7 +42,7 @@ def pred_gp_sp(llmb, theta, thetanew, thetai, lsigma2, g):
     '''
 
 
-    Delta_inv_diag, Q_half, _ = cov_sp(theta=theta, thetai=thetai, lsigma2=lsigma2.detach(), llmb=llmb)
+    Delta_inv_diag, Q_half, _, _, _ = cov_sp(theta=theta, thetai=thetai, llmb=llmb)
 
     # C_inv = torch.diag(Lmb_inv_diag) - Q_half @ Q_half.T
 

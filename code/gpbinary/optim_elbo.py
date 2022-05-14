@@ -12,7 +12,7 @@ def optim_elbo(model,
     flag = None
     negelbo_prev = torch.inf
     while True:
-        optim.zero_grad(set_to_none=True)  # from guide: Alternatively, starting from PyTorch 1.7, call model or optimizer.zero_grad(set_to_none=True).
+        optim.zero_grad(set_to_none=True)   # from guide: Alternatively, starting from PyTorch 1.7, call model or optimizer.zero_grad(set_to_none=True).
         negelbo = model.negelbo()
         if torch.isnan(negelbo):
             print('go here')
@@ -49,22 +49,40 @@ def optim_elbo(model,
 
 def optim_elbo_lbfgs(model,
                      # ftr, thetatr, fte, thetate,
-                     maxiter=250, lr=8e-3):
+                     maxiter=250, lr=8e-3,
+                     ftol=None):
+    # if model.method == 'MVIP' and model.n / model.p <= 2:
+    #     lr /= 4
+    if ftol is None:
+        ftol = model.n / 1e4
     optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
 
     def closure():
-        optim.zero_grad()
+        model.compute_MV()
+        optim.zero_grad(set_to_none=True)
         negelbo = model.negelbo()
+        if torch.isnan(negelbo):
+            print('go here')
+            negelbo = model.negelbo()
         return negelbo
     loss_prev = torch.inf
     loss = closure()
+    from torchviz import make_dot
+    make_dot(loss, params=dict(model.named_parameters())).render("code/fig/attached_before", format="png")
+
     loss.backward()
+    raise
+
 
     epoch = 0
     while True:
-        options = {'closure': closure, 'current_loss': loss}
-        loss, _, lr, _, _, _, _, _ = optim.step(options)
+        options = {'closure': closure, 'current_loss': loss,
+                   'c1': 1e-3, 'c2': 0.8}
+        loss, grad, lr, _, _, _, _, _ = optim.step(options)
 
+        # print(epoch, grad, loss)
+        # for p in model.parameters():
+        #     print(p)
         # if epoch % 1 == 0:
         #     with torch.no_grad():
         #         model.create_MV()
@@ -77,9 +95,9 @@ def optim_elbo_lbfgs(model,
         if epoch >= maxiter:
             flag = 'MAX_ITER'
             break
-
-        if convergence_f_abs(loss_prev, loss, ftol=model.d/10):
-            print('FTOL <= {:.3E}'.format(model.d/10))
+        # if epoch >= 5:
+        if convergence_f_abs(loss_prev, loss, ftol=ftol):
+            print('exit after epoch {:d}, FTOL <= {:.3E}'.format(epoch, ftol))
             flag = 'F_CONV'
             break
 

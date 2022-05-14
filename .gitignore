@@ -16,10 +16,4 @@ code/fig/choice_ip/
 
 code/test_results/choice_ip/
 
-code/test_results/comparison_20220512/
-
-code/test_results/comparison_20220509/
-
-code/test_results/comparison_20220508/
-
-code/test_results/comparison_20220504/
+code/test_results/*/

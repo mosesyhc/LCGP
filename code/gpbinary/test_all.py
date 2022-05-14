@@ -159,15 +159,15 @@ if __name__ == '__main__':
 
     ### list of methods
     method_list = ['MVIP', 'MVGP', 'surmise']
-    n_list = [200, 400, 800,1600]  #, 1600] 200,
+    n_list = [200, 400, 800] #,1600]  #, 1600] 200,
     ip_frac_list = [1/8, 1/4, 1/2, 1]  # 1/8, 1/4,
 
-    save_csv = True
-    # save_csv = False
+    # save_csv = True
+    save_csv = False
 
     ### replication,
     nrep = 5
-    kap = 5
+    kap = 1
 
     ### run test ###
     for rep in range(nrep):
