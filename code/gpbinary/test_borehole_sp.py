@@ -86,7 +86,7 @@ while True:
 
     if epoch % 10 == 0:
         with torch.no_grad():
-            model.create_MV()
+            model.compute_MV()
             trainmse = model.test_mse(thetatr, F)
             mse = model.test_mse(thetate, fte)
 

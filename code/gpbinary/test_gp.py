@@ -18,7 +18,7 @@ class simpleGP(nn.Module):
         theta = self.theta
         g = self.g
 
-        pred, predvar = pred_gp(lmb, theta, theta0, g)
+        pred, predvar = pred_gp(lmb, theta, theta0, )
         return pred
 
     def lik(self):
@@ -28,7 +28,7 @@ class simpleGP(nn.Module):
         return negloglik_gp(lmb, theta, g)
 
     def test_mse(self, theta0, g0):
-        gpred, gpredvar = pred_gp(self.lmb, self.theta, theta0, self.g)
+        gpred, gpredvar = pred_gp(self.lmb, self.theta, theta0, )
         return ((gpred - g0) ** 2).mean()
 
 
@@ -62,7 +62,7 @@ def test_gp():
         print('{:<5d} {:<12.6f} {:<10.3f}'.format(epoch, lik, mse))
 
 
-    gpred, gpredvar = pred_gp(model.lmb, model.theta, thetatest, model.g)
+    gpred, gpredvar = pred_gp(model.lmb, model.theta, thetatest, )
 
     import matplotlib.pyplot as plt
     thetatest = thetatest.numpy().squeeze()
@@ -103,7 +103,7 @@ def test_gp_borehole():
         mse = model.test_mse(thetatest, ftest)
         print('{:<5d} {:<12.6f} {:<10.3f}'.format(epoch, lik, mse))
 
-    fpred, fpredvar = pred_gp(model.lmb, theta, thetatest, f)
+    fpred, fpredvar = pred_gp(model.lmb, theta, thetatest, )
 
     import numpy as np
     print('\ngp mse: {:.3f}'.format(np.mean((fpred.detach().numpy() - ftest.numpy()) ** 2)))
