@@ -44,13 +44,19 @@ def negloglik_gp(llmb, theta, g, lmbregmean=0, lmbregstd=1):
     negloglik += 1/2 * torch.sum(fcenter ** 2 / sig2hat)  # quadratic term
     # negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)  # regularization of hyperparameter
 
+    # llmb, lsigma2 regularization
+    d = llmb.shape[0]
+    llmbreg = torch.ones(d) * (5 * (llmb + 1) ** 2)
+    llmbreg[-1] = 25 * llmb[-1]**2
+
+    negloglik += llmbreg.sum()
+
     return negloglik, Vh
 
 
-def negloglik_gp_sp(llmb, theta, thetai, lsigma2, g,
-                    Delta_inv_diag=None, Q_half=None, logdet_C=None):
-    if Delta_inv_diag is None or Q_half is None or logdet_C is None:
-        Delta_inv_diag, Q_half, logdet_C = cov_sp(theta, thetai, lsigma2, llmb)
+def negloglik_gp_sp(llmb, theta, thetai, g, Delta_inv_diag=None, QRinvh=None, logdet_C=None):
+    if Delta_inv_diag is None or QRinvh is None or logdet_C is None:
+        Delta_inv_diag, QRinvh, logdet_C, _, _ = cov_sp(theta, thetai, llmb)
     # R = covmat(theta, theta, lmb)
     #
     # W, V = torch.linalg.eigh(R)
@@ -58,13 +64,12 @@ def negloglik_gp_sp(llmb, theta, thetai, lsigma2, g,
     # fcenter = Vh.T @ g
 
     n = g.shape[0]
-    Q_half_g = (Q_half.T * g).sum(1)
-    Delta_inv_diag_g = Delta_inv_diag * g
+    QRinvh_g = (QRinvh.T * g).sum(1)
+    quad = g @ (Delta_inv_diag * g) - (QRinvh_g ** 2).sum()
 
-    quad2 = g @ Q_half @ Q_half_g
-    quad1 = g @ Delta_inv_diag_g
-
-    quad = quad1 - quad2
+    # if quad < 1e-8:
+    #     C = covmat(theta, theta, llmb)
+    #     quad = g @ torch.linalg.solve(C, g)
 
     sig2hat = (quad + 10) / (n + 10)
     negloglik = 1/2 * logdet_C  # log-determinant
@@ -76,9 +81,8 @@ def negloglik_gp_sp(llmb, theta, thetai, lsigma2, g,
     d = llmb.shape[0]
     llmbreg = torch.ones(d) * (5 * (llmb + 1) ** 2)
     llmbreg[-1] = 25 * llmb[-1]**2
-    lsigma2reg = 4 * (lsigma2 + 8)**2
 
-    negloglik += llmbreg.sum() + lsigma2reg
+    negloglik += llmbreg.sum()
 
     return negloglik #, Vh
 

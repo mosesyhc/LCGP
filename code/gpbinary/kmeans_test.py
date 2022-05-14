@@ -22,7 +22,7 @@ def diff(res, n, p, lsigma2):
     llmb = 0.5 * torch.log(torch.Tensor([theta.shape[1]])) + torch.log(torch.std(theta, 0))
     llmb = torch.cat((llmb, torch.Tensor([0])))
 
-    Dd, Qh, logdetC = cov_sp(theta=theta, thetai=thetai, lsigma2=lsigma2, llmb=llmb)
+    Dd, Qh, logdetC = cov_sp(theta=theta, thetai=thetai, llmb=llmb)
     C = covmat(x1=theta, x2=theta, llmb=llmb)
 
     suppI = (Dd.diag() - Qh @ Qh.T) @ C
