@@ -34,7 +34,7 @@ def covmat(x1, x2, llmb, diag_only=False):
     return C
 
 
-def cov_sp(theta, thetai, lsigma2, llmb):  # assuming x1 = x2 = theta
+def cov_sp(theta, thetai, llmb):  # assuming x1 = x2 = theta
     '''
     Returns the Nystr{\"o}m approximation of a covariance matrix,
     its inverse, and the log of its determinant.
@@ -49,9 +49,9 @@ def cov_sp(theta, thetai, lsigma2, llmb):  # assuming x1 = x2 = theta
     C_i = covmat(thetai, thetai, llmb=llmb)
     C_full_diag = covmat(theta, theta, llmb=llmb, diag_only=True)
 
-    W_i, U_i = torch.linalg.eigh(C_i)
-    W_iinv = 1 / W_i
-    C_iinv = U_i @ torch.diag(W_iinv) @ U_i.T
+    W_Ci, U_Ci = torch.linalg.eigh(C_i)
+    W_Ciinv = 1 / W_Ci
+    C_iinv = U_Ci @ torch.diag(W_Ciinv) @ U_Ci.T
 
     C_r = c_full_i @ C_iinv @ c_full_i.T
 
