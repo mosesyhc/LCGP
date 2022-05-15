@@ -67,12 +67,11 @@ def optim_elbo_lbfgs(model,
         return negelbo
     loss_prev = torch.inf
     loss = closure()
-    from torchviz import make_dot
-    make_dot(loss, params=dict(model.named_parameters())).render("code/fig/attached_before", format="png")
+    # from torchviz import make_dot
+    # make_dot(loss, params=dict(model.named_parameters())).render("code/fig/attached_before", format="png")
 
     loss.backward()
-    raise
-
+    # raise
 
     epoch = 0
     while True:
@@ -92,6 +91,8 @@ def optim_elbo_lbfgs(model,
         #         print('{:<5d} {:<12.3f} {:<12.3f} {:<12.6f} {:<12.6f}'.format
         #               (epoch, loss, loss_prev - loss, mse, trainmse))
 
+        epoch += 1
+
         if epoch >= maxiter:
             flag = 'MAX_ITER'
             break
@@ -100,8 +101,6 @@ def optim_elbo_lbfgs(model,
             print('exit after epoch {:d}, FTOL <= {:.3E}'.format(epoch, ftol))
             flag = 'F_CONV'
             break
-
-        epoch += 1
 
         loss_prev = loss.clone().detach()
     return model, epoch, flag
