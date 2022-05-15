@@ -100,20 +100,7 @@ class MVN_elbo_autolatent_sp(nn.Module):
         V = self.V
         negelbo = torch.zeros(1)
         for k in range(kap):
-            Delta_k_inv_diag, Qk_Rkinvh, logdet_Ck, ck_full_i, Ck_i = cov_sp(theta, thetai, lLmb[k])
-            # Dinv_k_diag = 1 / (sigma2 * Delta_k_inv_diag + 1)
-            #
-            # F_Phik = (Phi[:, k] * F.T).sum(1)
-            # Tk = Ck_i + ck_full_i.T * ((1 - Dinv_k_diag) / sigma2) @ ck_full_i
-            # W_Tk, U_Tk = torch.linalg.eigh(Tk)
-            #
-            # Sk_Tkinvh = ((1 - Dinv_k_diag) * ck_full_i.T).T @ (U_Tk * torch.sqrt(1 / W_Tk.abs())) @ U_Tk.T  # min W_Tk ~ -1e-5
-            # Mk = Dinv_k_diag * F_Phik + 1/sigma2 * Sk_Tkinvh @ Sk_Tkinvh.T @ F_Phik
-            # M[k] = Mk
-            # V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - torch.diag(Qk_Rkinvh @ Qk_Rkinvh.T))  #
-
-            negloggp_sp_k = negloglik_gp_sp(llmb=lLmb[k], theta=theta, thetai=thetai, g=M[k],
-                                            Delta_inv_diag=Delta_k_inv_diag, QRinvh=Qk_Rkinvh, logdet_C=logdet_Ck)
+            negloggp_sp_k = negloglik_gp_sp(llmb=lLmb[k], theta=theta, thetai=thetai, g=M[k])
             negelbo += negloggp_sp_k
 
         residF = F - (Phi @ M)
@@ -149,7 +136,8 @@ class MVN_elbo_autolatent_sp(nn.Module):
             Sk_Tkinvh = ((1 - Dinv_k_diag) * ck_full_i.T).T @ (U_Tk * torch.sqrt(1 / W_Tk.abs())) @ U_Tk.T
             Mk = Dinv_k_diag * F_Phik + 1/sigma2 * Sk_Tkinvh @ Sk_Tkinvh.T @ F_Phik
             M[k] = Mk
-            V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - torch.diag(Qk_Rkinvh @ Qk_Rkinvh.T))  #
+            # V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - torch.diag(Qk_Rkinvh @ Qk_Rkinvh.T))  #
+            V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - torch.einsum('ij, ij->i', Qk_Rkinvh, Qk_Rkinvh))  #
 
         self.M = M
         self.V = V

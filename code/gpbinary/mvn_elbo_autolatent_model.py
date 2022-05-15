@@ -121,8 +121,10 @@ class MVN_elbo_autolatent(nn.Module):
             C_k = covmat(theta, theta, lLmb[k])
             W_k, U_k = torch.linalg.eigh(C_k)
             Winv_k = 1 / W_k
-            Mk = torch.linalg.solve(torch.eye(n) + sigma2 * U_k @ torch.diag(Winv_k) @ U_k.T, Phi[:, k] @ F)
+            Mk = torch.linalg.solve(torch.eye(n) + sigma2 * U_k * Winv_k @ U_k.T, Phi[:, k] @ F)
             M[k] = Mk
+            V[k] = 1 / (1 / sigma2 + torch.diag((U_k * Winv_k) @ U_k.T))
+
         self.M = M
         self.V = V
 
