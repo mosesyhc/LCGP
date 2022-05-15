@@ -2,7 +2,7 @@ import torch
 from hyperparameter_tuning import parameter_clamping
 
 
-def covmat(x1, x2, llmb, diag_only=False):
+def covmat(x1, x2, llmb, diag_only:bool=False):
     '''
     :param diag_only:
     :param x1:

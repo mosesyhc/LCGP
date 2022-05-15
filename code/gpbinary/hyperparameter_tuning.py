@@ -13,7 +13,7 @@ def clam_lsigma2(x, c=C_LSIGMA2):
     return -13/2 + 11/2 * torch.tanh(c*(x + 13/2))
 
 
-def parameter_clamping(t, trng, c=1.23):
+def parameter_clamping(t, trng, c:float=1.23):
     """
     Returns clamped hyperparameter between a given range.
     For each dimension, the parameter clamping follows
