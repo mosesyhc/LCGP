@@ -1,7 +1,7 @@
 import pandas as pd
 import glob, os
 
-res_dir = r'code/test_results/comparison_20220513'
+res_dir = r'code/test_results/comparison_20220515_jit'
 all_files = glob.glob(res_dir + "/*.csv")
 
 li = []

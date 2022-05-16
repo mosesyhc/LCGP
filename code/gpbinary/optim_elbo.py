@@ -2,6 +2,62 @@ import torch
 from optim_rules import convergence_f, convergence_g, convergence_f_abs
 
 
+def optim_elbo_lbfgs(model,
+                     # ftr, thetatr, fte, thetate,
+                     maxiter=250, lr=8e-3,
+                     ftol=None):
+    # if model.method == 'MVIP' and model.n / model.p <= 2:
+    #     lr /= 4
+    if ftol is None:
+        ftol = model.n / 1e4
+    optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+
+    def closure():
+        model.compute_MV()
+        optim.zero_grad(set_to_none=True)
+        negelbo = model.negelbo()
+        if torch.isnan(negelbo):
+            print('go here')
+            negelbo = model.negelbo()
+        return negelbo
+    loss_prev = torch.inf
+    loss = closure()
+    loss.backward()
+    # raise
+
+    epoch = 0
+    while True:
+        options = {'closure': closure, 'current_loss': loss,
+                   'c1': 1e-3, 'c2': 0.8,
+                   'max_ls': 7}
+        loss, grad, lr, _, _, _, _, _ = optim.step(options)
+
+        if epoch >= maxiter:
+            flag = 'MAX_ITER'
+            break
+        # if epoch >= 3:
+        if convergence_f_abs(loss_prev, loss, ftol=ftol):
+            print('exit after epoch {:d}, FTOL <= {:.3E}'.format(epoch, ftol))
+            flag = 'F_CONV'
+            break
+
+        epoch += 1
+        loss_prev = loss.clone().detach()
+    return model, epoch, flag
+
+
+# print(epoch, grad, loss)
+# for p in model.parameters():
+#     print(p)
+# if epoch % 1 == 0:
+#     with torch.no_grad():
+#         model.create_MV()
+#         trainmse = model.test_mse(thetatr, ftr)
+#         mse = model.test_mse(thetate, fte)
+#
+#         print('{:<5d} {:<12.3f} {:<12.3f} {:<12.6f} {:<12.6f}'.format
+#               (epoch, loss, loss_prev - loss, mse, trainmse))
+
 def optim_elbo(model,
                # ftr, thetatr, fte, thetate,
                maxiter=2500, lr=8e-3):
@@ -44,63 +100,4 @@ def optim_elbo(model,
 
         epoch += 1
         negelbo_prev = negelbo.clone().detach()
-    return model, epoch, flag
-
-
-def optim_elbo_lbfgs(model,
-                     # ftr, thetatr, fte, thetate,
-                     maxiter=250, lr=8e-3,
-                     ftol=None):
-    # if model.method == 'MVIP' and model.n / model.p <= 2:
-    #     lr /= 4
-    if ftol is None:
-        ftol = model.n / 1e4
-    optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
-
-    def closure():
-        model.compute_MV()
-        optim.zero_grad(set_to_none=True)
-        negelbo = model.negelbo()
-        if torch.isnan(negelbo):
-            print('go here')
-            negelbo = model.negelbo()
-        return negelbo
-    loss_prev = torch.inf
-    loss = closure()
-    # from torchviz import make_dot
-    # make_dot(loss, params=dict(model.named_parameters())).render("code/fig/attached_before", format="png")
-
-    loss.backward()
-    # raise
-
-    epoch = 0
-    while True:
-        options = {'closure': closure, 'current_loss': loss,
-                   'c1': 1e-3, 'c2': 0.8}
-        loss, grad, lr, _, _, _, _, _ = optim.step(options)
-
-        # print(epoch, grad, loss)
-        # for p in model.parameters():
-        #     print(p)
-        # if epoch % 1 == 0:
-        #     with torch.no_grad():
-        #         model.create_MV()
-        #         trainmse = model.test_mse(thetatr, ftr)
-        #         mse = model.test_mse(thetate, fte)
-        #
-        #         print('{:<5d} {:<12.3f} {:<12.3f} {:<12.6f} {:<12.6f}'.format
-        #               (epoch, loss, loss_prev - loss, mse, trainmse))
-
-        epoch += 1
-
-        if epoch >= maxiter:
-            flag = 'MAX_ITER'
-            break
-        # if epoch >= 5:
-        if convergence_f_abs(loss_prev, loss, ftol=ftol):
-            print('exit after epoch {:d}, FTOL <= {:.3E}'.format(epoch, ftol))
-            flag = 'F_CONV'
-            break
-
-        loss_prev = loss.clone().detach()
     return model, epoch, flag
