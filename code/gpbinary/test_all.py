@@ -139,7 +139,7 @@ def rmse_w_surmise(emu, fte, thetate):
 
 
 if __name__ == '__main__':
-    res_dir = r'code/test_results/comparison_20220513/'
+    res_dir = r'code/test_results/comparison_20220515_revert/'
     data_dir = r'code/data/borehole_data/'
     f, x0, theta = read_data(data_dir)
     fte, thetate = read_test_data(data_dir)
