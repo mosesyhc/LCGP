@@ -1,0 +1,18 @@
+trace_computeMV_zerograd_seed0
+
+exit after epoch 10, FTOL <= 2.000E-02
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                     Optimizer.step#FullBatchLBFGS.step         7.16%        2.975s        99.22%       41.239s        4.124s            10  
+                                      aten::linalg_eigh        16.38%        6.806s        17.15%        7.127s       3.712ms          1920  
+      autograd::engine::evaluate_function: DivBackward0         2.06%     856.612ms        11.78%        4.896s     678.085us          7220  
+      autograd::engine::evaluate_function: MulBackward0         4.33%        1.798s        11.77%        4.891s     206.767us         23655  
+                                               aten::mm        10.99%        4.567s        11.02%        4.581s     172.969us         26486  
+                                              aten::mul         9.72%        4.040s        10.25%        4.259s      47.951us         88820  
+       autograd::engine::evaluate_function: MmBackward0         2.13%     885.355ms         9.11%        3.788s     546.181us          6935  
+                                           DivBackward0         1.79%     742.595ms         8.05%        3.346s     463.504us          7220  
+                                              aten::add         7.54%        3.133s         7.88%        3.275s      77.072us         42494  
+autograd::engine::evaluate_function: LinalgEighBackw...         0.52%     214.092ms         6.31%        2.621s       1.380ms          1900  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 41.561s
