@@ -5,13 +5,16 @@ from optim_rules import convergence_f, convergence_g, convergence_f_abs
 def optim_elbo_lbfgs(model,
                      # ftr, thetatr, fte, thetate,
                      maxiter=250, lr=8e-3,
-                     ftol=None):
+                     ftol=None, recordtime=True):
     # if model.method == 'MVIP' and model.n / model.p <= 2:
     #     lr /= 4
+    if recordtime:
+        import time
+        t0 = time.time()
+
     if ftol is None:
         ftol = model.n / 1e4
     optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
-
     def closure():
         model.compute_MV()
         optim.zero_grad(set_to_none=True)
@@ -28,11 +31,15 @@ def optim_elbo_lbfgs(model,
     epoch = 0
     while True:
         options = {'closure': closure, 'current_loss': loss,
-                   'c1': 1e-3, 'c2': 0.8,
-                   'max_ls': 7}
+                   'c1': 1e-3, 'c2': 0.8}
         loss, grad, lr, _, _, _, _, _ = optim.step(options)
 
-        if epoch >= maxiter:
+        # print(epoch, grad, loss)
+        epoch += 1
+        # if epoch >= 10:
+        #     flag = ''
+        #     break
+        if epoch > maxiter:
             flag = 'MAX_ITER'
             break
         # if epoch >= 3:
@@ -41,8 +48,11 @@ def optim_elbo_lbfgs(model,
             flag = 'F_CONV'
             break
 
-        epoch += 1
         loss_prev = loss.clone().detach()
+
+    if recordtime:
+        t1 = time.time()
+        model.buildtime = t1 - t0
     return model, epoch, flag
 
 

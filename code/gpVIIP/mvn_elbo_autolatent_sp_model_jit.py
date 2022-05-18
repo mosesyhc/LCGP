@@ -60,6 +60,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         if initlsigma2 or lsigma2 is None:
             lsigma2 = torch.log(((Phi @ Phi.T @ self.F - self.F)**2).mean())
         self.lsigma2 = nn.Parameter(lsigma2)  # nn.Parameter(torch.tensor((-8,)), requires_grad=False)
+        self.buildtime:float = 0.0
 
     @jit.script_method
     def forward(self, theta0):
@@ -139,10 +140,10 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
             Mk = Dinv_k_diag * F_Phik + 1/sigma2 * Sk_Tkinvh @ Sk_Tkinvh.T @ F_Phik
             M[k] = Mk
             # V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - torch.diag(Qk_Rkinvh @ Qk_Rkinvh.T))  #
-            V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - torch.einsum('ij, ij->i', Qk_Rkinvh, Qk_Rkinvh))  #
+            V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - torch.einsum('ij, ij->i', Qk_Rkinvh, Qk_Rkinvh))  # (Qk_Rkinvh ** 2).sum(0, 1)
 
-        self.M = M
-        self.V = V
+        self.M = M.detach_()
+        self.V = V.detach_()
 
     def predict(self, theta0):
         self.compute_MV()

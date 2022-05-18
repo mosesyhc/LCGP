@@ -51,7 +51,7 @@ def cov_sp(theta, thetai, llmb):  # assuming x1 = x2 = theta
 
     W_Ci, U_Ci = torch.linalg.eigh(C_i)
     W_Ciinv = 1 / W_Ci
-    C_iinv = U_Ci @ torch.diag(W_Ciinv) @ U_Ci.T
+    C_iinv = U_Ci @ torch.diag(W_Ciinv) @ U_Ci.T  # Change
 
     C_r = c_full_i @ C_iinv @ c_full_i.T
 

@@ -4,8 +4,8 @@ import pandas as pd
 import torch
 torch.set_num_threads(8)
 from fayans_support import read_data, read_test_data
-from mvn_elbo_autolatent_model import MVN_elbo_autolatent
-from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
+from mvn_elbo_autolatent_model_jit import MVN_elbo_autolatent
+from mvn_elbo_autolatent_sp_model_jit import MVN_elbo_autolatent_sp
 
 from optim_elbo import optim_elbo, optim_elbo_lbfgs
 
@@ -39,15 +39,15 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
     time_tr0 = time.time()
     # train model
     if method == 'surmise':
-        emu = build_surmise(ftr, thetatr) #, Phi)
+        emu = build_surmise(ftr, thetatr, Phi) #
 
-        time_tr1 = time.time()
         rmsetr = rmse_w_surmise(emu=emu, thetate=thetatr, fte=ftr)
         rmsete = rmse_w_surmise(emu=emu, thetate=thetate, fte=fte)
 
+        time_tr1 = time.time()
         del emu
     elif method == 'MVGP':
-        lr = 2e-4
+        lr = 5e-4
         model = MVN_elbo_autolatent(lLmb=None, initlLmb=True,
                                     lsigma2=None, initlsigma2=True,
                                     Phi=Phi, F=ftr, theta=thetatr)
@@ -61,7 +61,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
 
         del model
     elif method == 'MVIP':
-        lr = 2e-4
+        lr = 5e-4
         p = int(n * ip_frac)
 
         model = MVN_elbo_autolatent_sp(lLmb=None, initlLmb=True,
@@ -98,7 +98,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
     print(rmsetr, rmsete)
 
     if output_csv:
-        df = pd.DataFrame.from_dict(res)
+        df = pd.DataFrame(res, index=[0])
         df.to_csv(res_dir + r'rep{:d}_n{:d}_p{:d}_{:s}_seed{:d}_{:s}.csv'.format(
             rep, n, p, method, int(seed), datetime.today().strftime('%Y%m%d%H%M%S'))
         )
@@ -140,7 +140,11 @@ def rmse_w_surmise(emu, fte, thetate):
 
 
 if __name__ == '__main__':
-    res_dir = r'code/test_results/comparison_20220515/'
+    import pathlib
+    res_dir = r'code/test_results/comparison_20220515_jit_detach2/'
+    if not pathlib.Path(res_dir).exists():
+        pathlib.Path(res_dir).mkdir()
+
     data_dir = r'code/data/borehole_data/'
     f, x0, theta = read_data(data_dir)
     fte, thetate = read_test_data(data_dir)
@@ -159,7 +163,7 @@ if __name__ == '__main__':
     fte = (fte - fmean) / fstd
 
     ### list of methods
-    method_list = ['surmise', 'MVIP', 'MVGP']
+    method_list = [ 'MVIP', 'MVGP',  'surmise']
     n_list = [200, 400, 800] #,1600]  #, 1600] 200,
     ip_frac_list = [1/8, 1/4, 1/2, 1]  # 1/8, 1/4,
 
@@ -167,13 +171,13 @@ if __name__ == '__main__':
     # save_csv = False
 
     ### replication,
-    nrep = 5
+    nrep = 1
     kap = 5
 
     ### run test ###
     for rep in range(nrep):
         for n in n_list:
-            seed = torch.randint(0, 10000, (1,))
+            seed = rep # torch.randint(0, 10000, (1,))
             ### train, test data
             torch.manual_seed(int(seed))
             tr_ind = torch.randperm(n_all)[:n]
