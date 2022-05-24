@@ -56,7 +56,7 @@ class mvLogisticRegression():
             if model[i]['monoclass']:
                 ypred[i] = model[i]['model'] * np.ones(npred)
             else:
-                ypred[i] = model[i]['model'].predict(X)
+                ypred[i] = model[i]['model'].predictmean(X)
         return ypred
 
 

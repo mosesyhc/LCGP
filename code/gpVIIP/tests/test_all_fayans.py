@@ -2,10 +2,10 @@ import time
 from datetime import datetime
 import pandas as pd
 import torch
-torch.set_num_threads(8)
-from fayans_support import read_data, read_test_data
-from mvn_elbo_autolatent_model_jit import MVN_elbo_autolatent
-from mvn_elbo_autolatent_sp_model_jit import MVN_elbo_autolatent_sp
+from fayans_support import read_data, read_test_data, read_only_complete_data
+from sklearn.cluster import KMeans
+from mvn_elbo_autolatent_model import MVN_elbo_autolatent
+from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
 
 from optim_elbo import optim_elbo, optim_elbo_lbfgs
 
@@ -39,13 +39,12 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
     time_tr0 = time.time()
     # train model
     if method == 'surmise':
-        emu = build_surmise(ftr, thetatr, Phi) #
+        emu = build_surmise(ftr, thetatr) #, Phi)
 
+        time_tr1 = time.time()
         rmsetr = rmse_w_surmise(emu=emu, thetate=thetatr, fte=ftr)
         rmsete = rmse_w_surmise(emu=emu, thetate=thetate, fte=fte)
 
-        time_tr1 = time.time()
-        del emu
     elif method == 'MVGP':
         lr = 5e-4
         model = MVN_elbo_autolatent(lLmb=None, initlLmb=True,
@@ -59,16 +58,25 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         rmsetr = model.test_rmse(thetatr, ftr)
         rmsete = model.test_rmse(thetate, fte)
 
-        del model
     elif method == 'MVIP':
         lr = 5e-4
         p = int(n * ip_frac)
 
+
         model = MVN_elbo_autolatent_sp(lLmb=None, initlLmb=True,
                                        lsigma2=None, initlsigma2=True,
+                                       # lsigma2=torch.Tensor((-12,)), initlsigma2=False,
                                        p=p,
                                        Phi=Phi, F=ftr, theta=thetatr) #, thetai=thetai)
+        # model, niter, flag = optim_elbo(model,
+        #                                 ftr=ftr, thetatr=thetatr,
+        #                                 fte=fte, thetate=thetate,
+        #                                 maxiter=100,
+        #                                 lr=lr)
+
         model, niter, flag = optim_elbo_lbfgs(model,
+                                              # ftr=ftr, thetatr=thetatr,
+                                              # fte=fte, thetate=thetate,
                                               maxiter=100,
                                               lr=lr)
 
@@ -78,7 +86,6 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         rmsetr = model.test_rmse(thetatr, ftr)
         rmsete = model.test_rmse(thetate, fte)
 
-        del model
     res['method'] = method
     res['rep'] = rep
     res['n'] = n
@@ -98,10 +105,11 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
     print(rmsetr, rmsete)
 
     if output_csv:
-        df = pd.DataFrame(res, index=[0])
+        df = pd.DataFrame.from_dict(res)
         df.to_csv(res_dir + r'rep{:d}_n{:d}_p{:d}_{:s}_seed{:d}_{:s}.csv'.format(
             rep, n, p, method, int(seed), datetime.today().strftime('%Y%m%d%H%M%S'))
         )
+
 
 def build_surmise(ftr, thetatr, Phi=None):
     from surmise.emulation import emulator
@@ -134,79 +142,55 @@ def build_surmise(ftr, thetatr, Phi=None):
 
 def rmse_w_surmise(emu, fte, thetate):
     import numpy as np
-    emupred = emu.predict(x=x0.numpy(), theta=thetate.numpy())
+    emupred = emu.predictmean(x=x0.numpy(), theta=thetate.numpy())
     emumse = ((emupred.mean() - fte.numpy()) ** 2).mean()
     return np.sqrt(emumse)
 
 
 if __name__ == '__main__':
-    import pathlib
-    res_dir = r'code/test_results/comparison_20220515_jit_detach2/'
-    if not pathlib.Path(res_dir).exists():
-        pathlib.Path(res_dir).mkdir()
-
-    data_dir = r'code/data/borehole_data/'
-    f, x0, theta = read_data(data_dir)
-    fte, thetate = read_test_data(data_dir)
+    res_dir = r'code/test_results/comparison_20220511/'
+    data_dir = r'code/data/fayans_data/'
+    f, x0, theta = read_only_complete_data(data_dir)
     n_all = f.shape[1]
 
     f = torch.tensor(f)
     x0 = torch.tensor(x0)
     theta = torch.tensor(theta)
-    fte = torch.tensor(fte)
-    thetate = torch.tensor(thetate)
 
     fmean = f.mean(1).unsqueeze(1)
     fstd = f.std(1).unsqueeze(1)
 
     f = (f - fmean) / fstd
-    fte = (fte - fmean) / fstd
 
     ### list of methods
-    method_list = [ 'MVIP', 'MVGP',  'surmise']
-    n_list = [200, 400, 800] #,1600]  #, 1600] 200,
-    ip_frac_list = [1/8, 1/4, 1/2, 1]  # 1/8, 1/4,
+    method_list = ['MVIP', 'MVGP', 'surmise']
+    # n_list = [1600] #, 1600] 200,
+    ip_frac_list = [1/8, 1/4, 1/2, 1] #1/8, 1/4, 1/2] # 1/8, 1/4,
 
     save_csv = True
     # save_csv = False
 
     ### replication,
-    nrep = 1
-    kap = 5
+    kap = 30
 
-    ### run test ###
-    for rep in range(nrep):
-        for n in n_list:
-            seed = rep # torch.randint(0, 10000, (1,))
-            ### train, test data
-            torch.manual_seed(int(seed))
-            tr_ind = torch.randperm(n_all)[:n]
-            ftr = f[:, tr_ind]
-            thetatr = theta[tr_ind]
-            torch.seed()
+    n = f.shape[1]
+    lr = 5e-4
+    p = int(n * 1/4)
 
-            # construct basis
-            Phi, S, _ = torch.linalg.svd(ftr, full_matrices=False)
-            Phi = Phi[:, :kap]
-            S = S[:kap]
+    Phi, _, _ = torch.linalg.svd(f, full_matrices=False)
+    Phi = Phi[:, :kap]
+    Phi_mse = ((f - Phi @ Phi.T @ f) ** 2).mean()
 
-            Phi_mse = ((ftr - Phi @ Phi.T @ ftr)**2).mean()
+    model_ip_full = MVN_elbo_autolatent_sp(Phi=Phi, F=f, theta=theta, p=n)
+    model_ip_full, _, _ = optim_elbo_lbfgs(model_ip_full, maxiter=100, lr=lr)
 
-            for method in method_list:
-                print('rep: {:d}, method: {:s}, n: {:d}'.format(rep, method, n))
-                if method == 'MVIP':
-                    for ip_frac in ip_frac_list:
-                        print('ip_frac: {:.3f}'.format(ip_frac))
-                        test_single(method=method, n=n, seed=seed,
-                                    ftr=ftr, thetatr=thetatr,
-                                    fte=fte, thetate=thetate,
-                                    Phi=Phi,
-                                    rep=rep, ip_frac=ip_frac,
-                                    output_csv=save_csv)
-                else:
-                    test_single(method=method, n=n, seed=seed,
-                                ftr=ftr, thetatr=thetatr,
-                                fte=fte, thetate=thetate,
-                                Phi=Phi,
-                                rep=rep,
-                                output_csv=save_csv)
+    model_mvgp = MVN_elbo_autolatent(lLmb=None, initlLmb=True,
+                                     lsigma2=None, initlsigma2=True,
+                                     # lsigma2=torch.Tensor((-12,)), initlsigma2=False,
+                                     Phi=Phi, F=f, theta=theta)  # , thetai=thetai)
+
+    model_mvgp, niter, flag = optim_elbo_lbfgs(model_mvgp,
+                                               maxiter=100,
+                                               lr=lr)
+
+    emu = build_surmise(f, theta, Phi)

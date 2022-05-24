@@ -1,2 +1,0 @@
-,method,rep,n,p,seed,timeconstruct,Phi_mse,trainrmse,testrmse,optim_elbo_iter,optim_elbo_flag,optim_elbo_lr,precision
-0,MVGP,0,200,200,1492,151.9398262500763,0.008814920254689324,tensor(0.0959),tensor(0.1044),1237,F_CONV,0.008,float64
