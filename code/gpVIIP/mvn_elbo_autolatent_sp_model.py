@@ -1,4 +1,5 @@
 import torch
+import torch.jit as jit
 import torch.nn as nn
 from matern_covmat import cov_sp
 from likelihood import negloglik_gp_sp
@@ -6,7 +7,7 @@ from prediction import pred_gp_sp
 from hyperparameter_tuning import parameter_clamping
 
 
-class MVN_elbo_autolatent_sp(nn.Module):
+class MVN_elbo_autolatent_sp(jit.ScriptModule):
     def __init__(self, Phi, F, theta, p=None, thetai=None,
                  lLmb=None, lsigma2=None, initlLmb=True, initlsigma2=True,
                  choice_thetai='LHS'):
@@ -59,7 +60,9 @@ class MVN_elbo_autolatent_sp(nn.Module):
         if initlsigma2 or lsigma2 is None:
             lsigma2 = torch.log(((Phi @ Phi.T @ self.F - self.F)**2).mean())
         self.lsigma2 = nn.Parameter(lsigma2)  # nn.Parameter(torch.tensor((-8,)), requires_grad=False)
+        self.buildtime:float = 0.0
 
+    @jit.script_method
     def forward(self, theta0):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
@@ -98,7 +101,7 @@ class MVN_elbo_autolatent_sp(nn.Module):
 
         M = self.M
         V = self.V
-        negelbo = torch.zeros(1)
+        negelbo = 0
         for k in range(kap):
             negloggp_sp_k = negloglik_gp_sp(llmb=lLmb[k], theta=theta, thetai=thetai, g=M[k])
             negelbo += negloggp_sp_k
@@ -108,7 +111,7 @@ class MVN_elbo_autolatent_sp(nn.Module):
         negelbo += 1/(2 * sigma2) * (residF ** 2).sum()
         negelbo -= 1/2 * torch.log(V).sum()
 
-        return negelbo.squeeze()
+        return negelbo
 
     def compute_MV(self):
         lsigma2 = self.lsigma2
@@ -137,10 +140,10 @@ class MVN_elbo_autolatent_sp(nn.Module):
             Mk = Dinv_k_diag * F_Phik + 1/sigma2 * Sk_Tkinvh @ Sk_Tkinvh.T @ F_Phik
             M[k] = Mk
             # V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - torch.diag(Qk_Rkinvh @ Qk_Rkinvh.T))  #
-            V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - torch.einsum('ij, ij->i', Qk_Rkinvh, Qk_Rkinvh))  #
+            V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - (Qk_Rkinvh ** 2).sum(1))  # (Qk_Rkinvh ** 2).sum(0, 1)
 
-        self.M = M
-        self.V = V
+        self.M = M.detach_()
+        self.V = V.detach_()
 
     def predict(self, theta0):
         self.compute_MV()
@@ -168,7 +171,8 @@ class MVN_elbo_autolatent_sp(nn.Module):
             self.Fstd = F.std(1).unsqueeze(1)
             self.F = (F - self.Fmean) / self.Fstd
 
-    def parameter_clamp(self, lLmb, lsigma2):
+    @staticmethod
+    def parameter_clamp(lLmb, lsigma2):
         # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, -1)))
