@@ -1,16 +1,12 @@
 import torch
+import time
 from optim_rules import convergence_f, convergence_g, convergence_f_abs
 
 
 def optim_elbo_lbfgs(model,
                      # ftr, thetatr, fte, thetate,
-                     maxiter=250, lr=8e-3,
-                     ftol=None, recordtime=True):
-    # if model.method == 'MVIP' and model.n / model.p <= 2:
-    #     lr /= 4
-    if recordtime:
-        import time
-        t0 = time.time()
+                     maxiter=250, lr=8e-4,
+                     ftol=None):
 
     if ftol is None:
         ftol = model.n / 1e4
@@ -19,9 +15,6 @@ def optim_elbo_lbfgs(model,
         model.compute_MV()
         optim.zero_grad(set_to_none=True)
         negelbo = model.negelbo()
-        if torch.isnan(negelbo):
-            print('go here')
-            negelbo = model.negelbo()
         return negelbo
     loss_prev = torch.inf
     loss = closure()
@@ -30,15 +23,10 @@ def optim_elbo_lbfgs(model,
 
     epoch = 0
     while True:
-        options = {'closure': closure, 'current_loss': loss,
-                   'c1': 1e-3, 'c2': 0.8}
+        options = {'closure': closure, 'current_loss': loss}
         loss, grad, lr, _, _, _, _, _ = optim.step(options)
 
-        # print(epoch, grad, loss)
         epoch += 1
-        # if epoch >= 10:
-        #     flag = ''
-        #     break
         if epoch > maxiter:
             flag = 'MAX_ITER'
             break
@@ -50,9 +38,6 @@ def optim_elbo_lbfgs(model,
 
         loss_prev = loss.clone().detach()
 
-    if recordtime:
-        t1 = time.time()
-        model.buildtime = t1 - t0
     return model, epoch, flag
 
 
