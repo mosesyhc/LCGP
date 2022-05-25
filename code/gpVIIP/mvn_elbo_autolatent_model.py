@@ -61,7 +61,15 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
         ghat = torch.zeros(kap, n0)
         for k in range(kap):
-            ghat[k], _ = pred_gp(llmb=lLmb[k], theta=theta, thetanew=theta0, g=M[k])
+            ck = covmat(theta0, theta, llmb=lLmb[k])
+            Ck = covmat(theta, theta, llmb=lLmb[k])
+
+            Wk, Uk = torch.linalg.eigh(Ck)
+            Ukh = Uk / torch.sqrt(Wk)
+            Ckinv_Mk = Ukh @ Ukh.T @ M[k]
+
+            ghat[k] = ck.T @ Ckinv_Mk
+            # ghat[k], _ = pred_gp(llmb=lLmb[k], theta=theta, thetanew=theta0, g=M[k])
 
         fhat = Phi @ ghat
         fhat = (fhat * self.Fstd) + self.Fmean
@@ -128,10 +136,40 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
     def predictcov(self, theta0):
         self.compute_MV()
+        theta = self.theta
+        lLmb = self.lLmb
+        lsigma2 = self.lsigma2
 
+        Phi = self.Phi
+        V = self.V
+
+        n0 = theta0.shape[0]
+        kap = self.kap
+        m = self.m
+
+        predcov = torch.zeros(n0, m, m)
+
+        predcov_g = torch.zeros(kap, n0)
+        for k in range(kap):
+            ck0 = covmat(theta0, theta0, llmb=lLmb[k], diag_only=True)
+            ck = covmat(theta0, theta, llmb=lLmb[k])
+            Ck = covmat(theta, theta, llmb=lLmb[k])
+
+            Wk, Uk = torch.linalg.eigh(Ck)
+            Ukh = Uk / torch.sqrt(Wk)
+
+            ck_Ckinvh = ck @ Ukh
+            ck_Ckinv_Vkh = ck @ Ukh @ Ukh.T * torch.sqrt(V[k])
+
+            predcov_g[k] = ck0 - (ck_Ckinvh**2).sum(1) + (ck_Ckinv_Vkh**2).sum(1)
+
+        for i in range(n0):
+            predcov[i] = Phi * predcov_g[:, i] @ Phi.T + torch.exp(lsigma2) * torch.eye(m)
+
+        return predcov
 
     def predictvar(self, theta0):
-        self.compute_MV()
+
         return
 
     def test_mse(self, theta0, f0):
