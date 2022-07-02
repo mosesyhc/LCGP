@@ -160,6 +160,8 @@ class MVN_elbo_autolatent(jit.ScriptModule):
                 Wk, Uk = torch.linalg.eigh(Ck)
                 Ukh = Uk / torch.sqrt(Wk)
 
+                Ckinvh_Vkh = Ukh * torch.sqrt(V[k])
+
                 ck_Ckinvh = ck @ Ukh
                 ck_Ckinv_Vkh = ck @ Ukh @ Ukh.T * torch.sqrt(V[k])
 
@@ -171,8 +173,14 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         return predcov
 
     def predictvar(self, theta0):
-                
-        return
+        predcov = self.predictcov(theta0)
+
+        n0 = theta0.shape[0]
+        m = self.m
+        predvar = torch.zeros(m, n0)
+        for i in range(n0):
+            predvar[:, i] = predcov[:, :, i].diag()
+        return predvar
 
     def test_mse(self, theta0, f0):
         with torch.no_grad():
