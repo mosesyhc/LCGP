@@ -29,10 +29,6 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         self.Phi = Phi
 
         self.F = F
-        self.Fraw = None
-        self.Fstd = None
-        self.Fmean = None
-        self.standardize_F()
 
         self.theta = theta
         self.d = theta.shape[1]
@@ -42,10 +38,12 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             llmb = torch.cat((llmb, torch.Tensor([0])))
             lLmb = llmb.repeat(self.kap, 1)
             lLmb[:, -1] = torch.log(torch.var(Phi.T @ self.F, 1))
-        self.lLmb = nn.Parameter(lLmb)
+        self.lLmb = nn.Parameter(lLmb)  # , requires_grad=False
         if initlsigma2 or lsigma2 is None:
             lsigma2 = torch.log(((Phi @ Phi.T @ self.F - self.F)**2).mean())
         self.lsigma2 = nn.Parameter(lsigma2)  # nn.Parameter(torch.tensor((-8,)), requires_grad=False)
+
+
 
     @jit.script_method
     def forward(self, theta0):
@@ -73,15 +71,16 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             # ghat[k], _ = pred_gp(llmb=lLmb[k], theta=theta, thetanew=theta0, g=M[k])
 
         fhat = Phi @ ghat
-        fhat = (fhat * self.Fstd) + self.Fmean
-        return fhat
+        # fhat = (fhat * self.Fstd) + self.Fmean
+        return fhat, ghat
 
-    def negelbo(self):
+    def negelbo(self, lsigma2=None):
         lLmb = self.lLmb
-        lsigma2 = self.lsigma2
-        lLmb, lsigma2 = self.parameter_clamp(lLmb, lsigma2)
+        if lsigma2 is None:
+            lsigma2 = self.lsigma2
+        lLmb_clm, lsigma2_clm = self.parameter_clamp(lLmb, lsigma2)
 
-        sigma2 = torch.exp(lsigma2)
+        sigma2 = torch.exp(lsigma2_clm)
         Phi = self.Phi
         F = self.F
         theta = self.theta
@@ -95,12 +94,12 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
         negelbo = 0
         for k in range(kap):
-            negloggp_k, _ = negloglik_gp(llmb=lLmb[k], theta=theta, g=M[k])
+            negloggp_k, _ = negloglik_gp(llmb=lLmb_clm[k], theta=theta, g=M[k])
             negelbo += negloggp_k
 
         residF = F - (Phi @ M)
-        negelbo += m*n/2 * lsigma2
-        negelbo += 1/(2 * sigma2) * (residF ** 2).sum()
+        negelbo = m * n / 2 * lsigma2_clm
+        negelbo += 1 / (2 * lsigma2_clm.exp()) * (residF ** 2).sum()
         negelbo -= 1/2 * torch.log(V).sum()
 
         return negelbo
@@ -169,9 +168,9 @@ class MVN_elbo_autolatent(jit.ScriptModule):
                 predcov_g[k] = ck0 - (ck_Ckinvh**2).sum(1) + (ck_Ckinv_Vkh**2).sum(1)
 
             for i in range(n0):
-                predcov[:, :, i] = Phi * predcov_g[:, i] @ Phi.T + torch.exp(lsigma2) * torch.eye(m)
+                predcov[:, :, i] = torch.exp(lsigma2) * torch.eye(m) + Phi * predcov_g[:, i] @ Phi.T
 
-        return predcov
+        return predcov, predcov_g
 
     def predictvar(self, theta0):
         predcov = self.predictcov(theta0)
@@ -185,8 +184,9 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
     def test_mse(self, theta0, f0):
         with torch.no_grad():
+            m, n = f0.shape
             fhat = self.predictmean(theta0)
-            return ((fhat - f0) ** 2).mean()
+            return ((fhat - f0) ** 2).sum() / (m*n)
 
     def test_rmse(self, theta0, f0):
         return torch.sqrt(self.test_mse(theta0=theta0, f0=f0))
@@ -204,7 +204,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             self.Fstd = F.std(1).unsqueeze(1)
             self.F = (F - self.Fmean) / self.Fstd
 
-    def dss(self, theta0, f0):
+    def dss(self, theta0, f0, use_diag=False):
         """
         Returns the Dawid-Sebastani score averaged across test points.
 
@@ -212,6 +212,10 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         :param f0:
         :return:
         """
+        __score_single = self.__dss_single
+        if use_diag:
+            __score_single = self.__dss_single_diag
+
         predmean = self.predictmean(theta0)
         predcov = self.predictcov(theta0)
 
@@ -219,10 +223,20 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
         score = 0
         for i in range(n0):
-            score += self.__dss_single(f0[:, i], predmean[:, i], predcov[:, :, i])
+            score += __score_single(f0[:, i], predmean[:, i], predcov[:, :, i])
         score /= n0
 
         return score
+
+    @staticmethod
+    def __dss_single_diag(f, mu, Sigma):
+        r = f - mu
+        diagV = Sigma.diag()
+        score_single = torch.log(diagV).sum() + (r * r / diagV).sum()
+        # print('mse {:.6f}'.format((r**2).mean()))
+        # print('diag cov mean: {:.6f}'.format(diagV.mean()))
+        print('logdet: {:.6f}, quadratic: {:.6f}'.format(torch.log(diagV).sum(), (r * r / diagV).sum()))
+        return score_single
 
     @staticmethod
     def __dss_single(f, mu, Sigma):  # Dawid-Sebastani score
@@ -232,6 +246,31 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
         score_single = torch.linalg.slogdet(Sigma).logabsdet + (r_Sinvh ** 2).sum()
         return score_single
+
+    @staticmethod
+    def __single_chi2mean(f, mu, Sigma):
+        r = f - mu
+        diagV = torch.diag(Sigma)
+
+        # return (torch.abs(r / torch.sqrt(diagV)) > 1.65).sum() / r.shape[0]
+        return (torch.square(r / torch.sqrt(diagV))).mean()
+
+    def chi2mean(self, theta0, f0):
+
+        predmean = self.predictmean(theta0)
+        predcov = self.predictcov(theta0)
+
+        n0 = theta0.shape[0]
+
+        chi2arr = torch.zeros(n0)
+
+        chi2 = 0
+        for i in range(n0):
+            chi2arr[i] = self.__single_chi2mean(f0[:, i], predmean[:, i], predcov[:, :, i])
+            chi2 += self.__single_chi2mean(f0[:, i], predmean[:, i], predcov[:, :, i])
+        chi2 /= n0
+
+        return chi2arr
 
     @staticmethod
     def parameter_clamp(lLmb, lsigma2):

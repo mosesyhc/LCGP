@@ -4,8 +4,7 @@ from optim_rules import convergence_f, convergence_g, convergence_f_abs
 
 
 def optim_elbo_lbfgs(model,
-                     # ftr, thetatr, fte, thetate,
-                     maxiter=250, lr=8e-4,
+                     maxiter=250, lr=1e-3,
                      ftol=None):
 
     if ftol is None:

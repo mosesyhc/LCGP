@@ -19,3 +19,4 @@ code/test_results/borehole_comparisons/choice_ip/
 code/test_results/*/
 
 trace_json/
+*.pyc
