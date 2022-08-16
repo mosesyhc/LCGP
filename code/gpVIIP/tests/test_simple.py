@@ -59,10 +59,10 @@ if __name__ == '__main__':
     predvar = model.predictvar(thetate)
 
     # GP at the 0th component
-    from matern_covmat import covmat
+    from matern_covmat import cormat
 
-    ck = covmat(thetatr, thetatr, model.lLmb[0])
-    Ck = covmat(thetatr, thetatr, model.lLmb[0])
+    ck = cormat(thetatr, thetatr, model.lLmb[0])
+    Ck = cormat(thetatr, thetatr, model.lLmb[0])
 
     Wk, Uk = torch.linalg.eigh(Ck)
     Ukh = Uk / torch.sqrt(Wk)
@@ -76,8 +76,8 @@ if __name__ == '__main__':
     # tests
     with torch.no_grad():
         g0 = (Phi.T @ fte)
-        ck0 = covmat(thetate, thetatr, model.lLmb[0])
-        ck00 = covmat(thetate, thetate, model.lLmb[0], diag_only=True)
+        ck0 = cormat(thetate, thetatr, model.lLmb[0])
+        ck00 = cormat(thetate, thetate, model.lLmb[0], diag_only=True)
         mu0 = ck0 @ Ukh @ (Ukh.T * model.M[0]).sum(1)
         tau20 = ck00 - (ck0 @ Ukh @ (In - Ukh * model.V[0] @ Ukh.T) @ Ukh.T @ ck0.T).diag()
 

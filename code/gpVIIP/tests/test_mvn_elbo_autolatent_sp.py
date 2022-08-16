@@ -111,7 +111,7 @@ def test_mvn_elbo_autolatent_sp(ntrain, ntest, kap, run=None, seed=None, nepoch_
                                    Phi=Phi, F=F, theta=thetatr, thetai=thetai)
     model.double()
 
-    from matern_covmat import covmat
+    from matern_covmat import cormat
     from mvn_elbo_autolatent_sp_model import cov_sp
 
     # C = covmat(theta[:m], theta[:m], Lmb[0])

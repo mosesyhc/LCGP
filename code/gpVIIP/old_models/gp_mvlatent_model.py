@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from prediction import pred_gp
 from likelihood import negloglik_gp
-from matern_covmat import covmat
+from matern_covmat import cormat
 
 
 class MVlatentGP(nn.Module):
@@ -81,7 +81,7 @@ def negloglik_mvlatent(Lmb, G, lsigma, theta, f, psi, Phi):
 
     def predmean_gp_(Vh, lmb, theta, thetanew, g):
         Rinv_g = Vh @ Vh.T @ g
-        R_no = covmat(thetanew, theta, lmb)
+        R_no = cormat(thetanew, theta, lmb)
         return R_no @ Rinv_g
 
     nll_gp = torch.zeros(kap)

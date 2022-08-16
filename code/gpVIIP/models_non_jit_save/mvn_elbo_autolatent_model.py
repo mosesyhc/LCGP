@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from matern_covmat import covmat
+from matern_covmat import cormat
 from likelihood import negloglik_gp
 from prediction import pred_gp
 from hyperparameter_tuning import parameter_clamping
@@ -118,7 +118,7 @@ class MVN_elbo_autolatent(nn.Module):
         M = torch.zeros(self.kap, self.n)
         V = torch.zeros(self.kap, self.n)
         for k in range(kap):
-            C_k = covmat(theta, theta, lLmb[k])
+            C_k = cormat(theta, theta, lLmb[k])
             W_k, U_k = torch.linalg.eigh(C_k)
             Winv_k = 1 / W_k
             Mk = torch.linalg.solve(torch.eye(n) + sigma2 * U_k * Winv_k @ U_k.T, Phi[:, k] @ F)

@@ -1,7 +1,7 @@
 import torch
 torch.set_default_dtype(torch.double)
 
-from matern_covmat import covmat, cov_sp
+from matern_covmat import cormat, cov_sp
 
 from scipy.stats.qmc import LatinHypercube
 from sklearn.cluster import KMeans
@@ -23,7 +23,7 @@ def diff(res, n, p, lsigma2):
     llmb = torch.cat((llmb, torch.Tensor([0])))
 
     Dd, Qh, logdetC = cov_sp(theta=theta, thetai=thetai, llmb=llmb)
-    C = covmat(x1=theta, x2=theta, llmb=llmb)
+    C = cormat(x1=theta, x2=theta, llmb=llmb)
 
     suppI = (Dd.diag() - Qh @ Qh.T) @ C
     d_mean_I = torch.abs(torch.eye(n) - suppI).median()

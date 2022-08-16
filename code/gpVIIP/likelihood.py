@@ -1,6 +1,6 @@
 import torch
 import torch.distributions.normal as Normal
-from matern_covmat import covmat, cov_sp
+from matern_covmat import cormat, cov_sp
 norm = Normal.Normal(loc=0, scale=1)
 
 
@@ -30,8 +30,10 @@ def negloglik_link(G, y, psi, Phi):
     return negloglik
 
 
-def negloglik_gp(llmb, theta, g, lmbregmean=0, lmbregstd=1):
-    C = covmat(theta, theta, llmb)
+def negloglik_gp(llmb, lsigma2, theta, g):
+    C0 = cormat(theta, theta, llmb)
+    nug = torch.exp(lsigma2) / (1 + torch.exp(lsigma2))
+    C = C0 + nug * torch.eye(theta.shape[0]) # (1 - nug) *
 
     W, V = torch.linalg.eigh(C)
     Vh = V / torch.sqrt(W)
@@ -39,19 +41,19 @@ def negloglik_gp(llmb, theta, g, lmbregmean=0, lmbregstd=1):
     n = g.shape[0]
 
     sig2hat = (n * torch.mean(fcenter ** 2) + 10) / (n + 10)
+
+    print('sig2hat: ', sig2hat)
+
     negloglik = 1/2 * torch.sum(torch.log(W))  # log-determinant
     negloglik += n/2 * torch.log(sig2hat)  # log of MLE of scale
     negloglik += 1/2 * torch.sum(fcenter ** 2 / sig2hat)  # quadratic term
-    # negloglik += 1/2 * torch.sum(((lmb - lmbregmean + 10e-8) / lmbregstd)**2)  # regularization of hyperparameter
 
     # llmb, lsigma2 regularization
-    d = llmb.shape[0]
-    llmbreg = torch.ones(d) * (5 * (llmb + 1) ** 2)
-    llmbreg[-1] = 25 * llmb[-1]**2
+    llmbreg = 2 * (llmb + 1) ** 2
+    llmbreg[-1] = 25 * llmb[-1] ** 2
+    negloglik += llmbreg.sum() + 5 * lsigma2**2
 
-    negloglik += llmbreg.sum()
-
-    return negloglik, Vh
+    return negloglik
 
 
 def negloglik_gp_sp(llmb, theta, thetai, g, Delta_inv_diag=None, QRinvh=None, logdet_C=None):

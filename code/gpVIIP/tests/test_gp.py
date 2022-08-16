@@ -2,139 +2,142 @@ import torch
 from torch import nn
 torch.autograd.set_detect_anomaly(True)
 
+import numpy as np
+import pandas as pd
+
 from prediction import pred_gp
 from likelihood import negloglik_gp
 
 
 class simpleGP(nn.Module):
-    def __init__(self, lmb, theta, g):
+    def __init__(self, llmb, lsigma2, theta, g):
         super().__init__()
-        self.lmb = nn.Parameter(lmb)
+        self.llmb = nn.Parameter(llmb)
+        self.lsigma2 = nn.Parameter(lsigma2)
         self.theta = theta
         self.g = g
 
     def forward(self, theta0):
-        lmb = self.lmb
+        llmb = self.llmb
+        lsigma2 = self.lsigma2
         theta = self.theta
         g = self.g
 
-        pred, predvar = pred_gp(lmb, theta, theta0, )
+        pred, predvar = pred_gp(llmb, lsigma2, theta, theta0, g)
         return pred
 
     def lik(self):
-        lmb = self.lmb
+        llmb = self.llmb
+        lsigma2 = self.lsigma2
         theta = self.theta
         g = self.g
-        return negloglik_gp(lmb, theta, g)
+        return negloglik_gp(llmb, lsigma2, theta, g)
 
     def test_mse(self, theta0, g0):
-        gpred, gpredvar = pred_gp(self.lmb, self.theta, theta0, )
+        gpred, gpredvar = pred_gp(self.llmb, self.lsigma2, self.theta, theta0, self.g)
         return ((gpred - g0) ** 2).mean()
 
 
-def test_gp():
-    theta = torch.arange(0, 5, 1).resize_(5, 1)
-    g = torch.normal(torch.sin(theta) + theta, 1)
-    lmb = torch.Tensor((10, 0))
+data_dir = r'./code/data/colin_data/'
+theta = pd.read_csv(data_dir + r'ExpandedRanges2_LHS1L_n1000_s0304_all_input.csv')
+f = pd.read_csv(data_dir + r'ExpandedRanges2_LHS1L_n1000_s0304_all_output.csv')
+theta = torch.tensor(theta.iloc[:, 1:].to_numpy())
+f = torch.tensor(f.iloc[:, 1:].to_numpy()).T
 
-    thetatest = torch.arange(-1 / 3, 5, 1/6).resize_(32, 1)
-    gtest = torch.sin(thetatest) + thetatest
+f = ((f.T - f.mean(1)) / f.std(1)).T
 
-    lr = 10e-1
-    model = simpleGP(lmb, theta, g)
-    model.double()
-    model.requires_grad_()
+# arbitrary x
+m, n_all = f.shape
+x = np.arange(m)
 
-    # optim = torch.optim.LBFGS(model.parameters(), lr, line_search_fn='strong_wolfe')
-    optim = torch.optim.Adam(model.parameters(), lr)  #, line_search_fn='strong_wolfe')
+ftr = f[0, :400].unsqueeze(1)
+thetatr = theta[:400]
 
-    lik = model.lik()
-    header = ['iter', 'negloglik', 'test mse']
-    print('{:<5s} {:<12s} {:<12s}'.format(*header))
-    print('{:<5s} {:<12.6f} {:<10.3f}'.format(' ', lik, model.test_mse(thetatest, gtest)))
-    for epoch in range(100):
-        optim.zero_grad()
-        lik = model.lik()
-        lik.backward()
-        optim.step(lambda: model.lik())
+fte = f[0, 500:700].unsqueeze(1)
+thetate = theta[500:700]
 
-        mse = model.test_mse(thetatest, gtest)
-        print('{:<5d} {:<12.6f} {:<10.3f}'.format(epoch, lik, mse))
+llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([thetatr.shape[1]])) +
+                    torch.log(torch.std(thetatr, 0)))
+lsigma2 = torch.var(ftr).log()
+
+model = simpleGP(llmb, lsigma2, thetatr, ftr)
+model.double()
+model.requires_grad_()
 
 
-    gpred, gpredvar = pred_gp(model.lmb, model.theta, thetatest, )
+optim = torch.optim.FullBatchLBFGS(model.parameters())
+mse0 = model.test_mse(thetate, fte)
 
-    import matplotlib.pyplot as plt
-    thetatest = thetatest.numpy().squeeze()
-    gpred = gpred.detach().numpy().squeeze()
-    gpredvar = gpredvar.detach().numpy().squeeze()
-    plt.plot(thetatest, gpred, 'k-')
-    plt.fill_between(thetatest, gpred-2*gpredvar, gpred+2*gpredvar, alpha=0.75)
-    plt.scatter(theta, g, marker='o', s=25, c='blue')
-    plt.show()
-    return
+# closure
+def closure():
+    optim.zero_grad()
+    return model.lik()
 
+loss = closure()
+loss.backward()
 
-def test_gp_borehole():
-    from test_function import gen_borehole_data
-    theta, f, thetatest, ftest = gen_borehole_data(ntrain=25, ntest=1500)
+header = ['iter', 'negloglik', 'test mse']
+print('{:<5s} {:<12s} {:<12s}'.format(*header))
+print('{:<5s} {:<12.6f} {:<10.3f}'.format(' ', loss, mse0))
+for epoch in range(25):
+    options = {'closure': closure, 'current_loss': loss}
+    loss, grad, lr, _, _, _, _, _ = optim.step(options)
 
-    lmb = torch.Tensor(torch.zeros(9))
+    mse = model.test_mse(thetate, fte)
+    print('{:<5d} {:<12.6f} {:<10.3f}'.format(epoch, loss, mse))
 
-    lr = 10e-2
-    model = simpleGP(lmb, theta, f)
-    model.double()
-    model.requires_grad_()
+print(model.llmb.grad)
+print(model.llmb)
+print(model.lsigma2.grad)
+print(model.lsigma2)
 
-    lik = model.lik()
+ftrpred, ftrpredvar = pred_gp(model.llmb, model.lsigma2, thetatr, thetatr, ftr)
+chitr = (((ftrpred - ftr).squeeze() ** 2) / ftrpredvar).detach().numpy()
+stderrtr = (((ftrpred - ftr).squeeze()) / ftrpredvar.sqrt()).detach().numpy()
 
-    # optim = torch.optim.LBFGS(model.parameters(), lr, line_search_fn='strong_wolfe')
-    optim = torch.optim.Adam(model.parameters(), lr)  #, line_search_fn='strong_wolfe')
-
-    header = ['iter', 'negloglik', 'test mse']
-    print('{:<5s} {:<12s} {:<12s}'.format(*header))
-    print('{:<5s} {:<12.6f} {:<10.3f}'.format(' ', lik, model.test_mse(thetatest, ftest)))
-    for epoch in range(50):
-        optim.zero_grad()
-        lik = model.lik()
-        lik.backward()
-        optim.step(lambda: model.lik())
-
-        mse = model.test_mse(thetatest, ftest)
-        print('{:<5d} {:<12.6f} {:<10.3f}'.format(epoch, lik, mse))
-
-    fpred, fpredvar = pred_gp(model.lmb, theta, thetatest, )
-
-    import numpy as np
-    print('\ngp mse: {:.3f}'.format(np.mean((fpred.detach().numpy() - ftest.numpy()) ** 2)))
-
-    from surmise.emulation import emulator
-    import surmise
-    print(surmise.__file__)
-    x = np.array(1).reshape((1, 1))
-    emu = emulator(x, theta.numpy(),
-                   f.numpy().reshape(1, f.shape[0]),
-                   method='PCGPwM',
-                   args={'epsilon': 0.0})
-    emupred = emu.predict(x=x, theta=thetatest.numpy())
-    emumse = ((emupred.mean() - ftest.numpy()) ** 2).mean()
-
-    print('\nsurmise mse: {:.3f}'.format(emumse))
-
-    import matplotlib.pyplot as plt
-    thetatest = thetatest.numpy().squeeze()
-    fpred = fpred.detach().numpy().squeeze()
-    fpredvar = fpredvar.detach().numpy().squeeze()
-    plt.plot(thetatest[:, 1], fpred, 'k-')
-    plt.fill_between(thetatest[:, 1], fpred-2*fpredvar, fpred+2*fpredvar, alpha=0.25)
-    plt.scatter(theta[:, 1], f, marker='o', s=25, c='blue')
-
-    plt.plot(thetatest[:, 1], emupred.mean().squeeze(), 'r-')
-    plt.xlabel(r'$\theta_0$')
-    plt.ylabel(r'$f$')
-    plt.show()
+print(chitr.mean())
 
 
-if __name__ == '__main__':
-    # test_gp()
-    test_gp_borehole()
+fpred, fpredvar = pred_gp(model.llmb, model.lsigma2, thetatr, thetate, ftr)
+chi = (((fpred - fte).squeeze() ** 2) / fpredvar).detach().numpy()
+stderr = (((fpred - fte).squeeze()) / fpredvar.sqrt()).detach().numpy()
+
+largechiind = chi > np.quantile(chi, 0.95)
+smallchiind = chi <= np.quantile(chi, 0.95)
+
+chi[smallchiind].mean()
+
+import seaborn as sns
+thetatrplot = pd.DataFrame(thetatr)
+thetatrplot['error'] = 'train'
+thetateplot = pd.DataFrame(thetate)
+huetest = ['low']*thetate.shape[0]
+huetest = np.array(huetest)
+huetest[largechiind] = 'high'
+thetateplot['error'] = huetest
+
+thetaall = pd.concat((thetatrplot, thetateplot), ignore_index=True)
+
+# p = sns.pairplot(thetaall, hue='error', markers=["o", "s", "D"],
+#              palette=sns.set_palette(sns.color_palette(['#66c2a5', '#8da0cb', '#fc8d62'])), corner=True,
+#              diag_kind='hist',
+#              diag_kws={'common_norm': True})
+
+import matplotlib.pyplot as plt
+# plt.figure()
+# plt.scatter(np.arange(150), stderr)
+# plt.show()
+
+plt.figure()
+plt.hist(np.random.normal(0, 1, 1000), alpha=0.7, density=True, label='N(0,1)', bins=50)
+plt.hist(stderrtr, alpha=0.7, density=True, label='standard error', bins=50)
+plt.xlabel(r'$ (f - \mu) / \sigma$, Training')
+plt.legend()
+plt.show()
+
+plt.figure()
+plt.hist(np.random.normal(0, 1, 1000), alpha=0.7, density=True, label='N(0,1)', bins=30)
+plt.hist(stderr, alpha=0.7, density=True, label='standard error', bins=50)
+plt.xlabel(r'$ (f - \mu) / \sigma$, Testing')
+plt.legend()
+plt.show()

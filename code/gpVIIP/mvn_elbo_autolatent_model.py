@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.jit as jit
-from matern_covmat import covmat
+from matern_covmat import cormat
 from likelihood import negloglik_gp
 from prediction import pred_gp
 from hyperparameter_tuning import parameter_clamping
+
 
 class MVN_elbo_autolatent(jit.ScriptModule):
     def __init__(self, Phi, F, theta,
@@ -61,8 +62,8 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
         ghat = torch.zeros(kap, n0)
         for k in range(kap):
-            ck = covmat(theta0, theta, llmb=lLmb[k])
-            Ck = covmat(theta, theta, llmb=lLmb[k])
+            ck = cormat(theta0, theta, llmb=lLmb[k])
+            Ck = cormat(theta, theta, llmb=lLmb[k])
 
             Wk, Uk = torch.linalg.eigh(Ck)
             Ukh = Uk / torch.sqrt(Wk)
@@ -120,7 +121,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         M = torch.zeros(self.kap, self.n)
         V = torch.zeros(self.kap, self.n)
         for k in range(kap):
-            C_k = covmat(theta, theta, lLmb[k])
+            C_k = cormat(theta, theta, lLmb[k])
             W_k, U_k = torch.linalg.eigh(C_k)
             Winv_k = 1 / W_k
             Mk = torch.linalg.solve(torch.eye(n) + sigma2 * U_k * Winv_k @ U_k.T, Phi[:, k] @ F)
@@ -153,9 +154,9 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
             predcov_g = torch.zeros(kap, n0)
             for k in range(kap):
-                ck0 = covmat(theta0, theta0, llmb=lLmb[k], diag_only=True)
-                ck = covmat(theta0, theta, llmb=lLmb[k])
-                Ck = covmat(theta, theta, llmb=lLmb[k])
+                ck0 = cormat(theta0, theta0, llmb=lLmb[k], diag_only=True)
+                ck = cormat(theta0, theta, llmb=lLmb[k])
+                Ck = cormat(theta, theta, llmb=lLmb[k])
 
                 Wk, Uk = torch.linalg.eigh(Ck)
                 Ukh = Uk / torch.sqrt(Wk)

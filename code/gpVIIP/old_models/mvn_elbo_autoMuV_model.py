@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from matern_covmat import covmat
+from matern_covmat import cormat
 from likelihood import negloglik_gp
 from prediction import pred_gp
 
@@ -58,7 +58,7 @@ class MVN_elbo_autoMuV(nn.Module):
 
         def predmean_gp_(Vh, lmb, theta, thetanew, g):
             Rinv_g = Vh @ Vh.T @ g
-            R_no = covmat(thetanew, theta, lmb)
+            R_no = cormat(thetanew, theta, lmb)
             return R_no @ Rinv_g
 
         negelbo = 1/2 * torch.exp(-lsigma2) * torch.sum(torch.diag(Phi.T @ Phi) @ V) + \

@@ -2,7 +2,7 @@ import torch
 from hyperparameter_tuning import parameter_clamping
 
 
-def covmat(x1, x2, llmb, diag_only:bool=False):
+def cormat(x1, x2, llmb, diag_only:bool=False):
     '''
     :param diag_only:
     :param x1:
@@ -16,14 +16,15 @@ def covmat(x1, x2, llmb, diag_only:bool=False):
     assert x2.dim() == 2, 'input x2 should be 2-dimensional, (n_param, dim_param)'
     d = llmb.shape[0]
 
+    print(d, x1.shape[1])
     if diag_only:
         assert torch.isclose(x1, x2).all(), 'diag_only should only be called when x1 and x2 are identical.'
-        c = torch.exp(llmb[d - 1]) * torch.ones(x1.shape[0])
+        c = torch.ones(x1.shape[0])  # / (1 + torch.exp(llmb[-1]))
         return c
 
     else:
         V = torch.zeros((x1.shape[0], x2.shape[0]))
-        C = torch.ones((x1.shape[0], x2.shape[0])) * torch.exp(llmb[d - 1])
+        C = torch.ones((x1.shape[0], x2.shape[0])) / (1 + torch.exp(llmb[-1]))
 
         for j in range(d-1):
             S = torch.abs(x1[:, j].reshape(-1, 1) - x2[:, j]) / torch.exp(llmb[j])
@@ -31,6 +32,7 @@ def covmat(x1, x2, llmb, diag_only:bool=False):
             V -= S
 
         C *= torch.exp(V)
+        C += torch.exp(llmb[-1]) / (1 + torch.exp(llmb[-1]))
     return C
 
 
@@ -45,9 +47,9 @@ def cov_sp(theta, thetai, llmb):  # assuming x1 = x2 = theta
     :return:
     '''
 
-    c_full_i = covmat(theta, thetai, llmb=llmb)
-    C_i = covmat(thetai, thetai, llmb=llmb)
-    C_full_diag = covmat(theta, theta, llmb=llmb, diag_only=True)
+    c_full_i = cormat(theta, thetai, llmb=llmb)
+    C_i = cormat(thetai, thetai, llmb=llmb)
+    C_full_diag = cormat(theta, theta, llmb=llmb, diag_only=True)
 
     W_Ci, U_Ci = torch.linalg.eigh(C_i)
     W_Ciinv = 1 / W_Ci
