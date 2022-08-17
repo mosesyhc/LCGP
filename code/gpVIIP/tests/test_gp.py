@@ -35,6 +35,7 @@ class simpleGP(nn.Module):
 
     def test_mse(self, theta0, g0):
         gpred, gpredvar = pred_gp(self.llmb, self.lsigma2, self.theta, theta0, self.g)
+        assert gpred.shape == g0.shape
         return ((gpred - g0) ** 2).mean()
 
 
@@ -44,29 +45,36 @@ f = pd.read_csv(data_dir + r'ExpandedRanges2_LHS1L_n1000_s0304_all_output.csv')
 theta = torch.tensor(theta.iloc[:, 1:].to_numpy())
 f = torch.tensor(f.iloc[:, 1:].to_numpy()).T
 
-f = ((f.T - f.mean(1)) / f.std(1)).T
+# f = ((f.T - f.mean(1)) / f.std(1)).T
 
 # arbitrary x
 m, n_all = f.shape
+thetad = theta.shape[1]
 x = np.arange(m)
 
-ftr = f[0, :400].unsqueeze(1)
-thetatr = theta[:400]
+ftr = f[1, :500].unsqueeze(1)
+thetatr = theta[:500]
 
-fte = f[0, 500:700].unsqueeze(1)
+fte = f[1, 500:700].unsqueeze(1)
 thetate = theta[500:700]
 
-llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([thetatr.shape[1]])) +
-                    torch.log(torch.std(thetatr, 0)))
-lsigma2 = torch.var(ftr).log()
+ftrmean = ftr.mean(0)
+ftrstd = ftr.std(0)
 
-model = simpleGP(llmb, lsigma2, thetatr, ftr)
+ftr = ((ftr.T - ftrmean) / ftrstd).T
+fte = ((fte.T - ftrmean) / ftrstd).T
+
+llmb = torch.Tensor(0.5 * np.log(thetad) + torch.log(torch.std(thetatr, 0)))
+llmb = torch.cat((llmb, torch.Tensor([torch.var(ftr).log()])))
+lsigma2 = torch.var(ftr).log() - 10
+
+model = simpleGP(llmb, lsigma2, thetatr, ftr.squeeze())
 model.double()
 model.requires_grad_()
 
 
 optim = torch.optim.FullBatchLBFGS(model.parameters())
-mse0 = model.test_mse(thetate, fte)
+mse0 = model.test_mse(thetate, fte.squeeze())
 
 # closure
 def closure():
@@ -83,7 +91,7 @@ for epoch in range(25):
     options = {'closure': closure, 'current_loss': loss}
     loss, grad, lr, _, _, _, _, _ = optim.step(options)
 
-    mse = model.test_mse(thetate, fte)
+    mse = model.test_mse(thetate, fte.squeeze())
     print('{:<5d} {:<12.6f} {:<10.3f}'.format(epoch, loss, mse))
 
 print(model.llmb.grad)
@@ -91,16 +99,16 @@ print(model.llmb)
 print(model.lsigma2.grad)
 print(model.lsigma2)
 
-ftrpred, ftrpredvar = pred_gp(model.llmb, model.lsigma2, thetatr, thetatr, ftr)
-chitr = (((ftrpred - ftr).squeeze() ** 2) / ftrpredvar).detach().numpy()
-stderrtr = (((ftrpred - ftr).squeeze()) / ftrpredvar.sqrt()).detach().numpy()
+ftrpred, ftrpredvar = pred_gp(model.llmb, model.lsigma2, thetatr, thetatr, ftr.squeeze())
+chitr = (((ftrpred - ftr.squeeze()).squeeze() ** 2) / ftrpredvar).detach().numpy()
+stderrtr = (((ftrpred - ftr.squeeze()).squeeze()) / ftrpredvar.sqrt()).detach().numpy()
 
 print(chitr.mean())
+print('train mse: {:.6E}'.format(model.test_mse(thetatr, ftr.squeeze())))
 
-
-fpred, fpredvar = pred_gp(model.llmb, model.lsigma2, thetatr, thetate, ftr)
-chi = (((fpred - fte).squeeze() ** 2) / fpredvar).detach().numpy()
-stderr = (((fpred - fte).squeeze()) / fpredvar.sqrt()).detach().numpy()
+fpred, fpredvar = pred_gp(model.llmb, model.lsigma2, thetatr, thetate, ftr.squeeze())
+chi = (((fpred - fte.squeeze()).squeeze() ** 2) / fpredvar).detach().numpy()
+stderr = (((fpred - fte.squeeze()).squeeze()) / fpredvar.sqrt()).detach().numpy()
 
 largechiind = chi > np.quantile(chi, 0.95)
 smallchiind = chi <= np.quantile(chi, 0.95)
@@ -117,11 +125,24 @@ huetest[largechiind] = 'high'
 thetateplot['error'] = huetest
 
 thetaall = pd.concat((thetatrplot, thetateplot), ignore_index=True)
-
+#
 # p = sns.pairplot(thetaall, hue='error', markers=["o", "s", "D"],
 #              palette=sns.set_palette(sns.color_palette(['#66c2a5', '#8da0cb', '#fc8d62'])), corner=True,
 #              diag_kind='hist',
 #              diag_kws={'common_norm': True})
+
+
+# run surmise
+from surmise.emulation import emulator
+emu = emulator(x=np.array([x[0]]), theta=thetatr.numpy(), f=ftr.numpy())
+ptr = emu.predict()
+pte = emu.predict(np.array([x[0]]), theta=thetate.numpy())
+
+emurmse = ((pte.mean() - fte.numpy().squeeze())**2).mean()
+
+stderrtr_emu = (ptr.mean() - ftr.numpy().squeeze()) / np.sqrt(ptr.var())
+stderrte_emu = (pte.mean() - fte.numpy().squeeze()) / np.sqrt(pte.var())
+
 
 import matplotlib.pyplot as plt
 # plt.figure()
@@ -130,14 +151,16 @@ import matplotlib.pyplot as plt
 
 plt.figure()
 plt.hist(np.random.normal(0, 1, 1000), alpha=0.7, density=True, label='N(0,1)', bins=50)
-plt.hist(stderrtr, alpha=0.7, density=True, label='standard error', bins=50)
+plt.hist(stderrtr, alpha=0.7, density=True, label='new gp standard error', bins=50)
+plt.hist(stderrtr_emu.T, alpha=0.7, density=True, label='surmise standard error')
 plt.xlabel(r'$ (f - \mu) / \sigma$, Training')
 plt.legend()
 plt.show()
 
 plt.figure()
 plt.hist(np.random.normal(0, 1, 1000), alpha=0.7, density=True, label='N(0,1)', bins=30)
-plt.hist(stderr, alpha=0.7, density=True, label='standard error', bins=50)
+plt.hist(stderr, alpha=0.7, density=True, label='new gp standard error', bins=50)
+plt.hist(stderrte_emu.T, alpha=0.7, density=True, label='surmise standard error')
 plt.xlabel(r'$ (f - \mu) / \sigma$, Testing')
 plt.legend()
 plt.show()

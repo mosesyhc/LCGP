@@ -15,6 +15,8 @@ def pred_gp(llmb, lsigma2, theta, thetanew, g):
     :return:
     '''
 
+    n = theta.shape[0]
+
     # covariance matrix R for the training thetas
     C0 = cormat(theta, theta, llmb)
     nug = torch.exp(lsigma2) / (1 + torch.exp(lsigma2))
@@ -23,14 +25,15 @@ def pred_gp(llmb, lsigma2, theta, thetanew, g):
 
     W, V = torch.linalg.eigh(C)
     Vh = V / torch.sqrt(W)
+    fcenter = Vh.T @ g
+    sig2hat = (n * torch.mean(fcenter ** 2) + 10) / (n + 10)
 
-    Cinv_g = Vh @ Vh.T @ g
-    Cnewold = cormat(thetanew, theta, llmb)
-    Cnewnew = cormat(thetanew, thetanew, llmb)
+    Cinv_g = Vh @ fcenter
+    Cnewold = (1 - nug) * cormat(thetanew, theta, llmb)
 
     predmean = Cnewold @ Cinv_g
-    predvar = Cnewnew - Cnewold @ Vh @ Vh.T @ Cnewold.T
-    return predmean, predvar.diag() + nug
+    predvar = sig2hat * (1 - ((Cnewold @ Vh) ** 2).sum(axis=1))
+    return predmean, predvar
 
 
 def pred_gp_sp(llmb, theta, thetanew, thetai, g):

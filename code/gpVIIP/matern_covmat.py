@@ -14,9 +14,11 @@ def cormat(x1, x2, llmb, diag_only:bool=False):
     # assumes tensors are supplied
     assert x1.dim() == 2, 'input x1 should be 2-dimensional, (n_param, dim_param)'
     assert x2.dim() == 2, 'input x2 should be 2-dimensional, (n_param, dim_param)'
-    d = llmb.shape[0]
+    d = x1.shape[1]
 
-    print(d, x1.shape[1])
+    x1scal = x1 / torch.exp(llmb[:-1])
+    x2scal = x2 / torch.exp(llmb[:-1])
+
     if diag_only:
         assert torch.isclose(x1, x2).all(), 'diag_only should only be called when x1 and x2 are identical.'
         c = torch.ones(x1.shape[0])  # / (1 + torch.exp(llmb[-1]))
@@ -27,13 +29,13 @@ def cormat(x1, x2, llmb, diag_only:bool=False):
         C = torch.ones((x1.shape[0], x2.shape[0])) / (1 + torch.exp(llmb[-1]))
 
         for j in range(d-1):
-            S = torch.abs(x1[:, j].reshape(-1, 1) - x2[:, j]) / torch.exp(llmb[j])
+            S = torch.abs(x1scal[:, j].reshape(-1, 1) - x2scal[:, j])
             C *= (1 + S)
             V -= S
 
         C *= torch.exp(V)
         C += torch.exp(llmb[-1]) / (1 + torch.exp(llmb[-1]))
-    return C
+        return C
 
 
 def cov_sp(theta, thetai, llmb):  # assuming x1 = x2 = theta
