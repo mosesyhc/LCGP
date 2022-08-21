@@ -5,7 +5,7 @@ torch.autograd.set_detect_anomaly(True)
 import numpy as np
 import pandas as pd
 
-from prediction import pred_gp
+from prediction import pred_gp_sp
 from likelihood import negloglik_gp
 
 
@@ -23,7 +23,7 @@ class simpleGP(nn.Module):
         theta = self.theta
         g = self.g
 
-        pred, predvar = pred_gp(llmb=llmb, lsigma2=lsigma2, theta=theta,
+        pred, predvar = pred_gp_sp(llmb=llmb, lsigma2=lsigma2, theta=theta,
                                 thetanew=theta0, g=g)
         return pred
 
@@ -35,8 +35,8 @@ class simpleGP(nn.Module):
         return negloglik_gp(llmb=llmb, lsigma2=lsigma2, theta=theta, g=g)
 
     def test_mse(self, theta0, g0):
-        gpred, gpredvar = pred_gp(llmb=self.llmb, lsigma2=self.lsigma2,
-                                  theta=self.theta, thetanew=theta0, g=self.g)
+        gpred, gpredvar = pred_gp_sp(llmb=self.llmb, lsigma2=self.lsigma2,
+                                    theta=self.theta, thetanew=theta0, g=self.g)
         assert gpred.shape == g0.shape
         return ((gpred - g0) ** 2).mean()
 

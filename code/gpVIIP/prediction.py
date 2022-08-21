@@ -24,7 +24,7 @@ def pred_gp(llmb, lsigma2, theta, thetanew, g):
     C = (1 - nug) * C0 + nug * torch.eye(theta.shape[0])
 
     W, V = torch.linalg.eigh(C)
-    Vh = V / torch.sqrt(W)
+    Vh = V / torch.sqrt(W.abs())
     fcenter = Vh.T @ g
     sig2hat = (n * torch.mean(fcenter ** 2) + 10) / (n + 10)
 
@@ -32,7 +32,7 @@ def pred_gp(llmb, lsigma2, theta, thetanew, g):
     Cnewold = (1 - nug) * cormat(thetanew, theta, llmb)
 
     predmean = Cnewold @ Cinv_g
-    predvar = sig2hat * (1 - ((Cnewold @ Vh) ** 2).sum(axis=1))
+    predvar = sig2hat * (1 - ((Cnewold @ Vh) ** 2).sum(axis=1)) + nug
     return predmean, predvar
 
 

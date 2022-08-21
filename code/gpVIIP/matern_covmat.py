@@ -28,7 +28,7 @@ def cormat(x1, x2, llmb, diag_only:bool=False):
         V = torch.zeros((x1.shape[0], x2.shape[0]))
         C = torch.ones((x1.shape[0], x2.shape[0])) / (1 + torch.exp(llmb[-1]))
 
-        for j in range(d-1):
+        for j in range(d):
             S = torch.abs(x1scal[:, j].reshape(-1, 1) - x2scal[:, j])
             C *= (1 + S)
             V -= S
