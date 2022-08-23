@@ -43,43 +43,12 @@ def test_mvn_elbo_autolatent(ntrain, ntest, kap, run=None, seed=None, nepoch_nn=
                             *[x0[:, 2] == k for k in torch.unique(x0[:, 2])]))
     F = ftr - psi
 
-    from basis_nn_model import Basis
-    def loss(class_Phi, F):
-        Phi = class_Phi()
-        if class_Phi.normalize:
-            Fhat = Phi @ Phi.T @ F
-        else:
-            Fhat = Phi @ torch.linalg.solve(Phi.T @ Phi, Phi.T) @ F
-        mse = nn.MSELoss(reduction='mean')
-        return mse(Fhat, F)
-
-    # get_bestPhi takes F and gives the SVD U
-    Phi_as_param = Basis(m, kap, normalize=True)
-    optim_nn = torch.optim.Adam(Phi_as_param.parameters(), lr=10e-3)
-
-    print('F shape:', F.shape)
-
-    print('Neural network training:')
-    print('{:<5s} {:<12s}'.format('iter', 'train MSE'))
-    for epoch in range(nepoch_nn):
-        optim_nn.zero_grad()
-        l = loss(Phi_as_param, F)
-        l.backward()
-        optim_nn.step()
-
-        store_Phi_mse[epoch] = (run, seed, epoch, l.detach().numpy())
-        if (epoch % 50 - 1) == 0:
-            print('{:<5d} {:<12.6f}'.format(epoch, l))
-    Phi_match = Phi_as_param().detach()
-
-    mse_Phi = torch.mean((Phi_match @ Phi_match.T @ F - F) ** 2)
-    print('Reproducing Phi0 error in prediction of F: ',
-          mse_Phi)
-
-    Phi = Phi_match
+    Phi = torch.linalg.svd(F)
     print('Basis size: ', Phi.shape)
     # np.savetxt('Phi_seed0.txt', Phi.numpy())
     # Phi = torch.tensor(np.loadtxt('Phi_seed0.txt'))
+
+    mse_Phi = ((Phi @ Phi.T @ F - F)**2).mean()
 
     Lmb = torch.zeros(kap, d + 1)
 

@@ -4,11 +4,10 @@ from optim_rules import convergence_f, convergence_g, convergence_f_abs
 
 
 def optim_elbo_lbfgs(model,
-                     maxiter=250, lr=1e-3,
-                     ftol=None):
+                     maxiter=500, lr=1e-3,
+                     gtol=None,
+                     thetate=None, fte=None):
 
-    if ftol is None:
-        ftol = model.n / 1e4
     optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
     def closure():
         model.compute_MV()
@@ -21,8 +20,13 @@ def optim_elbo_lbfgs(model,
     # raise
 
     epoch = 0
+
+    header = ['iter', 'grad.mean()', 'lr', 'negelbo', 'diff.', 'test mse']
+    print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
+    print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f}'.format
+          (epoch, 0, lr, loss, loss_prev - loss, model.test_mse(thetate, fte)))
     while True:
-        options = {'closure': closure, 'current_loss': loss}
+        options = {'closure': closure, 'current_loss': loss, 'max_ls': 15}
         loss, grad, lr, _, _, _, _, _ = optim.step(options)
 
         epoch += 1
@@ -30,27 +34,41 @@ def optim_elbo_lbfgs(model,
             flag = 'MAX_ITER'
             break
         # if epoch >= 3:
-        if convergence_f_abs(loss_prev, loss, ftol=ftol):
-            print('exit after epoch {:d}, FTOL <= {:.3E}'.format(epoch, ftol))
-            flag = 'F_CONV'
+        if torch.max(torch.max(model.lLmb.grad.abs()), model.lsigma2.grad.abs()) <= gtol:
+            print('exit after epoch {:d}, GTOL <= {:.3E}'.format(epoch, gtol))
+            flag = 'G_CONV'
             break
 
-        loss_prev = loss.clone().detach()
+        print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f}'.format
+              (epoch, grad.abs().mean(), lr, loss, loss_prev - loss, model.test_mse(thetate, fte)))
 
+        with torch.no_grad():
+            loss_prev = loss.clone()
+    # print(model.lLmb.grad)
+    # optim.zero_grad(set_to_none=True)
+    # model.lLmb.requires_grad = False
+    #
+    # optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+    #
+    # epoch = 0
+    # while True:
+    #     options = {'closure': closure, 'current_loss': loss, 'max_ls': 15}
+    #     loss, grad, lr, _, _, _, _, _ = optim.step(options)
+    #
+    #     epoch += 1
+    #     if epoch > 100:
+    #         flag = 'MAX_ITER'
+    #         break
+    #     # if epoch >= 3:
+    #     if torch.max(model.lsigma2.grad.abs()) <= gtol:
+    #         print('exit after epoch {:d}, GTOL <= {:.3E}'.format(epoch, gtol))
+    #         flag = 'G_CONV'
+    #         break
+    #
+    #     print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f}'.format
+    #           (epoch, 0, lr, loss, loss_prev - loss, model.test_mse(thetate, fte)))
     return model, epoch, flag
 
-
-# print(epoch, grad, loss)
-# for p in model.parameters():
-#     print(p)
-# if epoch % 1 == 0:
-#     with torch.no_grad():
-#         model.create_MV()
-#         trainmse = model.test_mse(thetatr, ftr)
-#         mse = model.test_mse(thetate, fte)
-#
-#         print('{:<5d} {:<12.3f} {:<12.3f} {:<12.6f} {:<12.6f}'.format
-#               (epoch, loss, loss_prev - loss, mse, trainmse))
 
 def optim_elbo(model,
                # ftr, thetatr, fte, thetate,
@@ -70,16 +88,6 @@ def optim_elbo(model,
             break
         negelbo.backward()
         optim.step()
-        #
-        # if epoch % 10 == 0:
-        #     with torch.no_grad():
-        #         model.create_MV()
-        #         trainmse = model.test_mse(thetatr, ftr)
-        #         mse = model.test_mse(thetate, fte)
-        #
-        #         print('{:<5d} {:<12.3f} {:<12.6f} {:<12.6f}'.format
-        #               (epoch, negelbo, mse, trainmse))
-
         if convergence_f(negelbo_prev, negelbo, ftol=1e-6):
             print('FTOL <= {:.3E}'.format(1e-6))
             flag = 'F_CONV'

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from prediction import pred_gp
-from likelihood import negloglik_gp
+from likelihood import negloglik_singlevar_gp
 
 
 class simpleGP(nn.Module):
@@ -32,7 +32,7 @@ class simpleGP(nn.Module):
         lsigma2 = self.lsigma2
         theta = self.theta
         g = self.g
-        return negloglik_gp(llmb=llmb, lsigma2=lsigma2, theta=theta, g=g)
+        return negloglik_singlevar_gp(llmb=llmb, lsigma2=lsigma2, theta=theta, g=g)
 
     def test_mse(self, theta0, g0):
         gpred, gpredvar = pred_gp(llmb=self.llmb, lsigma2=self.lsigma2,
@@ -93,7 +93,7 @@ for epoch in range(25):
     loss, grad, lr, _, _, _, _, _ = optim.step(options)
 
     mse = model.test_mse(thetate, fte.squeeze())
-    print('{:<5d} {:<12.6f} {:<10.3f}'.format(epoch, loss, mse))
+    print('{:<5d} {:<12.6f} {:<12.6f} {:<10.3f}'.format(epoch, grad.abs().mean(), loss, mse))
 
 print(model.llmb.grad)
 print(model.llmb)

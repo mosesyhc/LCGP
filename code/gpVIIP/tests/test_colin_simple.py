@@ -70,7 +70,6 @@ def dss_surmise(emu, fte, thetate, use_diag=True):
     return score
 
 
-
 if __name__ == '__main__':
     data_dir = r'code/data/colin_data/'
     theta = pd.read_csv(data_dir + r'ExpandedRanges2_LHS1L_n1000_s0304_all_input.csv')
@@ -79,13 +78,12 @@ if __name__ == '__main__':
     f = torch.tensor(f.iloc[:, 1:].to_numpy()).T
 
     # f = ((f.T - f.min(1).values) / (f.max(1).values - f.min(1).values)).T
-    f = ((f.T - f.mean(1)) / f.std(1)).T
 
     # arbitrary x
     m, n_all = f.shape
     x = np.arange(m)
 
-    ntr = 200
+    ntr = 300
     indtr = torch.randperm(n_all)[:ntr]
     indte = np.setdiff1d(np.arange(n_all), indtr)[:105]
     ftr = f[:, indtr]
@@ -93,16 +91,34 @@ if __name__ == '__main__':
     fte = f[:, indte]
     thetate = theta[indte]
 
-    kap = 1
-    Phi, _, _ = torch.linalg.svd(ftr, full_matrices=False)
+    ftr = ((ftr.T - ftr.mean(1)) / ftr.std(1)).T
+    fte = ((fte.T - ftr.mean(1)) / ftr.std(1)).T
+
+    Phi, S, _ = torch.linalg.svd(ftr, full_matrices=False)
+    v = (S**2).cumsum(0)/(S**2).sum()
+
+    kap = 1  # torch.argwhere(v > 0.995)[0] + 1
+
     Phi = Phi[:, :kap]
     Phi_mse = ((ftr - Phi @ Phi.T @ ftr)**2).mean()
-    print('recovery mse: {:.3f}'.format(Phi_mse))
+    print('recovery mse: {:.3E}'.format(Phi_mse))
 
-    model = MVN_elbo_autolatent(Phi=Phi, F=ftr, theta=thetatr)
-    model, niter, flag = optim_elbo_lbfgs(model, lr=5e-2, ftol=model.n / 1e8)
+    model = MVN_elbo_autolatent(Phi=Phi, F=ftr, theta=thetatr, clamping=True)
 
+    print('train mse: {:.3E}'.format(model.test_mse(theta0=thetatr, f0=ftr)))
+
+    model.compute_MV()
+
+    model, niter, flag = optim_elbo_lbfgs(model, maxiter=500, lr=5e-1, gtol=1e-2, thetate=thetate, fte=fte)
+
+    print(model.lLmb)
+    print(model.lLmb.grad)
     print(model.lsigma2)
+    print(model.lsigma2.grad)
+
+
+
+
     #
     # print(model.test_rmse(theta0=thetatr, f0=ftr))
     # print('negelbo at optimizer: {:.5f}, sigma2 = {:.3f}'.format(model.negelbo(), parameter_clamping(model.lsigma2, torch.tensor((-12, -1))).exp()))
@@ -119,23 +135,23 @@ if __name__ == '__main__':
     # print(chi2.mean())
     # #
     # predmean = model.predictmean(thetatr)
-    fhat, ghat = model(thetate)
-
-    predcov, predcov_g = model.predictcov(thetate)
+    # fhat, ghat = model(thetate)
     #
-    # model._MVN_elbo_autolatent__single_chi2mean(f=fte[:, 0], mu=predmean[:, 0], Sigma=predcov[:, :, 0])
-    # print()
+    # predcov, predcov_g = model.predictcov(thetate)
+    # #
+    # # model._MVN_elbo_autolatent__single_chi2mean(f=fte[:, 0], mu=predmean[:, 0], Sigma=predcov[:, :, 0])
+    # # print()
+    # #
+    # emu = emulator(f=ftr.numpy(),
+    #                theta=thetatr.numpy(),
+    #                x=x, method='PCGPwM')
+    # emupred = emu.predict(x=x, theta=thetate.numpy())
+    # emumean = emupred.mean()
+    # emuvar = emupred.var()
     #
-    emu = emulator(f=ftr.numpy(),
-                   theta=thetatr.numpy(),
-                   x=x, method='PCGPwM')
-    emupred = emu.predict(x=x, theta=thetate.numpy())
-    emumean = emupred.mean()
-    emuvar = emupred.var()
-
-    emuchi2 = (emumean ** 2 / emuvar)
-    # emurmse = np.sqrt(((emupred.mean() - fte.numpy())**2).mean())
-
-    # print('surmise rmse: {:.3f}'.format(emurmse))
+    # emuchi2 = (emumean ** 2 / emuvar)
+    # # emurmse = np.sqrt(((emupred.mean() - fte.numpy())**2).mean())
     #
-    # print('DS Score: {:.3f}'.format(dss_surmise(emu, fte[:, :1].numpy(), thetate[:1].numpy(), use_diag=True)))
+    # # print('surmise rmse: {:.3f}'.format(emurmse))
+    # #
+    # # print('DS Score: {:.3f}'.format(dss_surmise(emu, fte[:, :1].numpy(), thetate[:1].numpy(), use_diag=True)))
