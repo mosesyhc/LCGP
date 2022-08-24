@@ -8,7 +8,8 @@ from hyperparameter_tuning import parameter_clamping
 
 
 class MVN_elbo_autolatent(jit.ScriptModule):
-    def __init__(self, Phi, F, theta,
+    def __init__(self, F, theta,
+                 Phi=None, kap=None, pcthreshold=0.99,
                  lLmb=None, lsigma2=None,
                  initlLmb=True, initlsigma2=True,
                  clamping=True):
@@ -25,13 +26,18 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         super().__init__()
         self.method = 'MVGP'
         self.clamping = clamping
-        self.kap = Phi.shape[1]
         self.m, self.n = F.shape
-        self.M = torch.zeros(self.kap, self.n)
-        self.Phi = Phi
-
         self.F = F
 
+        if Phi is None:
+            self.G, self.Phi, self.pcw, self.kap = self.__PCs(F=F, kap=kap, threshold=pcthreshold)
+        else:
+            self.G = Phi.T @ F
+            self.Phi = Phi
+            self.kap = kap
+            self.pcw = torch.ones(kap)
+
+        self.M = torch.zeros(self.kap, self.n)
         self.theta = theta
         self.d = theta.shape[1]
         if initlLmb or lLmb is None:
@@ -39,11 +45,11 @@ class MVN_elbo_autolatent(jit.ScriptModule):
                                torch.log(torch.std(theta, 0)))
             llmb = torch.cat((llmb, torch.Tensor([0])))
             lLmb = llmb.repeat(self.kap, 1)
-            lLmb[:, -1] = torch.log(torch.var(Phi.T @ self.F, 1))
-        self.lLmb = nn.Parameter(lLmb)  # , requires_grad=False
+            lLmb[:, -1] = torch.log(torch.var(self.G, 1))
+        self.lLmb = nn.Parameter(lLmb)
         if initlsigma2 or lsigma2 is None:
-            lsigma2 = torch.log(((Phi @ Phi.T @ self.F - self.F)**2).mean())
-        self.lsigma2 = nn.Parameter(lsigma2)  # nn.Parameter(torch.tensor((-8,)), requires_grad=False)
+            lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F)**2).mean())
+        self.lsigma2 = nn.Parameter(lsigma2)
 
     @jit.script_method
     def forward(self, theta0):
@@ -54,7 +60,6 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             lLmb, lsigma2 = self.parameter_clamp(lLmb, lsigma2)
 
         M = self.M
-        Phi = self.Phi
         theta = self.theta
 
         kap = self.kap
@@ -71,37 +76,8 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
             ghat[k] = ck @ Ckinv_Mk
 
-        fhat = Phi @ ghat
-        # fhat = (fhat * self.Fstd) + self.Fmean
+        fhat = (self.Phi * self.pcw) @ ghat
         return fhat  #, ghat
-
-    def __give_gs(self, theta0):
-        lLmb = self.lLmb
-        lsigma2 = self.lsigma2
-
-        if self.clamping:
-            lLmb, lsigma2 = self.parameter_clamp(lLmb, lsigma2)
-
-        M = self.M
-        theta = self.theta
-
-        kap = self.kap
-        n0 = theta0.shape[0]
-
-        ghat = torch.zeros(kap, n0)
-        for k in range(kap):
-            ck = cormat(theta0, theta, llmb=lLmb[k])
-            Ck = cormat(theta, theta, llmb=lLmb[k])
-
-            Wk, Uk = torch.linalg.eigh(Ck)
-            Ukh = Uk / torch.sqrt(Wk)
-            Ckinv_Mk = Ukh @ Ukh.T @ M[k]
-
-            ghat[k] = ck @ Ckinv_Mk
-            # ghat[k], _ = pred_gp(llmb=lLmb[k], theta=theta, thetanew=theta0, g=M[k])
-
-        return ghat
-
 
     def negelbo(self):
         lLmb = self.lLmb
@@ -110,7 +86,6 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         if self.clamping:
             lLmb, lsigma2 = self.parameter_clamp(lLmb, lsigma2)
 
-        Phi = self.Phi
         F = self.F
         theta = self.theta
 
@@ -126,7 +101,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             negloggp_k = negloglik_gp(llmb=lLmb[k], theta=theta, g=M[k])
             negelbo += negloggp_k
 
-        residF = F - (Phi @ M)
+        residF = F - (self.Phi * self.pcw) @ M
         negelbo = m * n / 2 * lsigma2
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
         negelbo -= 1/2 * torch.log(V).sum()
@@ -145,8 +120,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         theta = self.theta
 
         n = self.n
-        Phi = self.Phi
-        F = self.F
+        G = self.G
         sigma2 = torch.exp(lsigma2)
 
         M = torch.zeros(self.kap, self.n)
@@ -155,7 +129,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             C_k = cormat(theta, theta, lLmb[k])
             W_k, U_k = torch.linalg.eigh(C_k)
             Winv_k = 1 / W_k
-            Mk = torch.linalg.solve(torch.eye(n) + sigma2 * U_k * Winv_k @ U_k.T, Phi[:, k] @ F)
+            Mk = torch.linalg.solve(torch.eye(n) + sigma2 * U_k * Winv_k @ U_k.T, G[k])
             M[k] = Mk
             V[k] = 1 / (1 / sigma2 + torch.diag((U_k * Winv_k) @ U_k.T))
         self.M = M
@@ -311,3 +285,24 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, -1)))
 
         return lLmb, lsigma2
+
+    @staticmethod
+    def __PCs(F, kap=None, threshold=0.99):
+        m, n = F.shape
+
+        Phi, S, _ = torch.linalg.svd(F, full_matrices=False)
+        v = (S ** 2).cumsum(0) / (S ** 2).sum()
+
+        if kap is None:
+            kap = int(torch.argwhere(v > threshold)[0][0] + 1)
+
+        assert Phi.shape[1] == m
+        Phi = Phi[:, :kap]
+        S = S[:kap]
+
+        pcw = ((S**2).abs() / n).sqrt()
+
+        G = (Phi / pcw).T @ F  # kap x n
+        Phi_mse = (((Phi * pcw) @ G - F)**2).mean()
+        print('#PCs: {:d}, recovery mse: {:.3E}'.format(kap, Phi_mse.item()))
+        return G, Phi, pcw, kap

@@ -77,8 +77,6 @@ if __name__ == '__main__':
     theta = torch.tensor(theta.iloc[:, 1:].to_numpy())
     f = torch.tensor(f.iloc[:, 1:].to_numpy()).T
 
-    # f = ((f.T - f.min(1).values) / (f.max(1).values - f.min(1).values)).T
-
     # arbitrary x
     m, n_all = f.shape
     x = np.arange(m)
@@ -91,21 +89,15 @@ if __name__ == '__main__':
     fte = f[:, indte]
     thetate = theta[indte]
 
-    ftr = ((ftr.T - ftr.mean(1)) / ftr.std(1)).T
-    fte = ((fte.T - ftr.mean(1)) / ftr.std(1)).T
+    ftrmean = ftr.mean(1)
+    ftrstd = ftr.std(1)
+    ftr = ((ftr.T - ftrmean) / ftrstd).T
+    fte = ((fte.T - ftrmean) / ftrstd).T
 
-    Phi, S, _ = torch.linalg.svd(ftr, full_matrices=False)
-    v = (S**2).cumsum(0)/(S**2).sum()
+    model = MVN_elbo_autolatent(F=ftr, theta=thetatr, pcthreshold=0.999, clamping=True)
 
-    kap = 1  # torch.argwhere(v > 0.995)[0] + 1
-
-    Phi = Phi[:, :kap]
-    Phi_mse = ((ftr - Phi @ Phi.T @ ftr)**2).mean()
-    print('recovery mse: {:.3E}'.format(Phi_mse))
-
-    model = MVN_elbo_autolatent(Phi=Phi, F=ftr, theta=thetatr, clamping=True)
-
-    print('train mse: {:.3E}'.format(model.test_mse(theta0=thetatr, f0=ftr)))
+    print('train mse: {:.3E}, test mse: {:.3E}'.format(model.test_mse(theta0=thetatr, f0=ftr),
+                                                       model.test_mse(theta0=thetate, f0=fte)))
 
     model.compute_MV()
 
