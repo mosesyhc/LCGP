@@ -22,6 +22,8 @@ def cps2001(x):
 
 
 def forrester2008(x, noisy=True):
+    x = np.expand_dims(x, 1) if x.ndim < 2 else x
+
     y1 = (6*x - 2)**2 * np.sin(12*x - 4)
     def forrester1d(y, x, a, b, c):
         return a*y + b*(x - 0.5) - c
