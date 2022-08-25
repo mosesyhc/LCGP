@@ -101,7 +101,7 @@ if __name__ == '__main__':
 
     model.compute_MV()
 
-    model, niter, flag = optim_elbo_lbfgs(model, maxiter=500, lr=5e-1, gtol=1e-2, thetate=thetate, fte=fte)
+    model, niter, flag = optim_elbo_lbfgs(model, maxiter=500, lr=1., gtol=1e-2, thetate=thetate, fte=fte)
 
     print(model.lLmb)
     print(model.lLmb.grad)
