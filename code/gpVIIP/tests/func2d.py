@@ -30,12 +30,12 @@ def forrester2008(x, noisy=True):
     y2 = forrester1d(y1, x, 0.5, 5, -5)
 
     if noisy:
-        e1 = np.random.normal(0, 1 * (x + 0.5) ** 2, x.shape[0])
-        e2 = np.random.normal(0, 1 * (x + 0.5) ** 2, x.shape[0])
+        e1 = np.random.normal(0, 3 * (x + 0.5) ** 2, x.shape)
+        e2 = np.random.normal(0, 3 * (x + 0.5) ** 2, x.shape)
         #
         y1 += e1
         y2 += e2
 
-    y = np.column_stack((y1, y2))
+    y = np.row_stack((y1.T, y2.T))
 
     return y
