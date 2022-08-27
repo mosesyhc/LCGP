@@ -46,7 +46,7 @@ def negloglik_gp(llmb, theta, g):
     # negloglik += 1/2 * torch.sum(fcenter ** 2 / sig2hat)  # quadratic term
 
     # llmb, lsigma2 regularization
-    llmbreg = 10 * (llmb + 1) ** 2
+    llmbreg = 15 * (llmb + 1) ** 2
     llmbreg[-1] = 25 * llmb[-1] ** 2
     negloglik += llmbreg.sum() #+ 5 * (lsigma2 + 10)**2
     # negloglik += 1/2 * (llmb**2).sum() + 1/10 * (lsigma2 + 10)**2
@@ -103,10 +103,8 @@ def negloglik_gp_sp(llmb, theta, thetai, g, Delta_inv_diag=None, QRinvh=None, lo
     # negloglik += 1/2 * torch.sum(((llmb - llmbregmean) / llmbregstd)**2)  # regularization of hyperparameter
 
     # llmb, lsigma2 regularization
-    d = llmb.shape[0]
-    llmbreg = torch.ones(d) * (5 * (llmb + 1) ** 2)
-    llmbreg[-1] = 25 * llmb[-1]**2
-
+    llmbreg = 5 * (llmb + 1) ** 2
+    llmbreg[-1] = 15 * llmb[-1] ** 2
     negloglik += llmbreg.sum()
 
     return negloglik #, Vh

@@ -33,11 +33,11 @@ def optim_elbo_lbfgs(model,
         if epoch > maxiter:
             flag = 'MAX_ITER'
             break
-        # if epoch >= 3:
-        if torch.max(torch.max(model.lLmb.grad.abs()), model.lsigma2.grad.abs()) <= gtol:
-            print('exit after epoch {:d}, GTOL <= {:.3E}'.format(epoch, gtol))
-            flag = 'G_CONV'
-            break
+        if epoch >= 10:
+            if torch.max(torch.max(model.lLmb.grad.abs()), model.lsigma2.grad.abs()) <= gtol:
+                print('exit after epoch {:d}, GTOL <= {:.3E}'.format(epoch, gtol))
+                flag = 'G_CONV'
+                break
 
         print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f}'.format
               (epoch, grad.abs().mean(), lr, loss, loss_prev - loss, model.test_mse(thetate, fte)))

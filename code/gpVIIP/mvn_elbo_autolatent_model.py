@@ -29,10 +29,16 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         self.m, self.n = F.shape
         self.F = F
 
+        self.standardize_F()
+
         if Phi is None:
-            self.G, self.Phi, self.pcw, self.kap = self.__PCs(F=F, kap=kap, threshold=pcthreshold)
+            self.G, self.Phi, self.pcw, self.kap = self.__PCs(F=self.F, kap=kap, threshold=pcthreshold)
+
+            Fhat = self.tx_F((self.Phi * self.pcw) @ self.G)
+            Phi_mse = ((Fhat - self.Fraw) ** 2).mean()
+            print('#PCs: {:d}, recovery mse: {:.3E}'.format(self.kap, Phi_mse.item()))
         else:
-            self.G = Phi.T @ F
+            self.G = Phi.T @ self.F
             self.Phi = Phi
             self.kap = kap
             self.pcw = torch.ones(kap)
@@ -46,10 +52,13 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             llmb = torch.cat((llmb, torch.Tensor([0])))
             lLmb = llmb.repeat(self.kap, 1)
             lLmb[:, -1] = torch.log(torch.var(self.G, 1))
+        self.lLmbreg = lLmb.clone()
         self.lLmb = nn.Parameter(lLmb)
         if initlsigma2 or lsigma2 is None:
             lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F)**2).mean())
+        self.mse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
+        self.buildtime: float = 0.0
 
     @jit.script_method
     def forward(self, theta0):
@@ -77,6 +86,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             ghat[k] = ck @ Ckinv_Mk
 
         fhat = (self.Phi * self.pcw) @ ghat
+        fhat = self.tx_F(fhat)
         return fhat  #, ghat
 
     def negelbo(self):
@@ -106,7 +116,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
         negelbo -= 1/2 * torch.log(V).sum()
 
-        negelbo += 5 * (lsigma2 + 8)**2
+        negelbo += 8 * (lsigma2 + self.mse0 + 1)**2
 
         return negelbo
 
@@ -145,10 +155,9 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         with torch.no_grad():
             self.compute_MV()
             theta = self.theta
-            lLmb = self.lLmb
-            lsigma2 = self.lsigma2
+            lLmb, lsigma2 = self.parameter_clamp(self.lLmb, self.lsigma2)
 
-            Phi = self.Phi
+            txPhi = (self.Phi * self.pcw * self.Fstd)
             V = self.V
 
             n0 = theta0.shape[0]
@@ -159,14 +168,11 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
             predcov_g = torch.zeros(kap, n0)
             for k in range(kap):
-                # ck0 = cormat(theta0, theta0, llmb=lLmb[k], diag_only=True)
                 ck = cormat(theta0, theta, llmb=lLmb[k])
                 Ck = cormat(theta, theta, llmb=lLmb[k])
 
                 Wk, Uk = torch.linalg.eigh(Ck)
                 Ukh = Uk / torch.sqrt(Wk)
-
-                Ckinvh_Vkh = Ukh * torch.sqrt(V[k])
 
                 ck_Ckinvh = ck @ Ukh
                 ck_Ckinv_Vkh = ck @ Ukh @ Ukh.T * torch.sqrt(V[k])
@@ -174,9 +180,9 @@ class MVN_elbo_autolatent(jit.ScriptModule):
                 predcov_g[k] = 1 - (ck_Ckinvh**2).sum(1) + (ck_Ckinv_Vkh**2).sum(1)
 
             for i in range(n0):
-                predcov[:, :, i] = torch.exp(lsigma2) * torch.eye(m) + Phi * predcov_g[:, i] @ Phi.T
-
-        return predcov, predcov_g
+                predcov[:, :, i] = torch.exp(lsigma2) * torch.eye(m) + \
+                                   txPhi * predcov_g[:, i] @ txPhi.T
+        return predcov
 
     def predictvar(self, theta0):
         predcov = self.predictcov(theta0)
@@ -209,6 +215,9 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             self.Fmean = F.mean(1).unsqueeze(1)
             self.Fstd = F.std(1).unsqueeze(1)
             self.F = (F - self.Fmean) / self.Fstd
+
+    def tx_F(self, Fs):
+        return Fs * self.Fstd + self.Fmean
 
     def dss(self, theta0, f0, use_diag=False):
         """
@@ -258,7 +267,6 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         r = f - mu
         diagV = torch.diag(Sigma)
 
-        # return (torch.abs(r / torch.sqrt(diagV)) > 1.65).sum() / r.shape[0]
         return (torch.square(r / torch.sqrt(diagV))).mean()
 
     def chi2mean(self, theta0, f0):
@@ -303,6 +311,4 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         pcw = ((S**2).abs() / n).sqrt()
 
         G = (Phi / pcw).T @ F  # kap x n
-        Phi_mse = (((Phi * pcw) @ G - F)**2).mean()
-        print('#PCs: {:d}, recovery mse: {:.3E}'.format(kap, Phi_mse.item()))
         return G, Phi, pcw, kap
