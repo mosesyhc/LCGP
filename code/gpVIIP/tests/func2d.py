@@ -39,3 +39,42 @@ def forrester2008(x, noisy=True):
     y = np.row_stack((y1.T, y2.T))
 
     return y
+
+
+def plot_forrester():
+    import matplotlib.pyplot as plt
+    plt.style.use(['science', 'grid'])
+
+    x = np.linspace(0, 1, 500)
+    f = forrester2008(x, noisy=False)
+
+    # plt.figure(figsize=(8, 6))
+    # plt.plot(x, f.T, linewidth=3)
+    # plt.legend(labels=[r'$f_1(x) = (6x - 2)^2 \sin(12x - 4)$',
+    #                    r'$f_2(x) = 0.5 f_1(x) + 5 (x - 0.5) + 5$'],
+    #            fontsize='x-large')
+    # plt.title('Forrester et al. (2008) function', fontsize=24)
+    # plt.xticks(fontsize=18)
+    # plt.yticks(fontsize=18)
+    # plt.xlabel(r'$\boldsymbol x$', fontsize=20)
+    # plt.ylabel(r'$\boldsymbol f(\boldsymbol x)$', fontsize=20, rotation=0)
+    # plt.tight_layout()
+    # plt.savefig('forrester2d.png', dpi=300)
+    # plt.close()
+
+    x0 = np.random.uniform(0, 1, 25)
+    Phi, S, _ = np.linalg.svd(forrester2008(x0, noisy=True))
+    Phi = Phi[:, :1]
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(x, -(Phi.T @ f).T, linewidth=3)
+    plt.title(r'Projected function', fontsize=24)
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
+    plt.xlabel(r'$\boldsymbol x$', fontsize=20)
+    plt.ylabel(r'$g(\boldsymbol x)$', fontsize=20, rotation=0, labelpad=12)
+    plt.tight_layout()
+    plt.savefig('projected.png', dpi=300)
+    plt.close()
+
+plot_forrester()
