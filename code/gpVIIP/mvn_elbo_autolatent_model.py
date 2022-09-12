@@ -290,7 +290,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
     def parameter_clamp(lLmb, lsigma2):
         # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
-        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, -1)))
+        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 0)))
 
         return lLmb, lsigma2
 

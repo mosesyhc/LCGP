@@ -32,10 +32,13 @@ def forrester2008(x, noisy=True):
     if noisy:
         e1 = np.random.normal(0, 3 * (x + 0.5) ** 2, x.shape)
         e2 = np.random.normal(0, 3 * (x + 0.5) ** 2, x.shape)
-        #
+
+        centerflag = (x > 0.45) & (x < 0.55)
+        e1[centerflag] *= 3
+        e2[centerflag] *= 3
+
         y1 += e1
         y2 += e2
-
     y = np.row_stack((y1.T, y2.T))
 
     return y
@@ -77,4 +80,4 @@ def plot_forrester():
     plt.savefig('projected.png', dpi=300)
     plt.close()
 
-plot_forrester()
+# plot_forrester()

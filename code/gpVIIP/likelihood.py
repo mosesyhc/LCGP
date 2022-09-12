@@ -82,14 +82,9 @@ def negloglik_singlevar_gp(llmb, lsigma2, theta, g):
 def negloglik_gp_sp(llmb, theta, thetai, g, Delta_inv_diag=None, QRinvh=None, logdet_C=None):
     if Delta_inv_diag is None or QRinvh is None or logdet_C is None:
         Delta_inv_diag, QRinvh, logdet_C, _, _ = cov_sp(theta, thetai, llmb)
-    # R = covmat(theta, theta, lmb)
-    #
-    # W, V = torch.linalg.eigh(R)
-    # Vh = V / torch.sqrt(W)
-    # fcenter = Vh.T @ g
 
     n = g.shape[0]
-    QRinvh_g = (QRinvh.T * g).sum(1)
+    QRinvh_g = (QRinvh.T * g).sum(0)
     quad = g @ (Delta_inv_diag * g) - (QRinvh_g ** 2).sum()
 
     # if quad < 1e-8:
@@ -97,14 +92,15 @@ def negloglik_gp_sp(llmb, theta, thetai, g, Delta_inv_diag=None, QRinvh=None, lo
     #     quad = g @ torch.linalg.solve(C, g)
 
     sig2hat = (quad + 10) / (n + 10)
+
     negloglik = 1/2 * logdet_C  # log-determinant
     negloglik += n/2 * torch.log(sig2hat)  # log of MLE of scale
-    negloglik += 1/2 * quad / sig2hat  # quadratic term
+    # negloglik += 1/2 * quad / sig2hat  # quadratic term
     # negloglik += 1/2 * torch.sum(((llmb - llmbregmean) / llmbregstd)**2)  # regularization of hyperparameter
 
     # llmb, lsigma2 regularization
-    llmbreg = 5 * (llmb + 1) ** 2
-    llmbreg[-1] = 15 * llmb[-1] ** 2
+    llmbreg = 15 * (llmb + 1) ** 2
+    llmbreg[-1] = 25 * llmb[-1] ** 2
     negloglik += llmbreg.sum()
 
     return negloglik #, Vh

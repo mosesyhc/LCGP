@@ -66,7 +66,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
                                torch.log(torch.std(theta, 0)))
             llmb = torch.cat((llmb, torch.Tensor([0])))
             lLmb = llmb.repeat(self.kap, 1)
-            lLmb[:, -1] = torch.log(torch.var(Phi.T @ self.G, 1))
+            lLmb[:, -1] = torch.log(torch.var(self.G, 1))
         self.lLmb = nn.Parameter(lLmb)
         if initlsigma2 or lsigma2 is None:
             lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F)**2).mean())
@@ -74,7 +74,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         self.lsigma2 = nn.Parameter(lsigma2)  # nn.Parameter(torch.tensor((-8,)), requires_grad=False)
         self.buildtime:float = 0.0
 
-    @jit.script_method
+    # @jit.script_method
     def forward(self, theta0):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
@@ -95,7 +95,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
             Delta_k_inv_diag, Qk_Rkinvh, logdet_Ck, ck_full_i, Ck_i = cov_sp(theta, thetai, lLmb[k])
 
             # C_sp_inv = torch.diag(Delta_inv_diag) - Q_Rinvh @ Q_Rinvh.T
-            Ckinv_Mk = (Delta_k_inv_diag * M[k]) - ((Qk_Rkinvh * M[k])**2).sum(1)
+            Ckinv_Mk = (Delta_k_inv_diag * M[k]) - ((Qk_Rkinvh.T * M[k])**2).sum(0)
 
             ghat_sp[k] = ck @ Ckinv_Mk
 
@@ -125,6 +125,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         for k in range(kap):
             negloggp_sp_k = negloglik_gp_sp(llmb=lLmb[k], theta=theta, thetai=thetai, g=M[k])
             negelbo += negloggp_sp_k
+
 
         residF = F - (self.Phi * self.pcw) @ M
         negelbo = m * n / 2 * lsigma2
