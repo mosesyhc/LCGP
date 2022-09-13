@@ -105,3 +105,29 @@ def negloglik_gp_sp(llmb, theta, thetai, g, Delta_inv_diag=None, QRinvh=None, lo
 
     return negloglik #, Vh
 
+
+
+
+def negloglik_singlevar_gp_sp(llmb, lsigma2, theta, g):
+    C0 = cormat(theta, theta, llmb)
+    nug = torch.exp(lsigma2) / (1 + torch.exp(lsigma2))
+    C = (1 - nug) * C0 + nug * torch.eye(theta.shape[0])  # (1 - nug) *
+
+    W, V = torch.linalg.eigh(C)
+    Vh = V / torch.sqrt(W.abs())
+    fcenter = Vh.T @ g
+    n = g.shape[0]
+
+    sig2hat = (n * torch.mean(fcenter ** 2) + 10) / (n + 10)
+
+    negloglik = 1/2 * torch.sum(torch.log(W.abs()))  # log-determinant
+    negloglik += n/2 * torch.log(sig2hat)  # log of MLE of scale
+    # negloglik += 1/2 * torch.sum(fcenter ** 2 / sig2hat)  # quadratic term
+
+    # llmb, lsigma2 regularization
+    llmbreg = 5 * (llmb + 1) ** 2
+    llmbreg[-1] = 15 * llmb[-1] ** 2
+    negloglik += llmbreg.sum() + 5 * (lsigma2 + 10)**2
+    # negloglik += 1/2 * (llmb**2).sum() + 1/10 * (lsigma2 + 10)**2
+
+    return negloglik

@@ -47,7 +47,7 @@ ftest = torch.tensor(ftest)
 # emupct = emu._info['pct']
 
 ##############################################
-model = MVN_elbo_autolatent_sp(F=f, theta=x, p=int(n/2), kap=1, clamping=True)
+model = MVN_elbo_autolatent_sp(F=f, theta=x, p=int(n/4), kap=1, clamping=True)
 
 print('train mse: {:.3E}, test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
                                                    model.test_mse(theta0=xtest, f0=ftest)))

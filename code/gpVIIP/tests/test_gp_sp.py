@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 
 from prediction import pred_gp_sp
-from likelihood import negloglik_gp
+from likelihood import negloglik_singlevar_gp_sp
 
 
-class simpleGP(nn.Module):
+class simpleGP_sp(nn.Module):
     def __init__(self, llmb, lsigma2, theta, g):
         super().__init__()
         self.llmb = nn.Parameter(llmb)
@@ -32,7 +32,7 @@ class simpleGP(nn.Module):
         lsigma2 = self.lsigma2
         theta = self.theta
         g = self.g
-        return negloglik_gp(llmb=llmb, lsigma2=lsigma2, theta=theta, g=g)
+        return negloglik_singlevar_gp_sp(llmb=llmb, lsigma2=lsigma2, theta=theta, g=g)
 
     def test_mse(self, theta0, g0):
         gpred, gpredvar = pred_gp_sp(llmb=self.llmb, lsigma2=self.lsigma2,
@@ -70,7 +70,7 @@ llmb = torch.Tensor(0.5 * np.log(thetad) + torch.log(torch.std(thetatr, 0)))
 llmb = torch.cat((llmb, torch.Tensor([torch.var(ftr).log()])))
 lsigma2 = torch.var(ftr).log() - 10
 
-model = simpleGP(llmb, lsigma2, thetatr, ftr.squeeze())
+model = simpleGP_sp(llmb, lsigma2, thetatr, ftr.squeeze())
 model.double()
 model.requires_grad_()
 

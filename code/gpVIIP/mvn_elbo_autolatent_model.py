@@ -48,7 +48,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         self.d = theta.shape[1]
         if initlLmb or lLmb is None:
             llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([theta.shape[1]])) +
-                               torch.log(torch.std(theta, 0)))
+                                torch.log(torch.std(theta, 0)))
             llmb = torch.cat((llmb, torch.Tensor([0])))
             lLmb = llmb.repeat(self.kap, 1)
             lLmb[:, -1] = torch.log(torch.var(self.G, 1))
