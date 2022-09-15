@@ -47,23 +47,26 @@ def test_n(n):
 
     ##############################################
     model = MVN_elbo_autolatent(F=f, theta=x, kap=1, clamping=True)
-    #
-    # print('train mse: {:.3E}, test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
-    #                                                    model.test_mse(theta0=xtest, f0=ftest)))
+
+    print('train mse: {:.3E}, test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
+                                                       model.test_mse(theta0=xtest, f0=ftest)))
 
     model, niter, flag = optim_elbo_lbfgs(model, maxiter=200,
-                                          lr=1e-1, gtol=1e-4,
+                                          lr=1e-2, gtol=1e-3,
                                           thetate=xtest, fte=ftest, verbose=False)
 
     print('after training\ntrain mse: {:.3E}, '
           'test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
                                     model.test_mse(theta0=xtest, f0=ftest)))
 
-    # print(model.lLmb.grad, model.lsigma2.grad)
-
     model.eval()
     predmean = model.predictmean(xtest)
     predstd = model.predictvar(xtest).sqrt()
+
+    lLmb, lsigma2 = model.parameter_clamp(model.lLmb, model.lsigma2)
+
+    # print(lLmb, lsigma2)
+    # print(model.lLmb.grad, model.lsigma2.grad)
 
     # print(model.lsigma2)
 
@@ -78,7 +81,7 @@ def test_n(n):
     #      xtest, ftest,
     #      save=True)
 
-    return emuchi2, VIchi2
+    return emuchi2, VIchi2.numpy(), lsigma2.detach().numpy()
 
 def plot(n, emupct, emumean, emustd,
          model, predmean, predstd,
@@ -122,15 +125,13 @@ def plot(n, emupct, emumean, emustd,
 if __name__ == '__main__':
     ns = [25, 50, 100, 250]
     res = []
-    for i in range(10):
+    for i in range(2):
         for n in ns:
-            emuchi2, vichi2 = test_n(n)
-            res.append((n, emuchi2, vichi2.numpy()))
+            emuchi2, vichi2, lsigma2 = test_n(n)
+            res.append((n, emuchi2, vichi2, lsigma2))
 
 
     import pandas as pd
-    df = pd.DataFrame(res, columns=('n', 'surmise', 'VI'))
+    df = pd.DataFrame(res, columns=('n', 'surmise', 'VI', 'lsigma2'))
     print(df)
     df.to_csv('noisy2d_chi2.csv')
-
-    import plot_chi2

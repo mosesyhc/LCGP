@@ -48,8 +48,10 @@ def negloglik_gp(llmb, theta, g):
     # llmb, lsigma2 regularization
     llmbreg = 10 * (llmb + 1) ** 2
     llmbreg[-1] = 15 * llmb[-1] ** 2
+
+    # print(1 / 2 * torch.sum(torch.log(W.abs())), n / 2 * torch.log(sig2hat), llmbreg.sum())
+
     negloglik += llmbreg.sum() #+ 5 * (lsigma2 + 10)**2
-    # negloglik += 1/2 * (llmb**2).sum() + 1/10 * (lsigma2 + 10)**2
 
     return negloglik
 

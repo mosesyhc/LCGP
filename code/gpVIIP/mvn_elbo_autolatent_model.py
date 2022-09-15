@@ -112,11 +112,11 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             negelbo += negloggp_k
 
         residF = F - (self.Phi * self.pcw) @ M
-        negelbo = m * n / 2 * lsigma2
+        negelbo += m * n / 2 * lsigma2
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
         negelbo -= 1/2 * torch.log(V).sum()
 
-        negelbo += 12 * (lsigma2 - self.lmse0) ** 2
+        negelbo += 4 * (lsigma2 - self.lmse0) ** 2
 
         return negelbo
 
