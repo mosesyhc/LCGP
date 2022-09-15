@@ -8,12 +8,9 @@ plt.style.use(['science', 'grid'])
 
 # def test_n(n):
 
-n = 200
-n1, n2 = (int(n*3/10), int(n*6/10))
-x = np.zeros(n)
-x[:n1] = np.random.uniform(0, 0.2, n1)
-x[n1:n2] = np.random.uniform(0.4, 0.6, n2 - n1)
-x[n2:] = np.random.uniform(0.7, 1.0, n - n2)
+n = 250
+# n1, n2 = (int(n*3/10), int(n*6/10))
+x = np.random.uniform(0, 1, n)
 # x[:3] = np.array((0.05, 0.85, 1.0))
 # x = np.linspace(0.2, 1, 20)
 x = np.sort(x)
@@ -47,7 +44,7 @@ ftest = torch.tensor(ftest)
 # emupct = emu._info['pct']
 
 ##############################################
-model = MVN_elbo_autolatent_sp(F=f, theta=x, p=int(n/4), kap=1, clamping=True)
+model = MVN_elbo_autolatent_sp(F=f, theta=x, p=int(n), kap=1, clamping=True)
 
 print('train mse: {:.3E}, test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
                                                    model.test_mse(theta0=xtest, f0=ftest)))
@@ -70,7 +67,7 @@ predstd = model.predictvar(xtest).sqrt()
 print(model.lsigma2)
 
 # print('surmise chi2: {:.3f}'.format((((emumean - ftest.numpy()) / emustd)**2).mean()))
-print('VI chi2: {:.3f}'.format((((predmean - ftest) / predstd)**2).mean()))
+# print('VI chi2: {:.3f}'.format((((predmean - ftest) / predstd)**2).mean()))
 
 # plot(n, emupct, emumean, emustd,
 #      model, predmean, predstd,

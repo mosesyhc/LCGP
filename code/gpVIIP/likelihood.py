@@ -46,8 +46,8 @@ def negloglik_gp(llmb, theta, g):
     # negloglik += 1/2 * torch.sum(fcenter ** 2 / sig2hat)  # quadratic term
 
     # llmb, lsigma2 regularization
-    llmbreg = 15 * (llmb + 1) ** 2
-    llmbreg[-1] = 25 * llmb[-1] ** 2
+    llmbreg = 10 * (llmb + 1) ** 2
+    llmbreg[-1] = 15 * llmb[-1] ** 2
     negloglik += llmbreg.sum() #+ 5 * (lsigma2 + 10)**2
     # negloglik += 1/2 * (llmb**2).sum() + 1/10 * (lsigma2 + 10)**2
 
@@ -79,12 +79,13 @@ def negloglik_singlevar_gp(llmb, lsigma2, theta, g):
     return negloglik
 
 
-def negloglik_gp_sp(llmb, theta, thetai, g, Delta_inv_diag=None, QRinvh=None, logdet_C=None):
+def negloglik_gp_sp(llmb, theta, thetai, g,
+                    Delta_inv_diag=None, QRinvh=None, logdet_C=None):
     if Delta_inv_diag is None or QRinvh is None or logdet_C is None:
         Delta_inv_diag, QRinvh, logdet_C, _, _ = cov_sp(theta, thetai, llmb)
 
     n = g.shape[0]
-    QRinvh_g = (QRinvh.T * g).sum(0)
+    QRinvh_g = (QRinvh.T * g).sum(1)
     quad = g @ (Delta_inv_diag * g) - (QRinvh_g ** 2).sum()
 
     # if quad < 1e-8:

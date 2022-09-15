@@ -7,17 +7,18 @@ from optim_elbo import optim_elbo, optim_elbo_lbfgs
 plt.style.use(['science', 'grid'])
 
 def test_n(n):
-    n1, n2 = (int(n*3/10), int(n*6/10))
-    x = np.zeros(n)
-    x[:n1] = np.random.uniform(0, 0.2, n1)
-    x[n1:n2] = np.random.uniform(0.4, 0.6, n2 - n1)
-    x[n2:] = np.random.uniform(0.7, 1.0, n - n2)
-    # x[:3] = np.array((0.05, 0.85, 1.0))
-    # x = np.linspace(0.2, 1, 20)
+    # n1, n2 = (int(n*3/10), int(n*6/10))
+    # x = np.zeros(n)
+    # x[:n1] = np.random.uniform(0, 0.2, n1)
+    # x[n1:n2] = np.random.uniform(0.4, 0.6, n2 - n1)
+    # x[n2:] = np.random.uniform(0.7, 1.0, n - n2)
+
+    x = np.linspace(0, 1, n)
+
     x = np.sort(x)
     f = forrester2008(x, noisy=True)
 
-    xtest = np.linspace(0, 1, 100)
+    xtest = np.linspace(0, 1, 1000)
     ftest = forrester2008(xtest, noisy=False)
 
 
@@ -53,27 +54,31 @@ def test_n(n):
     model, niter, flag = optim_elbo_lbfgs(model, maxiter=200,
                                           lr=1e-1, gtol=1e-4,
                                           thetate=xtest, fte=ftest, verbose=False)
-    #
-    # print('after training\ntrain mse: {:.3E}, '
-    #       'test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
-    #                                 model.test_mse(theta0=xtest, f0=ftest)))
 
-    print(model.lLmb.grad, model.lsigma2.grad)
+    print('after training\ntrain mse: {:.3E}, '
+          'test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
+                                    model.test_mse(theta0=xtest, f0=ftest)))
+
+    # print(model.lLmb.grad, model.lsigma2.grad)
 
     model.eval()
     predmean = model.predictmean(xtest)
     predstd = model.predictvar(xtest).sqrt()
 
-    print(model.lsigma2)
+    # print(model.lsigma2)
 
-    print('surmise chi2: {:.3f}'.format((((emumean - ftest.numpy()) / emustd)**2).mean()))
-    print('VI chi2: {:.3f}'.format((((predmean - ftest) / predstd)**2).mean()))
+    emuchi2 = (((emumean - ftest.numpy()) / emustd)**2).mean()
+    VIchi2 = (((predmean - ftest) / predstd)**2).mean()
+    print('surmise chi2: {:.3f}'.format(emuchi2))
+    print('VI chi2: {:.3f}'.format(VIchi2))
 
     # plot(n, emupct, emumean, emustd,
     #      model, predmean, predstd,
     #      x, f,
     #      xtest, ftest,
     #      save=True)
+
+    return emuchi2, VIchi2
 
 def plot(n, emupct, emumean, emustd,
          model, predmean, predstd,
@@ -115,7 +120,17 @@ def plot(n, emupct, emumean, emustd,
     plt.close()
 
 if __name__ == '__main__':
-    ns = [25, 50, 100, 250, 500]
+    ns = [25, 50, 100, 250]
+    res = []
+    for i in range(10):
+        for n in ns:
+            emuchi2, vichi2 = test_n(n)
+            res.append((n, emuchi2, vichi2.numpy()))
 
-    for n in ns:
-        test_n(n)
+
+    import pandas as pd
+    df = pd.DataFrame(res, columns=('n', 'surmise', 'VI'))
+    print(df)
+    df.to_csv('noisy2d_chi2.csv')
+
+    import plot_chi2

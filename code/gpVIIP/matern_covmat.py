@@ -54,20 +54,20 @@ def cov_sp(theta, thetai, llmb):  # assuming x1 = x2 = theta
     # C_full_diag = cormat(theta, theta, llmb=llmb, diag_only=True)
 
     Wi, Ui = torch.linalg.eigh(C_i)
-    Cih = Ui / Wi.abs().sqrt()
+    Ciinvh = Ui / Wi.abs().sqrt()
     # C_iinv = Uih @ Uih.T   # Change
 
-    Crh = c_full_i @ Cih
+    Crh = c_full_i @ Ciinvh
     # C_r = c_full_i @ C_iinv @ c_full_i.T
 
     nugconst0 = torch.tensor((-8,))
     diag = 1 - (Crh ** 2).sum(1) + nugconst0.exp()  #
     Delta_inv_diag = 1 / diag
 
-    R = C_i + (c_full_i.T * Delta_inv_diag) @ c_full_i  # p x p
+    R = C_i + (c_full_i.T * Delta_inv_diag) @ c_full_i
 
     WR, UR = torch.linalg.eigh(R)
-    Rh = UR / WR.abs().sqrt()
+    Rinvh = UR / WR.abs().sqrt()
 
     # while W_R.min() < 1e-16:
     #     nugconst0 += 1
@@ -78,7 +78,8 @@ def cov_sp(theta, thetai, llmb):  # assuming x1 = x2 = theta
     #
     #     W_R, U_R = torch.linalg.eigh(R)
 
-    Q_Rinvh = (Delta_inv_diag * c_full_i.T).T @ Rh
+    Q = (Delta_inv_diag * c_full_i.T).T
+    Q_Rinvh = Q @ Rinvh
     # Rinv_half = U_R @ torch.diag(torch.sqrt(1 / W_R)) @ U_R.T
     # Q_Rinvh = Delta_inv @ c_full_i @ R_invhalf
 

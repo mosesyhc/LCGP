@@ -53,7 +53,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
             Phi_mse = ((Fhat - self.Fraw) ** 2).mean()
             print('#PCs: {:d}, recovery mse: {:.3E}'.format(self.kap, Phi_mse.item()))
         else:
-            self.G = Phi.T @ self.F
+            self.G = Phi.T @ self.F  # (Phi.T / 1.) @ self.F
             self.Phi = Phi
             self.kap = kap
             self.pcw = torch.ones(kap)
@@ -63,7 +63,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         self.d = theta.shape[1]
         if initlLmb or lLmb is None:
             llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([theta.shape[1]])) +
-                               torch.log(torch.std(theta, 0)))
+                                torch.log(torch.std(theta, 0)))
             llmb = torch.cat((llmb, torch.Tensor([0])))
             lLmb = llmb.repeat(self.kap, 1)
             lLmb[:, -1] = torch.log(torch.var(self.G, 1))
@@ -72,7 +72,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
             lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F)**2).mean())
         self.mse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)  # nn.Parameter(torch.tensor((-8,)), requires_grad=False)
-        self.buildtime:float = 0.0
+        self.buildtime: float = 0.0
 
     # @jit.script_method
     def forward(self, theta0):
@@ -92,10 +92,11 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         ghat_sp = torch.zeros(kap, n0)
         for k in range(kap):
             ck = cormat(theta0, theta, llmb=lLmb[k])
-            Delta_k_inv_diag, Qk_Rkinvh, logdet_Ck, ck_full_i, Ck_i = cov_sp(theta, thetai, lLmb[k])
+            Delta_k_inv_diag, Qk_Rkinvh, logdet_Ck, \
+                _, _ = cov_sp(theta=theta, thetai=thetai, llmb=lLmb[k])
 
             # C_sp_inv = torch.diag(Delta_inv_diag) - Q_Rinvh @ Q_Rinvh.T
-            Ckinv_Mk = (Delta_k_inv_diag * M[k]) - ((Qk_Rkinvh.T * M[k])**2).sum(0)
+            Ckinv_Mk = Delta_k_inv_diag * M[k] - Qk_Rkinvh @ (Qk_Rkinvh.T * M[k]).sum(1)
 
             ghat_sp[k] = ck @ Ckinv_Mk
 
@@ -123,7 +124,8 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
 
         negelbo = 0
         for k in range(kap):
-            negloggp_sp_k = negloglik_gp_sp(llmb=lLmb[k], theta=theta, thetai=thetai, g=M[k])
+            negloggp_sp_k = negloglik_gp_sp(llmb=lLmb[k], theta=theta,
+                                            thetai=thetai, g=M[k])
             negelbo += negloggp_sp_k
 
 
@@ -132,7 +134,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
         negelbo -= 1/2 * torch.log(V).sum()
 
-        negelbo += 8 * (lsigma2 + self.mse0 + 1)**2
+        negelbo += 8 * (lsigma2 - self.mse0)**2
 
         return negelbo
 
@@ -146,25 +148,26 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         theta = self.theta
         thetai = self.thetai
 
-        Phi = self.Phi
-        pcw = self.pcw
-        F = self.F
+        G = self.G
         sigma2 = torch.exp(lsigma2)
 
         M = torch.zeros(self.kap, self.n)
         V = torch.zeros(self.kap, self.n)
         for k in range(kap):
             Delta_k_inv_diag, Qk_Rkinvh, \
-            logdet_Ck, ck_full_i, Ck_i = cov_sp(theta, thetai, lLmb[k])
-            Dinv_k_diag = 1 / (sigma2 * Delta_k_inv_diag + 1)
+                logdet_Ck, ck_full_i, Ck_i = cov_sp(theta, thetai, lLmb[k])
+            Dinv_k_diag = 1 / (1 + sigma2 * Delta_k_inv_diag)
 
-            F_Phik = ((Phi * pcw)[:, k] * F.T).sum(1)  #checked
-            Tk = Ck_i + ck_full_i.T * ((1 - Dinv_k_diag) / sigma2) @ ck_full_i  #checked
+            # F_Phik = ((Phi * pcw)[:, k] * F.T).sum(1)  #checked
+            Tk = Ck_i + ck_full_i.T * (1/Delta_k_inv_diag + sigma2) @ ck_full_i  #checked
+
             W_Tk, U_Tk = torch.linalg.eigh(Tk)
             Tkinvh = U_Tk / W_Tk.abs().sqrt()
 
-            Sk_Tkinvh = ((1 - Dinv_k_diag) * ck_full_i.T).T @ Tkinvh
-            Mk = Dinv_k_diag * F_Phik + 1/sigma2 * Sk_Tkinvh @ (Sk_Tkinvh.T * F_Phik).sum(1)
+            Sk = ((1 - Dinv_k_diag) * ck_full_i.T).T
+            Sk_Tkinvh = Sk @ Tkinvh
+
+            Mk = Dinv_k_diag * G[k] + 1/sigma2 * Sk_Tkinvh @ (Sk_Tkinvh.T * G[k]).sum(1)
             M[k] = Mk
             # V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - torch.diag(Qk_Rkinvh @ Qk_Rkinvh.T))  #
             V[k] = 1 / (1/sigma2 + Delta_k_inv_diag - (Qk_Rkinvh ** 2).sum(1))  # (Qk_Rkinvh ** 2).sum(0, 1)

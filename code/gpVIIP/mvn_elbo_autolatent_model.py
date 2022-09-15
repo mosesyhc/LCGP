@@ -56,7 +56,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         self.lLmb = nn.Parameter(lLmb)
         if initlsigma2 or lsigma2 is None:
             lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F)**2).mean())
-        self.mse0 = lsigma2.item()
+        self.lmse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
         self.buildtime: float = 0.0
 
@@ -116,7 +116,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
         negelbo -= 1/2 * torch.log(V).sum()
 
-        negelbo += 8 * (lsigma2 + self.mse0 + 1)**2
+        negelbo += 12 * (lsigma2 - self.lmse0) ** 2
 
         return negelbo
 
