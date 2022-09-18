@@ -30,9 +30,11 @@ def negloglik_link(G, y, psi, Phi):
     return negloglik
 
 
+def negloglik_gp(llmb, lnug, theta, g):
+    C0 = cormat(theta, theta, llmb)
+    nug = torch.exp(lnug) / (1 + torch.exp(lnug))
 
-def negloglik_gp(llmb, theta, g):
-    C = cormat(theta, theta, llmb)
+    C = (1 - nug) * C0 + nug * torch.eye(theta.shape[0])
 
     W, V = torch.linalg.eigh(C)
     Vh = V / torch.sqrt(W.abs())
@@ -43,13 +45,10 @@ def negloglik_gp(llmb, theta, g):
 
     negloglik = 1/2 * torch.sum(torch.log(W.abs()))  # log-determinant
     negloglik += n/2 * torch.log(sig2hat)  # log of MLE of scale
-    # negloglik += 1/2 * torch.sum(fcenter ** 2 / sig2hat)  # quadratic term
 
     # llmb, lsigma2 regularization
     llmbreg = 10 * (llmb + 1) ** 2
     llmbreg[-1] = 15 * llmb[-1] ** 2
-
-    # print(1 / 2 * torch.sum(torch.log(W.abs())), n / 2 * torch.log(sig2hat), llmbreg.sum())
 
     negloglik += llmbreg.sum() #+ 5 * (lsigma2 + 10)**2
 

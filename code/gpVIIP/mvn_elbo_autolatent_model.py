@@ -44,6 +44,9 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             self.pcw = torch.ones(kap)
 
         self.M = torch.zeros(self.kap, self.n)
+        self.V = torch.full_like(self.M, torch.nan)
+        self.Cinvhs = torch.full((self.kap, self.n, self.n), torch.nan)
+
         self.theta = theta
         self.d = theta.shape[1]
         if initlLmb or lLmb is None:
@@ -52,10 +55,15 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             llmb = torch.cat((llmb, torch.Tensor([0])))
             lLmb = llmb.repeat(self.kap, 1)
             lLmb[:, -1] = torch.log(torch.var(self.G, 1))
+
         self.lLmbreg = lLmb.clone()
         self.lLmb = nn.Parameter(lLmb)
+
+        lnugGPs = torch.Tensor(-16 * torch.ones(self.kap))
+        self.lnugGPs = nn.Parameter(lnugGPs)
+
         if initlsigma2 or lsigma2 is None:
-            lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F)**2).mean())
+            lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F) ** 2).mean())
         self.lmse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
         self.buildtime: float = 0.0
@@ -64,37 +72,40 @@ class MVN_elbo_autolatent(jit.ScriptModule):
     def forward(self, theta0):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
+        lnugGPs = self.lnugGPs
 
         if self.clamping:
-            lLmb, lsigma2 = self.parameter_clamp(lLmb, lsigma2)
+            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
 
         M = self.M
+        Cinvhs = self.Cinvhs
         theta = self.theta
 
         kap = self.kap
-        n0 = theta0.shape[0]
 
+        n0 = theta0.shape[0]
         ghat = torch.zeros(kap, n0)
         for k in range(kap):
-            ck = cormat(theta0, theta, llmb=lLmb[k])
-            Ck = cormat(theta, theta, llmb=lLmb[k])
+            ck0 = cormat(theta0, theta, llmb=lLmb[k])
+            nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
+            ck = (1 - nug) * ck0
 
-            Wk, Uk = torch.linalg.eigh(Ck)
-            Ukh = Uk / torch.sqrt(Wk)
-            Ckinv_Mk = Ukh @ Ukh.T @ M[k]
+            Ckinvh = Cinvhs[k]
+            Ckinv_Mk = Ckinvh @ Ckinvh.T @ M[k]
 
             ghat[k] = ck @ Ckinv_Mk
 
         fhat = (self.Phi * self.pcw) @ ghat
         fhat = self.tx_F(fhat)
-        return fhat  #, ghat
+        return fhat  # , ghat
 
     def negelbo(self):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
+        lnugGPs = self.lnugGPs
 
         if self.clamping:
-            lLmb, lsigma2 = self.parameter_clamp(lLmb, lsigma2)
+            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
 
         F = self.F
         theta = self.theta
@@ -108,23 +119,25 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
         negelbo = 0
         for k in range(kap):
-            negloggp_k = negloglik_gp(llmb=lLmb[k], theta=theta, g=M[k])
+            negloggp_k = negloglik_gp(llmb=lLmb[k], lnug=lnugGPs[k], theta=theta, g=M[k])
             negelbo += negloggp_k
 
         residF = F - (self.Phi * self.pcw) @ M
         negelbo += m * n / 2 * lsigma2
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
-        negelbo -= 1/2 * torch.log(V).sum()
+        negelbo -= 1 / 2 * torch.log(V).sum()
 
-        negelbo += 4 * (lsigma2 - self.lmse0) ** 2
+        negelbo += 8 * (lsigma2 - self.lmse0) ** 2
 
         return negelbo
 
     def compute_MV(self):
         lsigma2 = self.lsigma2
         lLmb = self.lLmb
+        lnugGPs = self.lnugGPs
+
         if self.clamping:
-            lLmb, lsigma2 = self.parameter_clamp(lLmb, lsigma2)
+            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
 
         kap = self.kap
         theta = self.theta
@@ -135,15 +148,34 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
         M = torch.zeros(self.kap, self.n)
         V = torch.zeros(self.kap, self.n)
+
+        Cinvhs = torch.zeros(self.kap, self.n, self.n)  # Ukh @ Ukh.T == inv(Ck)
+        sig2gps = torch.zeros(self.kap)
+
         for k in range(kap):
-            C_k = cormat(theta, theta, lLmb[k])
+            C_k0 = cormat(theta, theta, lLmb[k])
+            nugk = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
+            C_k = (1 - nugk) * C_k0 + nugk * torch.eye(theta.shape[0])
+
             W_k, U_k = torch.linalg.eigh(C_k)
-            Winv_k = 1 / W_k
-            Mk = torch.linalg.solve(torch.eye(n) + sigma2 * U_k * Winv_k @ U_k.T, G[k])
+
+            Ckinvh = U_k / W_k.sqrt()
+            CkinvhGk = Ckinvh.T @ G[k]
+            sig2k = (n * (CkinvhGk ** 2).mean() + 10) / (n + 10)
+
+            Mk = torch.linalg.solve(torch.eye(n) + sigma2 / sig2k * Ckinvh @ Ckinvh.T, G[k])
+
             M[k] = Mk
-            V[k] = 1 / (1 / sigma2 + torch.diag((U_k * Winv_k) @ U_k.T))
+            V[k] = 1 / (1 / sigma2 + (Ckinvh ** 2 / sig2k).sum(1))
+
+            # save
+            Cinvhs[k] = Ckinvh
+            sig2gps[k] = sig2k
+
         self.M = M
         self.V = V
+        self.Cinvhs = Cinvhs
+        self.sig2gps = sig2gps
 
     def predictmean(self, theta0):
         with torch.no_grad():
@@ -155,7 +187,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         with torch.no_grad():
             self.compute_MV()
             theta = self.theta
-            lLmb, lsigma2 = self.parameter_clamp(self.lLmb, self.lsigma2)
+            lLmb, lsigma2, lnugGPs = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs)
 
             txPhi = (self.Phi * self.pcw * self.Fstd)
             V = self.V
@@ -164,20 +196,24 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             kap = self.kap
             m = self.m
 
-            predcov = torch.zeros(m, m, n0)
+            Cinvhs = self.Cinvhs
+            sig2gps = self.sig2gps
 
+            predcov = torch.zeros(m, m, n0)
             predcov_g = torch.zeros(kap, n0)
             for k in range(kap):
-                ck = cormat(theta0, theta, llmb=lLmb[k])
-                Ck = cormat(theta, theta, llmb=lLmb[k])
+                ck0 = cormat(theta0, theta, llmb=lLmb[k])
+                nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
+                ck = (1 - nug) * ck0
 
-                Wk, Uk = torch.linalg.eigh(Ck)
-                Ukh = Uk / torch.sqrt(Wk)
+                Ckinvh = Cinvhs[k]
 
-                ck_Ckinvh = ck @ Ukh
-                ck_Ckinv_Vkh = ck @ Ukh @ Ukh.T * torch.sqrt(V[k])
+                ck_Ckinvh = ck @ Ckinvh
+                ck_Ckinv_Vkh = ck @ Ckinvh @ Ckinvh.T * torch.sqrt(V[k])
 
-                predcov_g[k] = 1 - (ck_Ckinvh**2).sum(1) + (ck_Ckinv_Vkh**2).sum(1)
+                predcov_g[k] = sig2gps[k] * nug * (1 - (ck_Ckinvh ** 2).sum(1)) + \
+                                (ck_Ckinv_Vkh ** 2).sum(1)
+
 
             for i in range(n0):
                 predcov[:, :, i] = torch.exp(lsigma2) * torch.eye(m) + \
@@ -198,7 +234,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         with torch.no_grad():
             m, n = f0.shape
             fhat = self.predictmean(theta0)
-            return ((fhat - f0) ** 2).sum() / (m*n)
+            return ((fhat - f0) ** 2).sum() / (m * n)
 
     def test_rmse(self, theta0, f0):
         return torch.sqrt(self.test_mse(theta0=theta0, f0=f0))
@@ -206,7 +242,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
     def test_individual_error(self, theta0, f0):
         with torch.no_grad():
             fhat = self.predictmean(theta0)
-            return torch.sqrt((fhat - f0)**2).mean(0)
+            return torch.sqrt((fhat - f0) ** 2).mean(0)
 
     def standardize_F(self):
         if self.F is not None:
@@ -287,12 +323,13 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         return chi2arr
 
     @staticmethod
-    def parameter_clamp(lLmb, lsigma2):
+    def parameter_clamp(lLmb, lsigma2, lnugs):
         # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 0)))
+        lnugs = parameter_clamping(lnugs, torch.tensor((-20, -8)))
 
-        return lLmb, lsigma2
+        return lLmb, lsigma2, lnugs
 
     @staticmethod
     def __PCs(F, kap=None, threshold=0.99):
@@ -308,7 +345,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         Phi = Phi[:, :kap]
         S = S[:kap]
 
-        pcw = ((S**2).abs() / n).sqrt()
+        pcw = ((S ** 2).abs() / n).sqrt()
 
         G = (Phi / pcw).T @ F  # kap x n
         return G, Phi, pcw, kap

@@ -1,7 +1,7 @@
 import torch
-import torch.jit as jit
 import torch.nn as nn
-from matern_covmat import cov_sp, cormat
+import torch.jit as jit
+from matern_covmat import cormat, cov_sp
 from likelihood import negloglik_gp_sp
 from prediction import pred_gp_sp
 from hyperparameter_tuning import parameter_clamping
@@ -68,19 +68,24 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
             lLmb = llmb.repeat(self.kap, 1)
             lLmb[:, -1] = torch.log(torch.var(self.G, 1))
         self.lLmb = nn.Parameter(lLmb)
+
+        lnugGPs = torch.Tensor(-16 * torch.ones(self.kap))
+        self.lnugGPs = nn.Parameter(lnugGPs)
+
         if initlsigma2 or lsigma2 is None:
-            lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F)**2).mean())
-        self.mse0 = lsigma2.item()
-        self.lsigma2 = nn.Parameter(lsigma2)  # nn.Parameter(torch.tensor((-8,)), requires_grad=False)
+            lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F) ** 2).mean())
+        self.lmse0 = lsigma2.item()
+        self.lsigma2 = nn.Parameter(lsigma2)
         self.buildtime: float = 0.0
 
     # @jit.script_method
     def forward(self, theta0):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
+        lnugGPs = self.lnugGPs
 
         if self.clamping:
-            lLmb, lsigma2 = self.parameter_clamp(lLmb, lsigma2)
+            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
 
         M = self.M
         theta = self.theta
@@ -107,9 +112,10 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
     def negelbo(self):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
+        lnugGPs = self.lnugGPs
 
         if self.clamping:
-            lLmb, lsigma2 = self.parameter_clamp(lLmb, lsigma2)
+            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
 
         F = self.F
         theta = self.theta
@@ -130,19 +136,21 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
 
 
         residF = F - (self.Phi * self.pcw) @ M
-        negelbo = m * n / 2 * lsigma2
+        negelbo += m * n / 2 * lsigma2
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
-        negelbo -= 1/2 * torch.log(V).sum()
+        negelbo -= 1 / 2 * torch.log(V).sum()
 
-        negelbo += 8 * (lsigma2 - self.mse0)**2
+        negelbo += 8 * (lsigma2 - self.lmse0) ** 2
 
         return negelbo
 
     def compute_MV(self):
         lsigma2 = self.lsigma2
         lLmb = self.lLmb
+        lnugGPs = self.lnugGPs
+
         if self.clamping:
-            lLmb, lsigma2 = self.parameter_clamp(lLmb, lsigma2)
+            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
 
         kap = self.kap
         theta = self.theta
@@ -185,7 +193,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         with torch.no_grad():
             self.compute_MV()
             theta = self.theta
-            lLmb, lsigma2 = self.parameter_clamp(self.lLmb, self.lsigma2)
+            lLmb, lsigma2, lnugGPs = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs)
 
             txPhi = (self.Phi * self.pcw * self.Fstd)
             V = self.V
@@ -228,7 +236,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         with torch.no_grad():
             m, n = f0.shape
             fhat = self.predictmean(theta0)
-            return ((fhat - f0) ** 2).sum() / (m*n)
+            return ((fhat - f0) ** 2).sum() / (m * n)
 
     def test_rmse(self, theta0, f0):
         return torch.sqrt(self.test_mse(theta0=theta0, f0=f0))
@@ -236,7 +244,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
     def test_individual_error(self, theta0, f0):
         with torch.no_grad():
             fhat = self.predictmean(theta0)
-            return torch.sqrt((fhat - f0)**2).mean(0)
+            return torch.sqrt((fhat - f0) ** 2).mean(0)
 
     def standardize_F(self):
         if self.F is not None:
@@ -250,12 +258,13 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         return Fs * self.Fstd + self.Fmean
 
     @staticmethod
-    def parameter_clamp(lLmb, lsigma2):
+    def parameter_clamp(lLmb, lsigma2, lnugs):
         # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
-        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, -1)))
+        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 0)))
+        lnugs = parameter_clamping(lnugs, torch.tensor((-20, -8)))
 
-        return lLmb, lsigma2
+        return lLmb, lsigma2, lnugs
 
     def ip_choice(self, p, theta, choice_thetai):
         if choice_thetai == 'LHS':  # assume [0, 1]^d
@@ -288,7 +297,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         Phi = Phi[:, :kap]
         S = S[:kap]
 
-        pcw = ((S**2).abs() / n).sqrt()
+        pcw = ((S ** 2).abs() / n).sqrt()
 
         G = (Phi / pcw).T @ F  # kap x n
         return G, Phi, pcw, kap

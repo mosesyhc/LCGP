@@ -36,7 +36,7 @@ def pred_gp(llmb, lsigma2, theta, thetanew, g):
     return predmean, predvar
 
 
-def pred_gp_sp(llmb, theta, thetanew, thetai, g):
+def pred_gp_sp(llmb, lsigma2, theta, thetanew, thetai, g):
     '''
     Test in test_gp.py.
 

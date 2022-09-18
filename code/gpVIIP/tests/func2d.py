@@ -30,8 +30,8 @@ def forrester2008(x, noisy=True):
     y2 = forrester1d(y1, x, 0.5, 5, -5)
 
     if noisy:
-        e1 = np.random.normal(0, 3 * (x + 0.5) ** 2, x.shape)
-        e2 = np.random.normal(0, 3 * (x + 0.5) ** 2, x.shape)
+        e1 = np.random.normal(0, 2 * (x + 0.5) ** 2, x.shape)
+        e2 = np.random.normal(0, 2 * (x + 0.5) ** 2, x.shape)
 
         centerflag = (x > 0.45) & (x < 0.55)
         e1[centerflag] *= 3

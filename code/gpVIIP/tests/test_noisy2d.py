@@ -7,18 +7,18 @@ from optim_elbo import optim_elbo, optim_elbo_lbfgs
 plt.style.use(['science', 'grid'])
 
 def test_n(n):
-    # n1, n2 = (int(n*3/10), int(n*6/10))
-    # x = np.zeros(n)
-    # x[:n1] = np.random.uniform(0, 0.2, n1)
-    # x[n1:n2] = np.random.uniform(0.4, 0.6, n2 - n1)
-    # x[n2:] = np.random.uniform(0.7, 1.0, n - n2)
+    n1, n2 = (int(n*1/10), int(n*6/10))
+    x = np.zeros(n)
+    x[:n1] = np.random.uniform(0, 0.2, n1)
+    x[n1:n2] = np.random.uniform(0.4, 0.6, n2 - n1)
+    x[n2:] = np.random.uniform(0.7, 1.0, n - n2)
 
-    x = np.linspace(0, 1, n)
+    # x = np.linspace(0, 1, n)
 
     x = np.sort(x)
     f = forrester2008(x, noisy=True)
 
-    xtest = np.linspace(0, 1, 1000)
+    xtest = np.linspace(0, 1, 100)
     ftest = forrester2008(xtest, noisy=False)
 
 
@@ -48,40 +48,38 @@ def test_n(n):
     ##############################################
     model = MVN_elbo_autolatent(F=f, theta=x, kap=1, clamping=True)
 
-    print('train mse: {:.3E}, test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
+    print('train mse: {:.3f}, test mse: {:.3f}'.format(model.test_mse(theta0=x, f0=f),
                                                        model.test_mse(theta0=xtest, f0=ftest)))
 
-    model, niter, flag = optim_elbo_lbfgs(model, maxiter=200,
-                                          lr=1e-2, gtol=1e-3,
+    model, niter, flag = optim_elbo_lbfgs(model, maxiter=100,
+                                          lr=1e-1, gtol=1e-4,
                                           thetate=xtest, fte=ftest, verbose=False)
 
-    print('after training\ntrain mse: {:.3E}, '
-          'test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
+    print('after training\ntrain mse: {:.3f}, '
+          'test mse: {:.3f}'.format(model.test_mse(theta0=x, f0=f),
                                     model.test_mse(theta0=xtest, f0=ftest)))
+
+    print(model.lLmb)
 
     model.eval()
     predmean = model.predictmean(xtest)
     predstd = model.predictvar(xtest).sqrt()
 
-    lLmb, lsigma2 = model.parameter_clamp(model.lLmb, model.lsigma2)
-
-    # print(lLmb, lsigma2)
-    # print(model.lLmb.grad, model.lsigma2.grad)
-
-    # print(model.lsigma2)
+    emurmse = np.sqrt(((emumean - ftest.numpy()) ** 2).mean())
+    virmse = model.test_rmse(theta0=xtest, f0=ftest)
 
     emuchi2 = (((emumean - ftest.numpy()) / emustd)**2).mean()
     VIchi2 = (((predmean - ftest) / predstd)**2).mean()
     print('surmise chi2: {:.3f}'.format(emuchi2))
     print('VI chi2: {:.3f}'.format(VIchi2))
 
-    # plot(n, emupct, emumean, emustd,
-    #      model, predmean, predstd,
-    #      x, f,
-    #      xtest, ftest,
-    #      save=True)
+    plot(n, emupct[:, 0], emumean, emustd,
+         model, predmean, predstd,
+         x, f,
+         xtest, ftest,
+         save=True)
 
-    return emuchi2, VIchi2.numpy(), lsigma2.detach().numpy()
+    return emuchi2, VIchi2.numpy(), emurmse, virmse.numpy(), model.lnugGPs[0].detach().numpy()
 
 def plot(n, emupct, emumean, emustd,
          model, predmean, predstd,
@@ -94,7 +92,7 @@ def plot(n, emupct, emumean, emustd,
     ymin = np.min((np.min((emupct.T @ (emumean - 2*emustd))),
                    np.min(((model.Phi / model.pcw).T @ (predmean - 2*predstd)).numpy())))
 
-    fig, ax = plt.subplots(1, 2, figsize=(12, 4), sharey='True')
+    fig, ax = plt.subplots(1, 2, figsize=(12, 4), sharey='all')
     ax[0].plot(xtest, (emupct.T @ ftest.numpy()).T, linewidth=lw, label='True', color='k')
     ax[0].scatter(x, (emupct.T @ f.numpy()).T, label='Data', color='gray')
     ax[0].plot(xtest, (emupct.T @ emumean).T, linewidth=lw, label='Prediction', color='r')
@@ -118,20 +116,20 @@ def plot(n, emupct, emumean, emustd,
     plt.tight_layout()
     # plt.legend(fontsize=18)
     if save:
-        plt.savefig('compare_{:d}_lsigmaclamp2.png'.format(n), dpi=300)
+        plt.savefig('compare_{:d}_nonuniformx.png'.format(n), dpi=300)
 
     plt.close()
 
 if __name__ == '__main__':
     ns = [25, 50, 100, 250]
     res = []
-    for i in range(2):
+    for i in range(1):
         for n in ns:
-            emuchi2, vichi2, lsigma2 = test_n(n)
-            res.append((n, emuchi2, vichi2, lsigma2))
+            emuchi2, vichi2, emurmse, virmse, lnug0 = test_n(n)
+            res.append((n, emuchi2, vichi2, emurmse, virmse, lnug0))
 
-
-    import pandas as pd
-    df = pd.DataFrame(res, columns=('n', 'surmise', 'VI', 'lsigma2'))
-    print(df)
-    df.to_csv('noisy2d_chi2.csv')
+    #
+    # import pandas as pd
+    # df = pd.DataFrame(res, columns=('n', 'surmiseChi2', 'VIChi2', 'surmiseRMSE', 'VIRMSE', 'lnug0'))
+    # print(df)
+    # df.to_csv('noisy2d_chi2.csv')
