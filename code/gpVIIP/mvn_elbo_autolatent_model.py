@@ -9,7 +9,7 @@ from hyperparameter_tuning import parameter_clamping
 
 class MVN_elbo_autolatent(jit.ScriptModule):
     def __init__(self, F, theta,
-                 Phi=None, kap=None, pcthreshold=0.99,
+                 Phi=None, kap=None, pcthreshold=0.9999,
                  lLmb=None, lsigma2=None,
                  initlLmb=True, initlsigma2=True,
                  clamping=True):

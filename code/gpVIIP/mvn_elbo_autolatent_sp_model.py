@@ -3,14 +3,13 @@ import torch.nn as nn
 import torch.jit as jit
 from matern_covmat import cormat, cov_sp
 from likelihood import negloglik_gp_sp
-from prediction import pred_gp_sp
 from hyperparameter_tuning import parameter_clamping
 
 
 class MVN_elbo_autolatent_sp(jit.ScriptModule):
     def __init__(self, F, theta,
                  p=None, thetai=None,
-                 Phi=None, kap=None, pcthreshold=0.99,
+                 Phi=None, kap=None, pcthreshold=0.9999,
                  lLmb=None, lsigma2=None,
                  initlLmb=True, initlsigma2=True,
                  choice_thetai='LHS', clamping=True):
@@ -78,7 +77,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         self.lsigma2 = nn.Parameter(lsigma2)
         self.buildtime: float = 0.0
 
-    # @jit.script_method
+    @jit.script_method
     def forward(self, theta0):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
