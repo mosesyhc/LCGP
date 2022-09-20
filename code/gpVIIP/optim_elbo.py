@@ -1,11 +1,10 @@
 import torch
-import time
 from optim_rules import convergence_f, convergence_g, convergence_f_abs
 
 
 def optim_elbo_lbfgs(model,
-                     maxiter=500, lr=1e-3,
-                     gtol=None,
+                     maxiter=500, lr=1e-1,
+                     gtol=1e-2,
                      thetate=None, fte=None,
                      verbose=False):
 
@@ -28,47 +27,27 @@ def optim_elbo_lbfgs(model,
         print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f}'.format
               (epoch, 0, lr, loss, loss_prev - loss, model.test_mse(thetate, fte)))
     while True:
-        options = {'closure': closure, 'current_loss': loss, 'max_ls': 15}
+        options = {'closure': closure, 'current_loss': loss,
+                   'c1': 1e-2, 'c2': 0.7,
+                   'max_ls': 15, 'damping': True}
         loss, grad, lr, _, _, _, _, _ = optim.step(options)
 
         epoch += 1
         if epoch > maxiter:
             flag = 'MAX_ITER'
+            print('exit after maximum epoch {:d}'.format(epoch))
             break
         if epoch >= 10:
             if torch.max(torch.max(model.lLmb.grad.abs()), model.lsigma2.grad.abs()) <= gtol:
                 print('exit after epoch {:d}, GTOL <= {:.3E}'.format(epoch, gtol))
                 flag = 'G_CONV'
                 break
-        if verbose:
+        if verbose and thetate is not None and fte is not None:
             print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f}'.format
                   (epoch, grad.abs().mean(), lr, loss, loss_prev - loss, model.test_mse(thetate, fte)))
 
         with torch.no_grad():
             loss_prev = loss.clone()
-    # print(model.lLmb.grad)
-    # optim.zero_grad(set_to_none=True)
-    # model.lLmb.requires_grad = False
-    #
-    # optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
-    #
-    # epoch = 0
-    # while True:
-    #     options = {'closure': closure, 'current_loss': loss, 'max_ls': 15}
-    #     loss, grad, lr, _, _, _, _, _ = optim.step(options)
-    #
-    #     epoch += 1
-    #     if epoch > 100:
-    #         flag = 'MAX_ITER'
-    #         break
-    #     # if epoch >= 3:
-    #     if torch.max(model.lsigma2.grad.abs()) <= gtol:
-    #         print('exit after epoch {:d}, GTOL <= {:.3E}'.format(epoch, gtol))
-    #         flag = 'G_CONV'
-    #         break
-    #
-    #     print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f}'.format
-    #           (epoch, 0, lr, loss, loss_prev - loss, model.test_mse(thetate, fte)))
     return model, epoch, flag
 
 
