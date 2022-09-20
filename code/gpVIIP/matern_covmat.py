@@ -51,7 +51,7 @@ def cov_sp(theta, thetai, llmb, lnugi, lnugR=torch.tensor(-10,)):  # assuming x1
     '''
 
     c_full_i = cormat(theta, thetai, llmb=llmb)
-    C_i = cormat(thetai, thetai, llmb=llmb) + epsCi * torch.eye(thetai.shape[0])
+    C_i = cormat(thetai, thetai, llmb=llmb)
     # C_full_diag = cormat(theta, theta, llmb=llmb, diag_only=True)
 
     Wi, Ui = torch.linalg.eigh(C_i)
