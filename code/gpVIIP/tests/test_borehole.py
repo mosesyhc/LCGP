@@ -3,6 +3,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import torch
+from fayans_support import read_data, read_test_data
 from mvn_elbo_autolatent_model import MVN_elbo_autolatent
 from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
 from surmise.emulation import emulator
@@ -69,7 +70,8 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         del emu
 
     elif method == 'MVGP':
-        model = MVN_elbo_autolatent(F=ftr, theta=thetatr, clamping=True)
+        model = MVN_elbo_autolatent(F=ftr, theta=thetatr,
+                                    clamping=True)
         kap = model.kap
         model, niter, flag = optim_elbo_lbfgs(model,
                                               maxiter=100, lr=lr)
@@ -129,34 +131,27 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         )
 
 
+
 if __name__ == '__main__':
     import pathlib
-    res_dir = r'code/test_results/colin_comparison/surmise_MVGP_MVIP/'
-    if not pathlib.Path(res_dir).exists():
-        pathlib.Path(res_dir).mkdir(parents=True)
-    data_dir = r'code/data/colin_data/'
-    theta = pd.read_csv(data_dir + r'ExpandedRanges2_LHS1L_n1000_s0304_all_input.csv')
-    f = pd.read_csv(data_dir + r'ExpandedRanges2_LHS1L_n1000_s0304_all_output.csv')
-    theta = torch.tensor(theta.iloc[:, 1:].to_numpy())
-    f = torch.tensor(f.iloc[:, 1:].to_numpy()).T
+    res_dir = r'code/test_results/borehole_comparisons/surmise_MVGP_MVIP/'
+    dir = r'code/data/borehole_data/'
+    f, x, thetatr = read_data(dir)
 
-    # f = ((f.T - f.min(1).values) / (f.max(1).values - f.min(1).values)).T
-    # f = ((f.T - f.mean(1)) / f.std(1)).T
+    m, ntr = f.shape
+    fstd = f.std(1)
+    ftr = np.zeros_like(f)
+    for j in range(m):
+        ftr[j] = f[j] + np.random.normal(0, 0.2 * fstd[j], ntr)
 
-    # arbitrary x
-    m, n_all = f.shape
-    x = np.arange(m)
+    fte, thetate = read_test_data(dir)
 
-    ntr = 800
-    indtr = torch.randperm(n_all)[:ntr]
-    indte = np.setdiff1d(np.arange(n_all), indtr)
-    ftr = f[:, indtr]
-    thetatr = theta[indtr]
-    fte = f[:, indte]
-    thetate = theta[indte]
+    ftr = torch.tensor(ftr)
+    fte = torch.tensor(fte)
+    thetatr = torch.tensor(thetatr)
+    thetate = torch.tensor(thetate)
 
-
-    method_list = ['MVIP', 'MVGP', 'surmise']
+    method_list = ['surmise', 'MVIP', 'MVGP']
     n_list = [25, 50, 100, 250, 500]
     ip_frac_list = [1/8, 1/4, 1/2, 1]
 
