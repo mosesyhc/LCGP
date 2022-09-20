@@ -38,11 +38,12 @@ def cormat(x1, x2, llmb, diag_only:bool=False):
         return C
 
 
-def cov_sp(theta, thetai, llmb):  # assuming x1 = x2 = theta
+def cov_sp(theta, thetai, llmb, lnugi, lnugR=torch.tensor(-10,)):  # assuming x1 = x2 = theta
     '''
     Returns the Nystr{\"o}m approximation of a covariance matrix,
     its inverse, and the log of its determinant.
 
+    :param lnug:
     :param theta:
     :param thetai:
     :param llmb:
@@ -54,31 +55,22 @@ def cov_sp(theta, thetai, llmb):  # assuming x1 = x2 = theta
     # C_full_diag = cormat(theta, theta, llmb=llmb, diag_only=True)
 
     Wi, Ui = torch.linalg.eigh(C_i)
-    Ciinvh = Ui / Wi.abs().sqrt()
+    Ciinvh = Ui / Wi.sqrt()
     # C_iinv = Uih @ Uih.T   # Change
 
     Crh = c_full_i @ Ciinvh
     # C_r = c_full_i @ C_iinv @ c_full_i.T
 
-    nugconst0 = torch.tensor((-8,))
-    diag = 1 - (Crh ** 2).sum(1) + nugconst0.exp()  #
+    nug = lnugi.exp() / (1 + lnugi.exp())
+    diag = (1 - nug) * (1 - (Crh ** 2).sum(1)) + nug  #
     Delta_inv_diag = 1 / diag
 
-    R = C_i + (c_full_i.T * Delta_inv_diag) @ c_full_i
+    R = C_i + ((1 - nug) * c_full_i.T * Delta_inv_diag) @ c_full_i  # + lnugR.exp() * torch.ones(thetai.shape[0])
 
     WR, UR = torch.linalg.eigh(R)
     Rinvh = UR / WR.abs().sqrt()
 
-    # while W_R.min() < 1e-16:
-    #     nugconst0 += 1
-    #     diag = C_full_diag - (1 - torch.exp(torch.tensor((nugconst0,)))) * torch.diag(C_r)  #
-    #     Delta_inv_diag = 1 / diag
-    #
-    #     R = C_i + (c_full_i.T * Delta_inv_diag) @ c_full_i  # p x p
-    #
-    #     W_R, U_R = torch.linalg.eigh(R)
-
-    Q = (Delta_inv_diag * c_full_i.T).T
+    Q = (1 - nug).sqrt() * (Delta_inv_diag * c_full_i.T).T
     Q_Rinvh = Q @ Rinvh
     # Rinv_half = U_R @ torch.diag(torch.sqrt(1 / W_R)) @ U_R.T
     # Q_Rinvh = Delta_inv @ c_full_i @ R_invhalf
@@ -86,7 +78,5 @@ def cov_sp(theta, thetai, llmb):  # assuming x1 = x2 = theta
     # C_sp_inv = torch.diag(Delta_inv_diag) - Q_Rinvh @ Q_Rinvh.T
     # C_sp_inv = Delta_inv - Delta_inv @ c_full_i @ Rinv @ c_full_i.T @ Delta_inv  # improve to p x p matrices
 
-    logdet_C_sp = torch.log(WR).sum() - torch.log(Wi).sum() + torch.log(diag).sum()
-    # if torch.isnan(logdet_C_sp):
-    #     print('here')
+    logdet_C_sp = torch.log(WR.abs()).sum() - torch.log(Wi).sum() + torch.log(diag).sum()
     return Delta_inv_diag, Q_Rinvh, logdet_C_sp, c_full_i, C_i

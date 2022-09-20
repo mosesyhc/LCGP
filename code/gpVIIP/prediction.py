@@ -36,7 +36,7 @@ def pred_gp(llmb, lsigma2, theta, thetanew, g):
     return predmean, predvar
 
 
-def pred_gp_sp(llmb, lsigma2, theta, thetanew, thetai, g):
+def pred_gp_sp(llmb, lnug, theta, thetanew, thetai, g):
     '''
     Test in test_gp.py.
 
@@ -47,7 +47,7 @@ def pred_gp_sp(llmb, lsigma2, theta, thetanew, thetai, g):
     :return:
     '''
 
-    Delta_inv_diag, Q_half, _, _, _ = cov_sp(theta=theta, thetai=thetai, llmb=llmb)
+    Delta_inv_diag, Q_half, _, _, _ = cov_sp(theta=theta, thetai=thetai, llmb=llmb, lnugi=lnug)
 
     # C_inv = torch.diag(Lmb_inv_diag) - Q_half @ Q_half.T
 

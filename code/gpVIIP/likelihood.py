@@ -41,10 +41,10 @@ def negloglik_gp(llmb, lnug, theta, g):
     fcenter = Vh.T @ g
     n = g.shape[0]
 
-    sig2hat = (n * torch.mean(fcenter ** 2) + 10) / (n + 10)
+    tau2hat = (n * torch.mean(fcenter ** 2) + 10) / (n + 10)
 
     negloglik = 1/2 * torch.sum(torch.log(W.abs()))  # log-determinant
-    negloglik += n/2 * torch.log(sig2hat)  # log of MLE of scale
+    negloglik += n/2 * torch.log(tau2hat)  # log of MLE of scale
 
     # llmb, lsigma2 regularization
     llmbreg = 10 * (llmb + 1) ** 2
@@ -80,23 +80,16 @@ def negloglik_singlevar_gp(llmb, lsigma2, theta, g):
     return negloglik
 
 
-def negloglik_gp_sp(llmb, theta, thetai, g,
-                    Delta_inv_diag=None, QRinvh=None, logdet_C=None):
-    if Delta_inv_diag is None or QRinvh is None or logdet_C is None:
-        Delta_inv_diag, QRinvh, logdet_C, _, _ = cov_sp(theta, thetai, llmb)
+def negloglik_gp_sp(llmb, lnug, theta, thetai, g):
+    Delta_inv_diag, QRinvh, logdet_C, _, _ = cov_sp(theta, thetai, llmb, lnug)
 
     n = g.shape[0]
     QRinvh_g = (QRinvh.T * g).sum(1)
     quad = g @ (Delta_inv_diag * g) - (QRinvh_g ** 2).sum()
-
-    # if quad < 1e-8:
-    #     C = covmat(theta, theta, llmb)
-    #     quad = g @ torch.linalg.solve(C, g)
-
-    sig2hat = (quad + 10) / (n + 10)
+    tau2hat = (quad + 10) / (n + 10)
 
     negloglik = 1/2 * logdet_C  # log-determinant
-    negloglik += n/2 * torch.log(sig2hat)  # log of MLE of scale
+    negloglik += n/2 * torch.log(tau2hat)  # log of MLE of scale
     # negloglik += 1/2 * quad / sig2hat  # quadratic term
     # negloglik += 1/2 * torch.sum(((llmb - llmbregmean) / llmbregstd)**2)  # regularization of hyperparameter
 
@@ -105,9 +98,10 @@ def negloglik_gp_sp(llmb, theta, thetai, g,
     llmbreg[-1] = 25 * llmb[-1] ** 2
     negloglik += llmbreg.sum()
 
+    if torch.isnan(negloglik):
+        print('unstable')
+
     return negloglik #, Vh
-
-
 
 
 def negloglik_singlevar_gp_sp(llmb, lsigma2, theta, g):

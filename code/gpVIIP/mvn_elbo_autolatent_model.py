@@ -150,7 +150,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         V = torch.zeros(self.kap, self.n)
 
         Cinvhs = torch.zeros(self.kap, self.n, self.n)  # Ukh @ Ukh.T == inv(Ck)
-        sig2gps = torch.zeros(self.kap)
+        tau2gps = torch.zeros(self.kap)
 
         for k in range(kap):
             C_k0 = cormat(theta, theta, lLmb[k])
@@ -161,21 +161,21 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
             Ckinvh = U_k / W_k.sqrt()
             CkinvhGk = Ckinvh.T @ G[k]
-            sig2k = (n * (CkinvhGk ** 2).mean() + 10) / (n + 10)
+            tau2k = (n * (CkinvhGk ** 2).mean() + 10) / (n + 10)
 
-            Mk = torch.linalg.solve(torch.eye(n) + sigma2 / sig2k * Ckinvh @ Ckinvh.T, G[k])
+            Mk = torch.linalg.solve(torch.eye(n) + sigma2 / tau2k * Ckinvh @ Ckinvh.T, G[k])
 
             M[k] = Mk
-            V[k] = 1 / (1 / sigma2 + (Ckinvh ** 2 / sig2k).sum(1))
+            V[k] = 1 / (1 / sigma2 + (Ckinvh ** 2 / tau2k).sum(1))
 
             # save
             Cinvhs[k] = Ckinvh
-            sig2gps[k] = sig2k
+            tau2gps[k] = tau2k
 
         self.M = M
         self.V = V
         self.Cinvhs = Cinvhs
-        self.sig2gps = sig2gps
+        self.tau2gps = tau2gps
 
     def predictmean(self, theta0):
         with torch.no_grad():
@@ -197,7 +197,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
             m = self.m
 
             Cinvhs = self.Cinvhs
-            sig2gps = self.sig2gps
+            tau2gps = self.tau2gps
 
             predcov = torch.zeros(m, m, n0)
             predcov_g = torch.zeros(kap, n0)
@@ -211,7 +211,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
                 ck_Ckinvh = ck @ Ckinvh
                 ck_Ckinv_Vkh = ck @ Ckinvh @ Ckinvh.T * torch.sqrt(V[k])
 
-                predcov_g[k] = sig2gps[k] * nug * (1 - (ck_Ckinvh ** 2).sum(1)) + \
+                predcov_g[k] = tau2gps[k] * nug * (1 - (ck_Ckinvh ** 2).sum(1)) + \
                                 (ck_Ckinv_Vkh ** 2).sum(1)
 
 
@@ -341,7 +341,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         if kap is None:
             kap = int(torch.argwhere(v > threshold)[0][0] + 1)
 
-        assert Phi.shape[1] == m
+        assert Phi.shape[1] == min(m, n)
         Phi = Phi[:, :kap]
         S = S[:kap]
 
