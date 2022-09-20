@@ -131,7 +131,6 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         )
 
 
-
 if __name__ == '__main__':
     import pathlib
     res_dir = r'code/test_results/borehole_comparisons/surmise_MVGP_MVIP/'

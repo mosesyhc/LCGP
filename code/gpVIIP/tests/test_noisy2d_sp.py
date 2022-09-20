@@ -103,7 +103,7 @@ def plot(n, emupct, emumean, emustd,
     ax[0].set_title('PCGP', fontsize=30)
 
     ax[1].plot(xtest, ((model.Phi / model.pcw).T @ ftest).T, linewidth=lw, label='True', color='k')
-    ax[1].scatter(x, ((model.Phi / model.pcw).T @ f).T, label='Data', color='gray')
+    ax[1].scatter(x, model.M, label='Data', color='gray')
     ax[1].plot(xtest, ((model.Phi / model.pcw).T @ predmean).T, linewidth=lw, label='Prediction', color='r')
     ax[1].plot(xtest, ((model.Phi / model.pcw).T @ (predmean + 2*predstd)).T, linewidth=lw, linestyle='--', color='r')
     ax[1].plot(xtest, ((model.Phi / model.pcw).T @ (predmean - 2*predstd)).T, linewidth=lw, linestyle='--', color='r')
@@ -124,7 +124,7 @@ def plot(n, emupct, emumean, emustd,
 
 
 if __name__ == '__main__':
-    ns = [25, 50, 100, 250, 500, 1000]
+    ns = [25, 50, 100, 250]
     res = []
     for i in range(1):
         for n in ns:
