@@ -58,6 +58,9 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
             self.pcw = torch.ones(kap)
 
         self.M = torch.zeros(self.kap, self.n)
+        self.Delta_inv_diags = torch.zeros((self.kap, self.n))
+        self.QRinvhs = torch.zeros((self.kap, self.n, self.p))
+
         self.theta = theta
         self.d = theta.shape[1]
         if initlLmb or lLmb is None:
