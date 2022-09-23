@@ -48,7 +48,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         kap = model.kap
         with record_function("model_optim"):
             model, niter, flag = optim_elbo_lbfgs(model,
-                                                  maxiter=100, lr=lr)
+                                                  maxiter=6, lr=lr)
 
         time_tr1 = time.time()
         with record_function("model_pred"):
@@ -70,7 +70,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         kap = model.kap
         with record_function("model_optim"):
             model, niter, flag = optim_elbo_lbfgs(model,
-                                                  maxiter=100,
+                                                  maxiter=6,
                                                   lr=lr)
 
         time_tr1 = time.time()
