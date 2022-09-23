@@ -20,3 +20,7 @@ code/test_results/*/
 
 trace_json/
 *.pyc
+
+MVGP.json
+
+MVIP4.json
