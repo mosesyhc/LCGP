@@ -127,7 +127,7 @@ if __name__ == '__main__':
     thetatr = torch.tensor(thetatr)
     thetate = torch.tensor(thetate)
 
-    method_list = ['MVGP', 'MVIP']  # 'surmise', 'MVIP',
+    method_list = ['MVGP']  # 'surmise', 'MVIP', 'MVGP',
 
     save_csv = False
     # save_csv = False
@@ -143,7 +143,8 @@ if __name__ == '__main__':
     for method in method_list:
         print('rep: {:d}, method: {:s}, n: {:d}'.format(rep, method, n))
         if method == 'MVIP':
-            with profile(activities=[ProfilerActivity.CPU]) as profIP:
+            with profile(activities=[ProfilerActivity.CPU],
+                         profile_memory=True, record_shapes=True) as profIP:
                 test_single(method=method, n=n, seed=seed,
                             ftr=ftr_n, thetatr=thetatr_n,
                             fte=fte, thetate=thetate,
@@ -151,7 +152,8 @@ if __name__ == '__main__':
                             output_csv=save_csv)
             profIP.export_chrome_trace('MVIP4.json')
         else:
-            with profile(activities=[ProfilerActivity.CPU]) as profGP:
+            with profile(activities=[ProfilerActivity.CPU],
+                         profile_memory=True, record_shapes=True) as profGP:
                 test_single(method=method, n=n, seed=seed,
                             ftr=ftr_n, thetatr=thetatr_n,
                             fte=fte, thetate=thetate,
