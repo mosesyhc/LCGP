@@ -4,9 +4,16 @@ import torch.jit as jit
 from matern_covmat import cormat, cov_sp
 from likelihood import negloglik_gp_sp
 from hyperparameter_tuning import parameter_clamping
+from line_profiler_pycharm import profile
 
+JIT = False
+if JIT:
+    Module = jit.ScriptModule
+else:
+    Module = nn.Module
 
-class MVN_elbo_autolatent_sp(jit.ScriptModule):
+class MVN_elbo_autolatent_sp(Module):
+    @profile
     def __init__(self, F, theta,
                  p=None, thetai=None,
                  Phi=None, kap=None, pcthreshold=0.9999,
@@ -60,6 +67,8 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         self.M = torch.zeros(self.kap, self.n)
         self.Delta_inv_diags = torch.zeros((self.kap, self.n))
         self.QRinvhs = torch.zeros((self.kap, self.n, self.p))
+        self.Ciinvhs = torch.zeros((self.kap, self.p, self.p))
+        self.Rinvhs = torch.zeros((self.kap, self.p, self.p))
 
         self.theta = theta
         self.d = theta.shape[1]
@@ -80,7 +89,8 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         self.lsigma2 = nn.Parameter(lsigma2)
         self.buildtime: float = 0.0
 
-    @jit.script_method
+    # @jit.script_method
+    @profile
     def forward(self, theta0):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
@@ -92,26 +102,29 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         M = self.M
         Delta_inv_diags = self.Delta_inv_diags
         QRinvhs = self.QRinvhs
-        theta = self.theta
+        Rinvhs = self.Rinvhs
+        thetai = self.thetai
 
         kap = self.kap
 
         n0 = theta0.shape[0]
         ghat_sp = torch.zeros(kap, n0)
         for k in range(kap):
-            ck = cormat(theta0, theta, llmb=lLmb[k])
-            # nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
-            # ck = (1 - nug) * ck0
+            cki0 = cormat(theta0, thetai, llmb=lLmb[k])
+            nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
+            cki = (1 - nug) * cki0
 
             # C_sp_inv = torch.diag(Delta_inv_diag) - Q_Rinvh @ Q_Rinvh.T
-            Ckinv_Mk = (Delta_inv_diags[k] * M[k] - QRinvhs[k] @ (QRinvhs[k].T * M[k]).sum(1))
+            # Ckinv_Mk = (Delta_inv_diags[k] * M[k] - QRinvhs[k] @ (QRinvhs[k].T * M[k]).sum(1))
+            Ckinv_Mk = Rinvhs[k] @ (QRinvhs[k].T * M[k]).sum(1)
 
-            ghat_sp[k] = ck @ Ckinv_Mk
+            ghat_sp[k] = cki @ Ckinv_Mk
 
         fhat = (self.Phi * self.pcw) @ ghat_sp
         fhat = self.tx_F(fhat)
         return fhat
 
+    @profile
     def negelbo(self):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
@@ -152,6 +165,7 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
 
         return negelbo
 
+    @profile
     def compute_MV(self):
         lsigma2 = self.lsigma2
         lLmb = self.lLmb
@@ -173,14 +187,21 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
         tau2gps = torch.zeros(self.kap)
         Delta_inv_diags = torch.zeros((self.kap, self.n))
         QRinvhs = torch.zeros((self.kap, self.n, self.p))
+        Rinvhs = torch.zeros((self.kap, self.p, self.p))
+        Ciinvhs = torch.zeros((self.kap, self.p, self.p))
         for k in range(kap):
-            Delta_k_inv_diag, Qk_Rkinvh, \
+            Delta_k_inv_diag, Qk, Rkinvh, Qk_Rkinvh, \
                 logdet_Ck, ck_full_i, Ck_i = cov_sp(theta=theta, thetai=thetai, llmb=lLmb[k], lnugi=lnugGPs[k])
 
             n = G[k].shape[0]
             Qk_Rkinvh_g = (Qk_Rkinvh.T * G[k]).sum(1)
             quad = G[k] @ (Delta_k_inv_diag * G[k]) - (Qk_Rkinvh_g ** 2).sum()
             tau2k = (quad + 10) / (n + 10)
+
+            W_Cki, U_Cki = torch.linalg.eigh(Ck_i)
+            Ckiinvh = U_Cki / W_Cki.abs().sqrt()
+            Ciinvhs[k] = Ckiinvh
+
             rho2k = sigma2 / tau2k
 
             Dinv_k_diag = 1 / (1 + rho2k * Delta_k_inv_diag)
@@ -203,23 +224,29 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
             tau2gps[k] = tau2k
             Delta_inv_diags[k] = Delta_k_inv_diag
             QRinvhs[k] = Qk_Rkinvh
+            Rinvhs[k] = Rkinvh
 
         self.M = M
         self.V = V
         self.tau2gps = tau2gps
         self.Delta_inv_diags = Delta_inv_diags
         self.QRinvhs = QRinvhs
+        self.Ciinvhs = Ciinvhs
+        self.Rinvhs = Rinvhs
 
+    @profile
     def predictmean(self, theta0):
         with torch.no_grad():
             self.compute_MV()
             fhat = self.forward(theta0)
         return fhat
 
+    @profile
     def predictcov(self, theta0):
         with torch.no_grad():
             self.compute_MV()
             theta = self.theta
+            thetai = self.thetai
             lLmb, lsigma2, lnugGPs = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs)
 
             txPhi = (self.Phi * self.pcw * self.Fstd)
@@ -231,19 +258,31 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
 
             Delta_inv_diags = self.Delta_inv_diags
             QRinvhs = self.QRinvhs
+            Ciinvhs = self.Ciinvhs
+            Rinvhs = self.Rinvhs
             tau2gps = self.tau2gps
 
             predcov = torch.zeros(m, m, n0)
             predcov_g = torch.zeros(kap, n0)
             for k in range(kap):
-                ck = cormat(theta0, theta, llmb=lLmb[k])
                 nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
+                cki0 = cormat(theta0, thetai, llmb=lLmb[k])
+                cki = (1 - nug) * cki0
 
-                Ckinv = (Delta_inv_diags[k].diag() - QRinvhs[k] @ QRinvhs[k].T)
-                ck_Ckinv_ck = (1 - nug)**2 * (ck @ (Ckinv @ ck.T)).diag()
+                ck0 = cormat(theta0, theta, llmb=lLmb[k])
+                ck = (1 - nug) * ck0
+
+                Ckiinv = Ciinvhs[k]
+                Rkinvh = Rinvhs[k]
+
+                ck_Ckinv_ck = (cki @ (Ckiinv @ Ckiinv.T - Rkinvh @ Rkinvh.T) @ cki.T).diag()
+
+                Ckinv = Delta_inv_diags[k].diag() - QRinvhs[k] @ QRinvhs[k].T
+                # ck_Ckinv_ck = (ck @ Ckinv @ ck.T).diag()
+                #
                 ck_Ckinv_Vkh = (ck @ Ckinv) * V[k].sqrt()
 
-                predcov_g[k] = tau2gps[k] * nug * (1 - ck_Ckinv_ck) + \
+                predcov_g[k] = tau2gps[k] * (1 - ck_Ckinv_ck) + \
                                (ck_Ckinv_Vkh**2).sum(1)
 
             for i in range(n0):
@@ -285,6 +324,73 @@ class MVN_elbo_autolatent_sp(jit.ScriptModule):
 
     def tx_F(self, Fs):
         return Fs * self.Fstd + self.Fmean
+
+    @profile
+    def dss(self, theta0, f0, use_diag=False):
+        """
+        Returns the Dawid-Sebastani score averaged across test points.
+
+        :param theta0:
+        :param f0:
+        :return:
+        """
+        __score_single = self.__dss_single
+        if use_diag:
+            __score_single = self.__dss_single_diag
+
+        predmean = self.predictmean(theta0)
+        predcov = self.predictcov(theta0)
+
+        n0 = theta0.shape[0]
+
+        score = 0
+        for i in range(n0):
+            score += __score_single(f0[:, i], predmean[:, i], predcov[:, :, i])
+        score /= n0
+
+        return score
+
+    def chi2mean(self, theta0, f0):
+
+        predmean = self.predictmean(theta0)
+        predcov = self.predictcov(theta0)
+
+        n0 = theta0.shape[0]
+
+        chi2arr = torch.zeros(n0)
+
+        chi2 = 0
+        for i in range(n0):
+            chi2arr[i] = self.__single_chi2mean(f0[:, i], predmean[:, i], predcov[:, :, i])
+            chi2 += self.__single_chi2mean(f0[:, i], predmean[:, i], predcov[:, :, i])
+        chi2 /= n0
+
+        return chi2arr
+
+    @staticmethod
+    def __dss_single_diag(f, mu, Sigma):
+        r = f - mu
+        diagV = Sigma.diag()
+        score_single = torch.log(diagV).sum() + (r * r / diagV).sum()
+        # print('mse {:.6f}'.format((r**2).mean()))
+        # print('diag cov mean: {:.6f}'.format(diagV.mean()))
+        return score_single
+
+    @staticmethod
+    def __dss_single(f, mu, Sigma):  # Dawid-Sebastani score
+        r = f - mu
+        W, U = torch.linalg.eigh(Sigma)
+        r_Sinvh = r @ U * 1 / torch.sqrt(W)
+
+        score_single = torch.linalg.slogdet(Sigma).logabsdet + (r_Sinvh ** 2).sum()
+        return score_single
+
+    @staticmethod
+    def __single_chi2mean(f, mu, Sigma):
+        r = f - mu
+        diagV = torch.diag(Sigma)
+
+        return (torch.square(r / torch.sqrt(diagV))).mean()
 
     @staticmethod
     def parameter_clamp(lLmb, lsigma2, lnugs):
