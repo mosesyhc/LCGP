@@ -3,11 +3,17 @@ import torch.nn as nn
 import torch.jit as jit
 from matern_covmat import cormat
 from likelihood import negloglik_gp
-from prediction import pred_gp
 from hyperparameter_tuning import parameter_clamping
+from line_profiler_pycharm import profile
 
+JIT = False
+if JIT:
+    Module = jit.ScriptModule
+else:
+    Module = nn.Module
 
-class MVN_elbo_autolatent(jit.ScriptModule):
+class MVN_elbo_autolatent(Module):
+    @profile
     def __init__(self, F, theta,
                  Phi=None, kap=None, pcthreshold=0.9999,
                  lLmb=None, lsigma2=None,
@@ -68,7 +74,8 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         self.lsigma2 = nn.Parameter(lsigma2)
         self.buildtime: float = 0.0
 
-    @jit.script_method
+    # @jit.script_method
+    @profile
     def forward(self, theta0):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
@@ -99,6 +106,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         fhat = self.tx_F(fhat)
         return fhat  # , ghat
 
+    @profile
     def negelbo(self):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
@@ -131,6 +139,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
         return negelbo
 
+    @profile
     def compute_MV(self):
         lsigma2 = self.lsigma2
         lLmb = self.lLmb
@@ -177,12 +186,14 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         self.Cinvhs = Cinvhs
         self.tau2gps = tau2gps
 
+    @profile
     def predictmean(self, theta0):
         with torch.no_grad():
             self.compute_MV()
             fhat = self.forward(theta0)
         return fhat
 
+    @profile
     def predictcov(self, theta0):
         with torch.no_grad():
             self.compute_MV()
@@ -211,9 +222,8 @@ class MVN_elbo_autolatent(jit.ScriptModule):
                 ck_Ckinvh = ck @ Ckinvh
                 ck_Ckinv_Vkh = ck @ Ckinvh @ Ckinvh.T * torch.sqrt(V[k])
 
-                predcov_g[k] = tau2gps[k] * nug * (1 - (ck_Ckinvh ** 2).sum(1)) + \
+                predcov_g[k] = tau2gps[k] * (1 - (ck_Ckinvh ** 2).sum(1)) + \
                                 (ck_Ckinv_Vkh ** 2).sum(1)
-
 
             for i in range(n0):
                 predcov[:, :, i] = torch.exp(lsigma2) * torch.eye(m) + \
@@ -255,6 +265,7 @@ class MVN_elbo_autolatent(jit.ScriptModule):
     def tx_F(self, Fs):
         return Fs * self.Fstd + self.Fmean
 
+    @profile
     def dss(self, theta0, f0, use_diag=False):
         """
         Returns the Dawid-Sebastani score averaged across test points.
@@ -279,6 +290,23 @@ class MVN_elbo_autolatent(jit.ScriptModule):
 
         return score
 
+    def chi2mean(self, theta0, f0):
+
+        predmean = self.predictmean(theta0)
+        predcov = self.predictcov(theta0)
+
+        n0 = theta0.shape[0]
+
+        chi2arr = torch.zeros(n0)
+
+        chi2 = 0
+        for i in range(n0):
+            chi2arr[i] = self.__single_chi2mean(f0[:, i], predmean[:, i], predcov[:, :, i])
+            chi2 += self.__single_chi2mean(f0[:, i], predmean[:, i], predcov[:, :, i])
+        chi2 /= n0
+
+        return chi2arr
+
     @staticmethod
     def __dss_single_diag(f, mu, Sigma):
         r = f - mu
@@ -286,7 +314,6 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         score_single = torch.log(diagV).sum() + (r * r / diagV).sum()
         # print('mse {:.6f}'.format((r**2).mean()))
         # print('diag cov mean: {:.6f}'.format(diagV.mean()))
-        print('logdet: {:.6f}, quadratic: {:.6f}'.format(torch.log(diagV).sum(), (r * r / diagV).sum()))
         return score_single
 
     @staticmethod
@@ -304,23 +331,6 @@ class MVN_elbo_autolatent(jit.ScriptModule):
         diagV = torch.diag(Sigma)
 
         return (torch.square(r / torch.sqrt(diagV))).mean()
-
-    def chi2mean(self, theta0, f0):
-
-        predmean = self.predictmean(theta0)
-        predcov = self.predictcov(theta0)
-
-        n0 = theta0.shape[0]
-
-        chi2arr = torch.zeros(n0)
-
-        chi2 = 0
-        for i in range(n0):
-            chi2arr[i] = self.__single_chi2mean(f0[:, i], predmean[:, i], predcov[:, :, i])
-            chi2 += self.__single_chi2mean(f0[:, i], predmean[:, i], predcov[:, :, i])
-        chi2 /= n0
-
-        return chi2arr
 
     @staticmethod
     def parameter_clamp(lLmb, lsigma2, lnugs):
