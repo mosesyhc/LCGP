@@ -164,7 +164,7 @@ if __name__ == '__main__':
     fstd = f.std(1)
     ftr = np.zeros_like(f)
     for j in range(m):
-        ftr[j] = f[j] + np.random.normal(0, 0.2 * fstd[j], ntr)
+        ftr[j] = f[j] + np.random.normal(0, 0.5 * fstd[j], ntr)
 
     fte, thetate = read_test_data(dir)
 
