@@ -38,6 +38,25 @@ def rmse_w_surmise(emu, fte, thetate):
     return np.sqrt(emumse)
 
 
+def dss_surmise(emu, fte, thetate):
+    emupred = emu.predict(x=np.arange(fte.shape[0]), theta=thetate.numpy())
+    emumean = emupred.mean()
+    emucov = emupred.covx().transpose(0, 2, 1)
+
+    def __dss_single_diag(f, mu, diagS):
+        r = f - mu
+        score_single = np.log(diagS).sum() + (r * r / diagS).sum()
+        return score_single
+
+    n0 = thetate.shape[0]
+
+    score = 0
+    for i in range(n0):
+        score += __dss_single_diag(fte[:, i], emumean[:, i], emucov[:, :, i])
+    score /= n0
+
+    return score
+
 def test_single(method, n, seed, ftr, thetatr, fte, thetate,
                 rep=None, ip_frac=None,
                 output_csv=False):
@@ -65,7 +84,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         emupred = emu.predict(x=np.arange(fte.shape[0]),
                               theta=thetate)
         chi2 = chi2metric(emupred.mean(), np.sqrt(emupred.var()), fte)
-
+        dss = dss_surmise(emu, thetate=thetate, fte=fte)
         time_tr1 = time.time()
         del emu
 
@@ -74,9 +93,8 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
                                     clamping=True)
         kap = model.kap
         model, niter, flag = optim_elbo_lbfgs(model,
-                                              maxiter=100, lr=lr)
+                                              maxiter=0, lr=lr)
 
-        time_tr1 = time.time()
         model.compute_MV()
         rmsetr = model.test_rmse(thetatr, ftr).item()
         rmsete = model.test_rmse(thetate, fte).item()
@@ -84,7 +102,9 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         predmean = model.predictmean(thetate).detach().numpy()
         predstd = model.predictvar(thetate).sqrt().detach().numpy()
         chi2 = chi2metric(predmean, predstd, fte)
+        dss = model.dss(theta0=thetate, f0=fte, use_diag=True).item()
 
+        time_tr1 = time.time()
         del model
 
     elif method == 'MVIP':
@@ -94,10 +114,9 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
                                        clamping=True) #, thetai=thetai)
         kap = model.kap
         model, niter, flag = optim_elbo_lbfgs(model,
-                                              maxiter=100,
+                                              maxiter=0,
                                               lr=lr)
 
-        time_tr1 = time.time()
 
         rmsetr = model.test_rmse(thetatr, ftr).item()
         rmsete = model.test_rmse(thetate, fte).item()
@@ -105,7 +124,9 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         predmean = model.predictmean(thetate).detach().numpy()
         predstd = model.predictvar(thetate).sqrt().detach().numpy()
         chi2 = chi2metric(predmean, predstd, fte)
+        dss = model.dss(theta0=thetate, f0=fte, use_diag=True)
 
+        time_tr1 = time.time()
         del model
 
     res['method'] = method
@@ -123,6 +144,8 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
     res['testrmse'] = rmsete
     res['chi2'] = chi2
     res['kap'] = kap
+    res['dss'] = dss
+
 
     if output_csv:
         df = pd.DataFrame(res, index=[0])
@@ -133,7 +156,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
 
 if __name__ == '__main__':
     import pathlib
-    res_dir = r'code/test_results/borehole_comparisons/surmise_MVGP_MVIP/'
+    res_dir = r'code/test_results/surmise_MVGP_MVIP/testlp/'
     dir = r'code/data/borehole_data/'
     f, x, thetatr = read_data(dir)
 
@@ -150,11 +173,11 @@ if __name__ == '__main__':
     thetatr = torch.tensor(thetatr)
     thetate = torch.tensor(thetate)
 
-    method_list = ['surmise', 'MVIP', 'MVGP']
-    n_list = [25, 50, 100, 250, 500]
-    ip_frac_list = [1/8, 1/4, 1/2, 1]
+    method_list = ['MVIP', 'MVGP'] # 'surmise',
+    n_list = [100] #, 250, 500] # 25, 50] #
+    ip_frac_list = [1/2] # , 1] 1/8, 1/4,
 
-    nrep = 5
+    nrep = 1
     save_csv = True
     # save_csv = False
     for rep in np.arange(nrep):
