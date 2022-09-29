@@ -81,7 +81,7 @@ def negloglik_singlevar_gp(llmb, lsigma2, theta, g):
 
 
 def negloglik_gp_sp(llmb, lnug, theta, thetai, g):
-    Delta_inv_diag, QRinvh, logdet_C, _, _ = cov_sp(theta, thetai, llmb, lnug)
+    Delta_inv_diag, _, _, QRinvh, logdet_C, _, _ = cov_sp(theta, thetai, llmb, lnug)
 
     n = g.shape[0]
     QRinvh_g = (QRinvh.T * g).sum(1)
