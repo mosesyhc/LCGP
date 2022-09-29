@@ -1,7 +1,8 @@
 import torch
 from optim_rules import convergence_f, convergence_g, convergence_f_abs
+from line_profiler_pycharm import profile
 
-
+@profile
 def optim_elbo_lbfgs(model,
                      maxiter=500, lr=1e-1,
                      gtol=1e-2,
