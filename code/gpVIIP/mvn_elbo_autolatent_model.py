@@ -65,7 +65,7 @@ class MVN_elbo_autolatent(Module):
         self.lLmbreg = lLmb.clone()
         self.lLmb = nn.Parameter(lLmb)
 
-        lnugGPs = torch.Tensor(-16 * torch.ones(self.kap))
+        lnugGPs = torch.Tensor(-8 * torch.ones(self.kap))
         self.lnugGPs = nn.Parameter(lnugGPs)
 
         if initlsigma2 or lsigma2 is None:
@@ -337,12 +337,12 @@ class MVN_elbo_autolatent(Module):
         # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 0)))
-        lnugs = parameter_clamping(lnugs, torch.tensor((-20, -8)))
+        lnugs = parameter_clamping(lnugs, torch.tensor((-14, -6)))
 
         return lLmb, lsigma2, lnugs
 
     @staticmethod
-    def __PCs(F, kap=None, threshold=0.99):
+    def __PCs(F, kap=None, threshold=0.9999):
         m, n = F.shape
 
         Phi, S, _ = torch.linalg.svd(F, full_matrices=False)
