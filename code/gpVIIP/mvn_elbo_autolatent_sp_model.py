@@ -12,6 +12,7 @@ if JIT:
 else:
     Module = nn.Module
 
+
 class MVN_elbo_autolatent_sp(Module):
     @profile
     def __init__(self, F, theta,
@@ -100,7 +101,7 @@ class MVN_elbo_autolatent_sp(Module):
             lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
 
         M = self.M
-        Delta_inv_diags = self.Delta_inv_diags
+        # Delta_inv_diags = self.Delta_inv_diags
         QRinvhs = self.QRinvhs
         Rinvhs = self.Rinvhs
         thetai = self.thetai
@@ -286,8 +287,8 @@ class MVN_elbo_autolatent_sp(Module):
                                (ck_Ckinv_Vkh**2).sum(1)
 
             for i in range(n0):
-                predcov[:, :, i] = torch.exp(lsigma2) * torch.eye(m) + \
-                                   txPhi * predcov_g[:, i] @ txPhi.T
+                predcov[:, :, i] = txPhi * predcov_g[:, i] @ txPhi.T
+        #         torch.exp(lsigma2) * torch.eye(m) + \
         return predcov
 
     def predictvar(self, theta0):
