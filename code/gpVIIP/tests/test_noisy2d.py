@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from mvn_elbo_autolatent_model import MVN_elbo_autolatent
 from optim_elbo import optim_elbo, optim_elbo_lbfgs
 plt.style.use(['science', 'grid'])
+torch.set_default_dtype(torch.double)
 
 def test_n(n):
     n1, n2 = (int(n*1/10), int(n*6/10))
@@ -116,7 +117,7 @@ def plot(n, emupct, emumean, emustd,
     plt.tight_layout()
     # plt.legend(fontsize=18)
     if save:
-        plt.savefig('compare_{:d}_nonuniformx.png'.format(n), dpi=300)
+        plt.savefig('compare_{:d}.png'.format(n), dpi=300)
 
     plt.close()
 

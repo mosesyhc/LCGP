@@ -4,6 +4,7 @@ import torch
 import matplotlib.pyplot as plt
 from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
 from optim_elbo import optim_elbo, optim_elbo_lbfgs
+torch.set_default_dtype(torch.double)
 plt.style.use(['science', 'grid'])
 
 
