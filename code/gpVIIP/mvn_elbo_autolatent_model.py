@@ -66,7 +66,7 @@ class MVN_elbo_autolatent(Module):
         self.lLmb = nn.Parameter(lLmb)
 
         lnugGPs = torch.Tensor(-8 * torch.ones(self.kap))
-        self.lnugGPs = nn.Parameter(lnugGPs)
+        self.lnugGPs = nn.Parameter(lnugGPs) #, requires_grad=False)
 
         if initlsigma2 or lsigma2 is None:
             lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F) ** 2).mean())
@@ -212,6 +212,9 @@ class MVN_elbo_autolatent(Module):
 
             predcov = torch.zeros(m, m, n0)
             predcov_g = torch.zeros(kap, n0)
+
+            term1 = torch.zeros(kap, n0)
+            term2 = torch.zeros(kap, n0)
             for k in range(kap):
                 ck0 = cormat(theta0, theta, llmb=lLmb[k])
                 nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
@@ -225,9 +228,14 @@ class MVN_elbo_autolatent(Module):
                 predcov_g[k] = tau2gps[k] * (1 - (ck_Ckinvh ** 2).sum(1)) + \
                                 (ck_Ckinv_Vkh ** 2).sum(1)
 
+                term1[k] = tau2gps[k] * (1 - (ck_Ckinvh ** 2).sum(1))
+                term2[k] = (ck_Ckinv_Vkh**2).sum(1)
             for i in range(n0):
                 predcov[:, :, i] = txPhi * predcov_g[:, i] @ txPhi.T
                 # torch.exp(lsigma2) * torch.eye(m)
+
+            self.GPvarterm1 = term1
+            self.GPvarterm2 = term2
         return predcov
 
     def predictvar(self, theta0):
