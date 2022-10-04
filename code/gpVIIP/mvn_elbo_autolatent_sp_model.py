@@ -194,30 +194,37 @@ class MVN_elbo_autolatent_sp(Module):
             Delta_k_inv_diag, Qk, Rkinvh, Qk_Rkinvh, \
                 logdet_Ck, ck_full_i, Ck_i = cov_sp(theta=theta, thetai=thetai, llmb=lLmb[k], lnugi=lnugGPs[k])
 
-            n = G[k].shape[0]
-            Qk_Rkinvh_g = (Qk_Rkinvh.T * G[k]).sum(1)
-            quad = G[k] @ (Delta_k_inv_diag * G[k]) - (Qk_Rkinvh_g ** 2).sum()
-            tau2k = (quad + 10) / (n + 10)
-
             W_Cki, U_Cki = torch.linalg.eigh(Ck_i)
             Ckiinvh = U_Cki / W_Cki.abs().sqrt()
             Ciinvhs[k] = Ckiinvh
 
-            rho2k = sigma2 / tau2k
-
-            Dinv_k_diag = 1 / (1 + rho2k * Delta_k_inv_diag)
-            Drhoinv_k_diag = 1 / (1 / Delta_k_inv_diag + rho2k)
+            n = G[k].shape[0]
+            Qk_Rkinvh_g = (Qk_Rkinvh.T * G[k]).sum(1)
+            quad = G[k] @ (Delta_k_inv_diag * G[k]) - (Qk_Rkinvh_g ** 2).sum()
+            tau2k = (quad + 1) / (n + 1)
 
             nug = (lnugGPs[k].exp()) / (1 + lnugGPs[k].exp())
-            Tk = Ck_i + (1 - nug) * ck_full_i.T * Drhoinv_k_diag @ ck_full_i  #checked
 
-            W_Tk, U_Tk = torch.linalg.eigh(Tk)
-            Tkinvh = U_Tk / W_Tk.abs().sqrt()
+            Mk = torch.zeros(self.n)
+            for kk in range(10):
+                rho2k = sigma2 / tau2k
 
-            Sk = (1 - nug).sqrt() * (Drhoinv_k_diag * ck_full_i.T).T
-            Sk_Tkinvh = Sk @ Tkinvh
+                Dinv_k_diag = 1 / (1 + rho2k * Delta_k_inv_diag)
+                Drhoinv_k_diag = 1 / (1 / Delta_k_inv_diag + rho2k)
 
-            Mk = Dinv_k_diag * G[k] + rho2k * Sk_Tkinvh @ (Sk_Tkinvh.T * G[k]).sum(1)
+                Tk = Ck_i + (1 - nug) * ck_full_i.T * Drhoinv_k_diag @ ck_full_i  #checked
+
+                W_Tk, U_Tk = torch.linalg.eigh(Tk)
+                Tkinvh = U_Tk / W_Tk.abs().sqrt()
+
+                Sk = (1 - nug).sqrt() * (Drhoinv_k_diag * ck_full_i.T).T
+                Sk_Tkinvh = Sk @ Tkinvh
+
+                Mk = Dinv_k_diag * G[k] + rho2k * Sk_Tkinvh @ (Sk_Tkinvh.T * G[k]).sum(1)
+
+                Qk_Rkinvh_Mk = (Qk_Rkinvh.T * Mk).sum(1)
+                quadM = Mk @ (Delta_k_inv_diag * Mk) - (Qk_Rkinvh_Mk ** 2).sum()
+                tau2k = (quadM + 1) / (n + 1)
 
             M[k] = Mk
             V[k] = 1 / (1/sigma2 + (Delta_k_inv_diag - (Qk_Rkinvh ** 2).sum(1)) / tau2k)
@@ -406,7 +413,7 @@ class MVN_elbo_autolatent_sp(Module):
         # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 1)))
-        lnugs = parameter_clamping(lnugs, torch.tensor((-14, -6)))
+        lnugs = parameter_clamping(lnugs, torch.tensor((-14, -8)))
 
         return lLmb, lsigma2, lnugs
 

@@ -72,6 +72,7 @@ class MVN_elbo_autolatent(Module):
             lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F) ** 2).mean())
         self.lmse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
+        self.tau2gps = torch.zeros(self.kap)
         self.buildtime: float = 0.0
 
     # @jit.script_method
@@ -170,9 +171,14 @@ class MVN_elbo_autolatent(Module):
 
             Ckinvh = U_k / W_k.sqrt()
             CkinvhGk = Ckinvh.T @ G[k]
-            tau2k = (n * (CkinvhGk ** 2).mean() + 10) / (n + 10)
 
-            Mk = torch.linalg.solve(torch.eye(n) + sigma2 / tau2k * Ckinvh @ Ckinvh.T, G[k])
+            Mk = torch.zeros(self.n)
+            tau2k = (n * (CkinvhGk ** 2).mean() + 1) / (n + 1)
+            for kk in range(10):
+                Mk = torch.linalg.solve(torch.eye(n) + sigma2 / tau2k * Ckinvh @ Ckinvh.T, G[k])
+                tau2k = (n * ((Ckinvh.T @ Mk)**2).mean() + 1) / (n + 1)
+            #     print(tau2k)
+            # print('\n')
 
             M[k] = Mk
             V[k] = 1 / (1 / sigma2 + (Ckinvh ** 2).sum(1) / tau2k)
@@ -345,7 +351,7 @@ class MVN_elbo_autolatent(Module):
         # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 0)))
-        lnugs = parameter_clamping(lnugs, torch.tensor((-14, -6)))
+        lnugs = parameter_clamping(lnugs, torch.tensor((-14, -8)))
 
         return lLmb, lsigma2, lnugs
 
