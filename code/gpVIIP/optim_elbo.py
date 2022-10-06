@@ -39,7 +39,7 @@ def optim_elbo_lbfgs(model,
             print('exit after maximum epoch {:d}'.format(epoch))
             break
         if epoch >= 10:
-            if torch.max(torch.max(model.lLmb.grad.abs()), model.lsigma2.grad.abs()) <= gtol:
+            if grad.abs().max() <= gtol:
                 print('exit after epoch {:d}, GTOL <= {:.3E}'.format(epoch, gtol))
                 flag = 'G_CONV'
                 break

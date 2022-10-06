@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.jit as jit
-from matern_covmat import cormat, cov_sp
+from matern_covmat import covmat, cov_sp
 from likelihood import negloglik_gp_sp
 from hyperparameter_tuning import parameter_clamping
 from line_profiler_pycharm import profile
@@ -111,7 +111,7 @@ class MVN_elbo_autolatent_sp(Module):
         n0 = theta0.shape[0]
         ghat_sp = torch.zeros(kap, n0)
         for k in range(kap):
-            cki0 = cormat(theta0, thetai, llmb=lLmb[k])
+            cki0 = covmat(theta0, thetai, llmb=lLmb[k])
             nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
             cki = (1 - nug) * cki0
 
@@ -192,7 +192,7 @@ class MVN_elbo_autolatent_sp(Module):
         Ciinvhs = torch.zeros((self.kap, self.p, self.p))
         for k in range(kap):
             Delta_k_inv_diag, Qk, Rkinvh, Qk_Rkinvh, \
-                logdet_Ck, ck_full_i, Ck_i = cov_sp(theta=theta, thetai=thetai, llmb=lLmb[k], lnugi=lnugGPs[k])
+                logdet_Ck, ck_full_i, Ck_i = cov_sp(theta=theta, thetai=thetai, llmb=lLmb[k], lnug=lnugGPs[k])
 
             W_Cki, U_Cki = torch.linalg.eigh(Ck_i)
             Ckiinvh = U_Cki / W_Cki.abs().sqrt()
@@ -277,10 +277,10 @@ class MVN_elbo_autolatent_sp(Module):
             predcov_g = torch.zeros(kap, n0)
             for k in range(kap):
                 nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
-                cki0 = cormat(theta0, thetai, llmb=lLmb[k])
+                cki0 = covmat(theta0, thetai, llmb=lLmb[k])
                 cki = (1 - nug) * cki0
 
-                ck0 = cormat(theta0, theta, llmb=lLmb[k])
+                ck0 = covmat(theta0, theta, llmb=lLmb[k])
                 ck = (1 - nug) * ck0
 
                 Ckiinv = Ciinvhs[k]

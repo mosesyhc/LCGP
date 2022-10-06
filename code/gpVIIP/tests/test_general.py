@@ -22,7 +22,7 @@ def build_surmise(ftr, xtr):
     from surmise.emulation import emulator
     emu = emulator(x=np.arange(ftr.shape[0]),
                    theta=xtr.numpy(),
-                   f=ftr.numpy(), method='PCGPwM',
+                   f=ftr.numpy(), method='PCGP',
                    args={'warnings': True})
 
     return emu

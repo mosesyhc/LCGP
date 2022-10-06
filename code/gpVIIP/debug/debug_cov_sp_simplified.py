@@ -81,7 +81,7 @@ model.double()
 
 ###########################################################
 ### compare full covariance vs sparse covariance results
-from matern_covmat import cormat
+from matern_covmat import covmat
 from mvn_elbo_autolatent_sp_model import cov_sp
 
 # C = covmat(theta[:m], theta[:m], Lmb[0])
