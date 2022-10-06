@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.jit as jit
-from matern_covmat import cormat
+from matern_covmat import covmat
 from likelihood import negloglik_gp
 from hyperparameter_tuning import parameter_clamping
 from line_profiler_pycharm import profile
@@ -65,14 +65,15 @@ class MVN_elbo_autolatent(Module):
         self.lLmbreg = lLmb.clone()
         self.lLmb = nn.Parameter(lLmb)
 
-        lnugGPs = torch.Tensor(-8 * torch.ones(self.kap))
-        self.lnugGPs = nn.Parameter(lnugGPs) #, requires_grad=False)
+        self.lnugGPs = nn.Parameter(torch.Tensor(-14 * torch.ones(self.kap)))
+        self.ltau2GPs = nn.Parameter(torch.Tensor(torch.zeros(self.kap)))
 
         if initlsigma2 or lsigma2 is None:
-            lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F) ** 2).mean())
+            Fhat = (self.Phi * self.pcw) @ self.G
+            lsigma2 = torch.log(((Fhat - self.F) ** 2).mean())
         self.lmse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
-        self.tau2gps = torch.zeros(self.kap)
+
         self.buildtime: float = 0.0
 
     # @jit.script_method
@@ -81,9 +82,10 @@ class MVN_elbo_autolatent(Module):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
         lnugGPs = self.lnugGPs
+        ltau2GPs = self.ltau2GPs
 
         if self.clamping:
-            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
+            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
 
         M = self.M
         Cinvhs = self.Cinvhs
@@ -94,9 +96,7 @@ class MVN_elbo_autolatent(Module):
         n0 = theta0.shape[0]
         ghat = torch.zeros(kap, n0)
         for k in range(kap):
-            ck0 = cormat(theta0, theta, llmb=lLmb[k])
-            nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
-            ck = (1 - nug) * ck0
+            ck = covmat(theta0, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
 
             Ckinvh = Cinvhs[k]
             Ckinv_Mk = Ckinvh @ Ckinvh.T @ M[k]
@@ -112,9 +112,10 @@ class MVN_elbo_autolatent(Module):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
         lnugGPs = self.lnugGPs
+        ltau2GPs = self.ltau2GPs
 
         if self.clamping:
-            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
+            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
 
         F = self.F
         theta = self.theta
@@ -128,13 +129,19 @@ class MVN_elbo_autolatent(Module):
 
         negelbo = 0
         for k in range(kap):
-            negloggp_k = negloglik_gp(llmb=lLmb[k], lnug=lnugGPs[k], theta=theta, g=M[k])
+            negloggp_k, Cinvkdiag = negloglik_gp(llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], theta=theta, g=M[k])
             negelbo += negloggp_k
+            negelbo += 1 / 2 * (Cinvkdiag * V[k]).sum()
 
         residF = F - (self.Phi * self.pcw) @ M
         negelbo += m * n / 2 * lsigma2
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
         negelbo -= 1 / 2 * torch.log(V).sum()
+        negelbo += 1 / (2 * lsigma2.exp()) * V.sum()
+
+        # print(negloggp_k.item(), 1 / 2 * (Cinvkdiag * V[k]).sum().item(),
+        #       m * n / 2 * lsigma2.item(), 1 / (2 * lsigma2.exp().item()) * (residF ** 2).sum().item(),
+        #       - 1 / 2 * torch.log(V).sum().item(), 1 / (2 * lsigma2.exp().item()) * V.sum().item())
 
         negelbo += 8 * (lsigma2 - self.lmse0) ** 2
 
@@ -145,9 +152,10 @@ class MVN_elbo_autolatent(Module):
         lsigma2 = self.lsigma2
         lLmb = self.lLmb
         lnugGPs = self.lnugGPs
+        ltau2GPs = self.ltau2GPs
 
         if self.clamping:
-            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
+            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
 
         kap = self.kap
         theta = self.theta
@@ -159,38 +167,24 @@ class MVN_elbo_autolatent(Module):
         M = torch.zeros(self.kap, self.n)
         V = torch.zeros(self.kap, self.n)
 
-        Cinvhs = torch.zeros(self.kap, self.n, self.n)  # Ukh @ Ukh.T == inv(Ck)
-        tau2gps = torch.zeros(self.kap)
-
+        Cinvhs = torch.zeros(self.kap, self.n, self.n)
         for k in range(kap):
-            C_k0 = cormat(theta, theta, lLmb[k])
-            nugk = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
-            C_k = (1 - nugk) * C_k0 + nugk * torch.eye(theta.shape[0])
+            C_k = covmat(theta, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
 
             W_k, U_k = torch.linalg.eigh(C_k)
 
             Ckinvh = U_k / W_k.sqrt()
-            CkinvhGk = Ckinvh.T @ G[k]
 
-            Mk = torch.zeros(self.n)
-            tau2k = (n * (CkinvhGk ** 2).mean() + 1) / (n + 1)
-            for kk in range(10):
-                Mk = torch.linalg.solve(torch.eye(n) + sigma2 / tau2k * Ckinvh @ Ckinvh.T, G[k])
-                tau2k = (n * ((Ckinvh.T @ Mk)**2).mean() + 1) / (n + 1)
-            #     print(tau2k)
-            # print('\n')
-
+            Mk = torch.linalg.solve(torch.eye(n) + sigma2 * Ckinvh @ Ckinvh.T, G[k])
             M[k] = Mk
-            V[k] = 1 / (1 / sigma2 + (Ckinvh ** 2).sum(1) / tau2k)
+            V[k] = 1 / (1 / sigma2 + (Ckinvh ** 2).sum(1))
 
             # save
             Cinvhs[k] = Ckinvh
-            tau2gps[k] = tau2k
 
         self.M = M
         self.V = V
         self.Cinvhs = Cinvhs
-        self.tau2gps = tau2gps
 
     @profile
     def predictmean(self, theta0):
@@ -204,7 +198,7 @@ class MVN_elbo_autolatent(Module):
         with torch.no_grad():
             self.compute_MV()
             theta = self.theta
-            lLmb, lsigma2, lnugGPs = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs)
+            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs, self.ltau2GPs)
 
             txPhi = (self.Phi * self.pcw * self.Fstd)
             V = self.V
@@ -214,7 +208,6 @@ class MVN_elbo_autolatent(Module):
             m = self.m
 
             Cinvhs = self.Cinvhs
-            tau2gps = self.tau2gps
 
             predcov = torch.zeros(m, m, n0)
             predcov_g = torch.zeros(kap, n0)
@@ -222,19 +215,17 @@ class MVN_elbo_autolatent(Module):
             term1 = torch.zeros(kap, n0)
             term2 = torch.zeros(kap, n0)
             for k in range(kap):
-                ck0 = cormat(theta0, theta, llmb=lLmb[k])
-                nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
-                ck = (1 - nug) * ck0
-
+                ck0 = covmat(theta0, theta0, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], diag_only=True)
+                ck = covmat(theta0, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
                 Ckinvh = Cinvhs[k]
 
                 ck_Ckinvh = ck @ Ckinvh
                 ck_Ckinv_Vkh = ck @ Ckinvh @ Ckinvh.T * torch.sqrt(V[k])
 
-                predcov_g[k] = tau2gps[k] * (1 - (ck_Ckinvh ** 2).sum(1)) + \
-                                (ck_Ckinv_Vkh ** 2).sum(1)
+                predcov_g[k] = (ck0 - (ck_Ckinvh ** 2).sum(1)) + \
+                               (ck_Ckinv_Vkh ** 2).sum(1)
 
-                term1[k] = tau2gps[k] * (1 - (ck_Ckinvh ** 2).sum(1))
+                term1[k] = (ck0 - (ck_Ckinvh ** 2).sum(1))
                 term2[k] = (ck_Ckinv_Vkh**2).sum(1)
             for i in range(n0):
                 predcov[:, :, i] = txPhi * predcov_g[:, i] @ txPhi.T
@@ -347,13 +338,14 @@ class MVN_elbo_autolatent(Module):
         return (torch.square(r / torch.sqrt(diagV))).mean()
 
     @staticmethod
-    def parameter_clamp(lLmb, lsigma2, lnugs):
+    def parameter_clamp(lLmb, lsigma2, lnugs, ltau2s):
         # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
-        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 0)))
-        lnugs = parameter_clamping(lnugs, torch.tensor((-14, -8)))
+        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 3)))
+        lnugs = parameter_clamping(lnugs, torch.tensor((-16, -8)))
+        ltau2s = parameter_clamping(ltau2s, torch.tensor((-4, 4)))
 
-        return lLmb, lsigma2, lnugs
+        return lLmb, lsigma2, lnugs, ltau2s
 
     @staticmethod
     def __PCs(F, kap=None, threshold=0.9999):
