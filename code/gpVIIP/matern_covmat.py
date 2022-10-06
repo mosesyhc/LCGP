@@ -1,44 +1,40 @@
 import torch
-from hyperparameter_tuning import parameter_clamping
 
 
-def cormat(x1, x2, llmb, diag_only:bool=False):
-    '''
-    :param diag_only:
-    :param x1:
-    :param x2:
-    :param llmb:
-    :return:
-    '''
-
+def covmat(x1, x2, llmb, lnug, ltau2, diag_only:bool=False):
     # assumes tensors are supplied
     assert x1.dim() == 2, 'input x1 should be 2-dimensional, (n_param, dim_param)'
     assert x2.dim() == 2, 'input x2 should be 2-dimensional, (n_param, dim_param)'
     d = x1.shape[1]
 
-    x1scal = x1 / torch.exp(llmb[:-1])
-    x2scal = x2 / torch.exp(llmb[:-1])
-
     if diag_only:
         assert torch.isclose(x1, x2).all(), 'diag_only should only be called when x1 and x2 are identical.'
         c = torch.ones(x1.shape[0])  # / (1 + torch.exp(llmb[-1]))
-        return c
+        return ltau2.exp() * c
 
     else:
         V = torch.zeros((x1.shape[0], x2.shape[0]))
-        C = torch.ones((x1.shape[0], x2.shape[0])) / (1 + torch.exp(llmb[-1]))
+        C0 = torch.ones((x1.shape[0], x2.shape[0])) / (1 + torch.exp(llmb[-1]))
 
+        x1scal = x1 / torch.exp(llmb[:-1])
+        x2scal = x2 / torch.exp(llmb[:-1])
         for j in range(d):
-            S = torch.abs(x1scal[:, j].reshape(-1, 1) - x2scal[:, j])
-            C *= (1 + S)
+            S = torch.abs(x1scal[:, j].reshape(-1, 1) - x2scal[:, j])  # outer diff
+            C0 *= (1 + S)
             V -= S
 
-        C *= torch.exp(V)
-        C += torch.exp(llmb[-1]) / (1 + torch.exp(llmb[-1]))
-        return C
+        C0 *= torch.exp(V)
+        C0 += torch.exp(llmb[-1]) / (1 + torch.exp(llmb[-1]))
+
+        nug = lnug.exp() / (1 + lnug.exp())
+        if torch.equal(x1, x2):
+            C = (1 - nug) * C0 + nug * torch.eye(x1.shape[0])
+        else:
+            C = (1 - nug) * C0
+        return ltau2.exp() * C
 
 
-def cov_sp(theta, thetai, llmb, lnugi, lnugR=torch.tensor(-10,)):  # assuming x1 = x2 = theta
+def cov_sp(theta, thetai, llmb, lnug, ltau2):  # assuming x1 = x2 = theta
     '''
     Returns the Nystr{\"o}m approximation of a covariance matrix,
     its inverse, and the log of its determinant.
@@ -50,8 +46,8 @@ def cov_sp(theta, thetai, llmb, lnugi, lnugR=torch.tensor(-10,)):  # assuming x1
     :return:
     '''
 
-    c_full_i = cormat(theta, thetai, llmb=llmb)
-    C_i = cormat(thetai, thetai, llmb=llmb)
+    c_full_i = covmat(theta, thetai, llmb=llmb)
+    C_i = covmat(thetai, thetai, llmb=llmb)
     # C_full_diag = cormat(theta, theta, llmb=llmb, diag_only=True)
 
     Wi, Ui = torch.linalg.eigh(C_i)
@@ -61,7 +57,7 @@ def cov_sp(theta, thetai, llmb, lnugi, lnugR=torch.tensor(-10,)):  # assuming x1
     Crh = c_full_i @ Ciinvh
     # C_r = c_full_i @ C_iinv @ c_full_i.T
 
-    nug = lnugi.exp() / (1 + lnugi.exp())
+    nug = lnug.exp() / (1 + lnug.exp())
     diag = (1 - nug) * (1 - (Crh ** 2).sum(1)) + nug  #
     Delta_inv_diag = 1 / diag
 
