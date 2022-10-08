@@ -107,7 +107,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         predmean = emupred.mean()
         predcov = emupred.covx().transpose(2, 0, 1)
         predstd = np.sqrt(emupred.var())
-        sigma2 = 0
+        predaddvar = 0
 
         time_tr1 = time.time()
 
@@ -127,8 +127,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         for i in range(n0):
             predvar[:, i] = np.diag(predcov[:, :, i])
         predstd = np.sqrt(predvar)
-
-        sigma2 = model.lsigma2.exp().detach().numpy()
+        predaddvar = model.predictaddvar().detach().numpy()
         time_tr1 = time.time()
 
     elif method == 'MVIP':
@@ -150,7 +149,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         for i in range(n0):
             predvar[:, i] = np.diag(predcov[:, :, i])
         predstd = np.sqrt(predvar)
-        sigma2 = model.lsigma2.exp().detach().numpy()
+        predaddvar = model.predictaddvar().detach().numpy()
         time_tr1 = time.time()
 
     else:
@@ -166,7 +165,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
     chi2 = chi2metric(predmean=predmean, predstd=predstd, fte=fte)
 
     ccover, cintwid, cintscore = interval_stats(mean=predmean, stdev=predstd, testf=fte0)
-    pcover, pintwid, pintscore = interval_stats(mean=predmean, stdev=np.sqrt((predstd**2 + sigma2)), testf=fte)
+    pcover, pintwid, pintscore = interval_stats(mean=predmean, stdev=np.sqrt(((predstd**2).T + predaddvar).T), testf=fte)
 
     res['method'] = method
     res['rep'] = rep
@@ -203,7 +202,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
 
 if __name__ == '__main__':
     from pathlib import Path
-    res_dir = r'code/test_results/surmise_MVGP_MVIP/20220929/'
+    res_dir = r'code/test_results/surmise_MVGP_MVIP/20221007/'
     Path(res_dir).mkdir(parents=True, exist_ok=True)
 
     dir = r'code/data/borehole_data/'
@@ -217,7 +216,7 @@ if __name__ == '__main__':
     fte = np.zeros_like(fte0)
     _, nte = fte.shape
 
-    noiseconst = 1
+    noiseconst = 3
     for j in range(m):
         ftr[j] = f[j] + np.random.normal(0, noiseconst * fstd[j], ntr)
         fte[j] = fte0[j] + np.random.normal(0, noiseconst * fstd[j], nte)
@@ -229,10 +228,10 @@ if __name__ == '__main__':
     thetate = torch.tensor(thetate)
 
     method_list = ['surmise', 'MVIP', 'MVGP']
-    n_list = [100] #, 250, 500] # 25, 50] #
-    ip_frac_list = [1/2] # , 1] 1/8, 1/4,
+    n_list = [25, 50, 100, 250, 500] # 25, 50] #
+    ip_frac_list = [1/4, 1/2, 1]
 
-    nrep = 1
+    nrep = 10
     save_csv = True
     for rep in np.arange(nrep):
         for n in n_list:

@@ -29,27 +29,27 @@ def test_n(n, noiseconst, save=False):
     ftest = torch.tensor(ftest)
     ftest0 = torch.tensor(ftest0)
 
-    emu, emumean, emustd, emupcto, \
-        n, xtr, ftr, xte, fte = test_single(method='surmise', n=n, seed=0, noiseconst=noiseconst,
-                                            ftr=f, xtr=x, fte=ftest, xte=xtest,
-                                            fte0=ftest0, output_csv=True, dir=DIR,
-                                            return_quant=True)
-
-    model, predmean, predstd, Phi, \
-        _, _, _, _, _ = test_single(method='MVGP', n=n, seed=0, kap=1, noiseconst=noiseconst,
-                                            ftr=f, xtr=x, fte=ftest, xte=xtest,
-                                            fte0=ftest0, output_csv=True, dir=DIR,
-                                            return_quant=True)
-
-    # modelsp, predmeansp, predstdsp, Phisp, \
-    #     _, _, _, _, _ = test_single(method='MVIP', n=n, ip_frac=1, seed=0, kap=1,
-    #                                 noiseconst=noiseconst,
+    # emu, emumean, emustd, emupcto, \
+    #     n, xtr, ftr, xte, fte = test_single(method='surmise', n=n, seed=0, noiseconst=noiseconst,
     #                                         ftr=f, xtr=x, fte=ftest, xte=xtest,
     #                                         fte0=ftest0, output_csv=True, dir=DIR,
     #                                         return_quant=True)
 
+    # model, predmean, predstd, Phi, \
+    #     _, _, _, _, _ = test_single(method='MVGP', n=n, seed=0, kap=1, noiseconst=noiseconst,
+    #                                         ftr=f, xtr=x, fte=ftest, xte=xtest,
+    #                                         fte0=ftest0, output_csv=True, dir=DIR,
+    #                                         return_quant=True)
 
-    if True:
+    model, predmean, predstd, Phi, \
+        _, _, _, _, _ = test_single(method='MVIP', n=n, ip_frac=1/4, seed=0, kap=1,
+                                    noiseconst=noiseconst,
+                                    ftr=f, xtr=x, fte=ftest, xte=xtest,
+                                    fte0=ftest0, output_csv=True, dir=DIR,
+                                    return_quant=True)
+
+
+    if False:
         predub = (predmean + 2 * predstd)
         predlb = (predmean - 2 * predstd)
         emuub = (emumean + 2 * emustd)
@@ -158,7 +158,7 @@ def plot(noiseconst, n, emupct, emumean, emustd,
 
 
 if __name__ == '__main__':
-    ns = [10, 25, 50, 100] #, 250, 500] #, 250]  # 25,
+    ns = [10, 25, 50, 100, 250, 500] #, 1000]  # 25,
     res = []
     res_sp = []
     for i in range(1):
