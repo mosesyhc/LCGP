@@ -62,9 +62,7 @@ class MVN_elbo_autolatent(Module):
             lLmb = llmb.repeat(self.kap, 1)
             lLmb[:, -1] = torch.log(torch.var(self.G, 1))
 
-        self.lLmbreg = lLmb.clone()
         self.lLmb = nn.Parameter(lLmb)
-
         self.lnugGPs = nn.Parameter(torch.Tensor(-14 * torch.ones(self.kap)))
         self.ltau2GPs = nn.Parameter(torch.Tensor(torch.zeros(self.kap)))
 
@@ -244,6 +242,11 @@ class MVN_elbo_autolatent(Module):
         for i in range(n0):
             predvar[:, i] = predcov[:, :, i].diag()
         return predvar
+
+    def predictaddvar(self):
+        txPhi = (self.Phi * self.pcw * self.Fstd)
+        predictaddvar = self.lsigma2.exp() * (txPhi @ txPhi.T).diag()
+        return predictaddvar
 
     def test_mse(self, theta0, f0):
         with torch.no_grad():

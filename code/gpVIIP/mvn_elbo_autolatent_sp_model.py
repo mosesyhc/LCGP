@@ -294,6 +294,11 @@ class MVN_elbo_autolatent_sp(Module):
             predvar[:, i] = predcov[:, :, i].diag()
         return predvar
 
+    def predictaddvar(self):
+        txPhi = (self.Phi * self.pcw * self.Fstd)
+        predictaddvar = self.lsigma2.exp() * (txPhi @ txPhi.T).diag()
+        return predictaddvar
+
     def test_mse(self, theta0, f0):
         with torch.no_grad():
             m, n = f0.shape
