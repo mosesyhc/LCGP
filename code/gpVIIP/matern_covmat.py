@@ -46,34 +46,25 @@ def cov_sp(theta, thetai, llmb, lnug, ltau2):  # assuming x1 = x2 = theta
     :return:
     '''
 
-    c_full_i = covmat(theta, thetai, llmb=llmb)
-    C_i = covmat(thetai, thetai, llmb=llmb)
-    # C_full_diag = cormat(theta, theta, llmb=llmb, diag_only=True)
+    c_full_i = covmat(theta, thetai, llmb=llmb, lnug=lnug, ltau2=ltau2)
+    C_i = covmat(thetai, thetai, llmb=llmb, lnug=lnug, ltau2=ltau2)
+    C_full_diag = covmat(theta, theta, llmb=llmb, lnug=lnug, ltau2=ltau2, diag_only=True)
 
     Wi, Ui = torch.linalg.eigh(C_i)
     Ciinvh = Ui / Wi.sqrt()
-    # C_iinv = Uih @ Uih.T   # Change
 
     Crh = c_full_i @ Ciinvh
-    # C_r = c_full_i @ C_iinv @ c_full_i.T
 
-    nug = lnug.exp() / (1 + lnug.exp())
-    diag = (1 - nug) * (1 - (Crh ** 2).sum(1)) + nug  #
+    diag = C_full_diag - (Crh ** 2).sum(1)  #
     Delta_inv_diag = 1 / diag
 
-    R = C_i + ((1 - nug) * c_full_i.T * Delta_inv_diag) @ c_full_i  # + lnugR.exp() * torch.ones(thetai.shape[0])
+    R = C_i + (c_full_i.T * Delta_inv_diag) @ c_full_i
 
     WR, UR = torch.linalg.eigh(R)
-
     Rinvh = UR / WR.abs().sqrt()
 
-    Q = (1 - nug).sqrt() * (Delta_inv_diag * c_full_i.T).T
+    Q = (Delta_inv_diag * c_full_i.T).T
     Q_Rinvh = Q @ Rinvh
-    # Rinv_half = U_R @ torch.diag(torch.sqrt(1 / W_R)) @ U_R.T
-    # Q_Rinvh = Delta_inv @ c_full_i @ R_invhalf
-
-    # C_sp_inv = torch.diag(Delta_inv_diag) - Q_Rinvh @ Q_Rinvh.T
-    # C_sp_inv = Delta_inv - Delta_inv @ c_full_i @ Rinv @ c_full_i.T @ Delta_inv  # improve to p x p matrices
 
     logdet_C_sp = torch.log(WR.abs()).sum() - torch.log(Wi).sum() + torch.log(diag).sum()
     return Delta_inv_diag, Q, Rinvh, Q_Rinvh, logdet_C_sp, c_full_i, C_i

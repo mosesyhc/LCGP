@@ -81,11 +81,12 @@ class MVN_elbo_autolatent_sp(Module):
             lLmb[:, -1] = torch.log(torch.var(self.G, 1))
         self.lLmb = nn.Parameter(lLmb)
 
-        lnugGPs = torch.Tensor(-8 * torch.ones(self.kap))
-        self.lnugGPs = nn.Parameter(lnugGPs) #, requires_grad=False)
+        self.lnugGPs = nn.Parameter(torch.Tensor(-14 * torch.ones(self.kap)))
+        self.ltau2GPs = nn.Parameter(torch.Tensor(torch.zeros(self.kap)))
 
         if initlsigma2 or lsigma2 is None:
-            lsigma2 = torch.log(((self.Phi @ self.Phi.T @ self.F - self.F) ** 2).mean())
+            Fhat = (self.Phi * self.pcw) @ self.G
+            lsigma2 = torch.log(((Fhat - self.F) ** 2).mean())
         self.lmse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
         self.buildtime: float = 0.0
@@ -96,12 +97,12 @@ class MVN_elbo_autolatent_sp(Module):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
         lnugGPs = self.lnugGPs
+        ltau2GPs = self.ltau2GPs
 
         if self.clamping:
-            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
+            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
 
         M = self.M
-        # Delta_inv_diags = self.Delta_inv_diags
         QRinvhs = self.QRinvhs
         Rinvhs = self.Rinvhs
         thetai = self.thetai
@@ -111,12 +112,7 @@ class MVN_elbo_autolatent_sp(Module):
         n0 = theta0.shape[0]
         ghat_sp = torch.zeros(kap, n0)
         for k in range(kap):
-            cki0 = covmat(theta0, thetai, llmb=lLmb[k])
-            nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
-            cki = (1 - nug) * cki0
-
-            # C_sp_inv = torch.diag(Delta_inv_diag) - Q_Rinvh @ Q_Rinvh.T
-            # Ckinv_Mk = (Delta_inv_diags[k] * M[k] - QRinvhs[k] @ (QRinvhs[k].T * M[k]).sum(1))
+            cki = covmat(theta0, thetai, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
             Ckinv_Mk = Rinvhs[k] @ (QRinvhs[k].T * M[k]).sum(1)
 
             ghat_sp[k] = cki @ Ckinv_Mk
@@ -130,9 +126,10 @@ class MVN_elbo_autolatent_sp(Module):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
         lnugGPs = self.lnugGPs
+        ltau2GPs = self.ltau2GPs
 
         if self.clamping:
-            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
+            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
 
         F = self.F
         theta = self.theta
@@ -147,13 +144,16 @@ class MVN_elbo_autolatent_sp(Module):
 
         negelbo = 0
         for k in range(kap):
-            negloggp_sp_k = negloglik_gp_sp(llmb=lLmb[k], lnug=lnugGPs[k], theta=theta, thetai=thetai, g=M[k])
+            negloggp_sp_k, Cinvkdiag_sp = negloglik_gp_sp(llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k],
+                                            theta=theta, thetai=thetai, g=M[k])
             negelbo += negloggp_sp_k
+            negelbo += 1 / 2 * (Cinvkdiag_sp * V[k]).sum()
 
         residF = F - (self.Phi * self.pcw) @ M
         negelbo += m * n / 2 * lsigma2
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
         negelbo -= 1 / 2 * torch.log(V).sum()
+        negelbo += 1 / (2 * lsigma2.exp()) * V.sum()
 
         negelbo += 10 * (lsigma2 - self.lmse0) ** 2
         # negelbo += 4 * ((lnugGPs + 10) ** 2).sum()
@@ -171,9 +171,10 @@ class MVN_elbo_autolatent_sp(Module):
         lsigma2 = self.lsigma2
         lLmb = self.lLmb
         lnugGPs = self.lnugGPs
+        ltau2GPs = self.ltau2GPs
 
         if self.clamping:
-            lLmb, lsigma2, lnugGPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs)
+            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
 
         kap = self.kap
         theta = self.theta
@@ -185,58 +186,41 @@ class MVN_elbo_autolatent_sp(Module):
         M = torch.zeros(self.kap, self.n)
         V = torch.zeros(self.kap, self.n)
 
-        tau2gps = torch.zeros(self.kap)
         Delta_inv_diags = torch.zeros((self.kap, self.n))
         QRinvhs = torch.zeros((self.kap, self.n, self.p))
         Rinvhs = torch.zeros((self.kap, self.p, self.p))
         Ciinvhs = torch.zeros((self.kap, self.p, self.p))
         for k in range(kap):
             Delta_k_inv_diag, Qk, Rkinvh, Qk_Rkinvh, \
-                logdet_Ck, ck_full_i, Ck_i = cov_sp(theta=theta, thetai=thetai, llmb=lLmb[k], lnug=lnugGPs[k])
+                logdet_Ck, ck_full_i, Ck_i = cov_sp(theta=theta, thetai=thetai,
+                                                    llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
 
             W_Cki, U_Cki = torch.linalg.eigh(Ck_i)
             Ckiinvh = U_Cki / W_Cki.abs().sqrt()
             Ciinvhs[k] = Ckiinvh
 
-            n = G[k].shape[0]
-            Qk_Rkinvh_g = (Qk_Rkinvh.T * G[k]).sum(1)
-            quad = G[k] @ (Delta_k_inv_diag * G[k]) - (Qk_Rkinvh_g ** 2).sum()
-            tau2k = (quad + 1) / (n + 1)
+            Dinvk_diag = 1 / (1 + sigma2 * Delta_k_inv_diag)
+            D2invk_diag = 1 / (1 / Delta_k_inv_diag + sigma2)
 
-            nug = (lnugGPs[k].exp()) / (1 + lnugGPs[k].exp())
+            Tk = Ck_i + ck_full_i.T * D2invk_diag @ ck_full_i  #checked
 
-            Mk = torch.zeros(self.n)
-            for kk in range(10):
-                rho2k = sigma2 / tau2k
+            W_Tk, U_Tk = torch.linalg.eigh(Tk)
+            Tkinvh = U_Tk / W_Tk.abs().sqrt()
 
-                Dinv_k_diag = 1 / (1 + rho2k * Delta_k_inv_diag)
-                Drhoinv_k_diag = 1 / (1 / Delta_k_inv_diag + rho2k)
+            Sk = (D2invk_diag * ck_full_i.T).T
+            Sk_Tkinvh = Sk @ Tkinvh
 
-                Tk = Ck_i + (1 - nug) * ck_full_i.T * Drhoinv_k_diag @ ck_full_i  #checked
-
-                W_Tk, U_Tk = torch.linalg.eigh(Tk)
-                Tkinvh = U_Tk / W_Tk.abs().sqrt()
-
-                Sk = (1 - nug).sqrt() * (Drhoinv_k_diag * ck_full_i.T).T
-                Sk_Tkinvh = Sk @ Tkinvh
-
-                Mk = Dinv_k_diag * G[k] + rho2k * Sk_Tkinvh @ (Sk_Tkinvh.T * G[k]).sum(1)
-
-                Qk_Rkinvh_Mk = (Qk_Rkinvh.T * Mk).sum(1)
-                quadM = Mk @ (Delta_k_inv_diag * Mk) - (Qk_Rkinvh_Mk ** 2).sum()
-                tau2k = (quadM + 1) / (n + 1)
+            Mk = Dinvk_diag * G[k] + sigma2 * Sk_Tkinvh @ (Sk_Tkinvh.T * G[k]).sum(1)
 
             M[k] = Mk
-            V[k] = 1 / (1/sigma2 + (Delta_k_inv_diag - (Qk_Rkinvh ** 2).sum(1)) / tau2k)
+            V[k] = 1 / (1 / sigma2 + (Delta_k_inv_diag - (Qk_Rkinvh ** 2).sum(1)))
 
-            tau2gps[k] = tau2k
             Delta_inv_diags[k] = Delta_k_inv_diag
             QRinvhs[k] = Qk_Rkinvh
             Rinvhs[k] = Rkinvh
 
         self.M = M
         self.V = V
-        self.tau2gps = tau2gps
         self.Delta_inv_diags = Delta_inv_diags
         self.QRinvhs = QRinvhs
         self.Ciinvhs = Ciinvhs
@@ -255,7 +239,7 @@ class MVN_elbo_autolatent_sp(Module):
             self.compute_MV()
             theta = self.theta
             thetai = self.thetai
-            lLmb, lsigma2, lnugGPs = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs)
+            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs, self.ltau2GPs)
 
             txPhi = (self.Phi * self.pcw * self.Fstd)
             V = self.V
@@ -268,7 +252,6 @@ class MVN_elbo_autolatent_sp(Module):
             QRinvhs = self.QRinvhs
             Ciinvhs = self.Ciinvhs
             Rinvhs = self.Rinvhs
-            tau2gps = self.tau2gps
 
             term1 = torch.zeros(kap, n0)
             term2 = torch.zeros(kap, n0)
@@ -276,12 +259,9 @@ class MVN_elbo_autolatent_sp(Module):
             predcov = torch.zeros(m, m, n0)
             predcov_g = torch.zeros(kap, n0)
             for k in range(kap):
-                nug = torch.exp(lnugGPs[k]) / (1 + torch.exp(lnugGPs[k]))
-                cki0 = covmat(theta0, thetai, llmb=lLmb[k])
-                cki = (1 - nug) * cki0
-
-                ck0 = covmat(theta0, theta, llmb=lLmb[k])
-                ck = (1 - nug) * ck0
+                ck0 = covmat(theta0, theta0, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], diag_only=True)
+                cki = covmat(theta0, thetai, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+                ck = covmat(theta0, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
 
                 Ckiinv = Ciinvhs[k]
                 Rkinvh = Rinvhs[k]
@@ -289,14 +269,12 @@ class MVN_elbo_autolatent_sp(Module):
                 ck_Ckinv_ck = (cki @ (Ckiinv @ Ckiinv.T - Rkinvh @ Rkinvh.T) @ cki.T).diag()
 
                 Ckinv = Delta_inv_diags[k].diag() - QRinvhs[k] @ QRinvhs[k].T
-                # ck_Ckinv_ck = (ck @ Ckinv @ ck.T).diag()
-                #
                 ck_Ckinv_Vkh = (ck @ Ckinv) * V[k].sqrt()
 
-                predcov_g[k] = tau2gps[k] * (1 - ck_Ckinv_ck) + \
+                predcov_g[k] = (ck0 - ck_Ckinv_ck) + \
                                (ck_Ckinv_Vkh**2).sum(1)
 
-                term1[k] = tau2gps[k] * (1 - ck_Ckinv_ck)
+                term1[k] = (ck0 - ck_Ckinv_ck)
                 term2[k] = (ck_Ckinv_Vkh**2).sum(1)
             for i in range(n0):
                 predcov[:, :, i] = txPhi * predcov_g[:, i] @ txPhi.T
@@ -367,7 +345,6 @@ class MVN_elbo_autolatent_sp(Module):
         return score
 
     def chi2mean(self, theta0, f0):
-
         predmean = self.predictmean(theta0)
         predcov = self.predictcov(theta0)
 
@@ -409,13 +386,14 @@ class MVN_elbo_autolatent_sp(Module):
         return (torch.square(r / torch.sqrt(diagV))).mean()
 
     @staticmethod
-    def parameter_clamp(lLmb, lsigma2, lnugs):
+    def parameter_clamp(lLmb, lsigma2, lnugs, ltau2s):
         # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
-        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 1)))
-        lnugs = parameter_clamping(lnugs, torch.tensor((-14, -8)))
+        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 3)))
+        lnugs = parameter_clamping(lnugs, torch.tensor((-16, -12)))
+        ltau2s = parameter_clamping(ltau2s, torch.tensor((-4, 4)))
 
-        return lLmb, lsigma2, lnugs
+        return lLmb, lsigma2, lnugs, ltau2s
 
     def ip_choice(self, p, theta, choice_thetai):
         if choice_thetai == 'LHS':  # assume [0, 1]^d

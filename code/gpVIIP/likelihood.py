@@ -26,24 +26,26 @@ def negloglik_gp(llmb, lnug, ltau2, theta, g):
     return negloglik, Cinvdiag
 
 
-def negloglik_gp_sp(llmb, lnug, theta, thetai, g):
-    Delta_inv_diag, _, _, QRinvh, logdet_C, _, _ = cov_sp(theta, thetai, llmb, lnug)
+def negloglik_gp_sp(llmb, lnug, ltau2, theta, thetai, g):
+    Delta_inv_diag, _, _, QRinvh, logdet_C, _, _ = cov_sp(theta=theta, thetai=thetai, llmb=llmb, lnug=lnug, ltau2=ltau2)
 
-    n = g.shape[0]
     QRinvh_g = (QRinvh.T * g).sum(1)
-    quad = g @ (Delta_inv_diag * g) - (QRinvh_g ** 2).sum()
-    tau2hat = (quad + 10) / (n + 10)
+    quad = (Delta_inv_diag * g ** 2).sum() - (QRinvh_g ** 2).sum()
     # print(tau2hat)
 
     negloglik = 1/2 * logdet_C  # log-determinant
-    negloglik += n/2 * torch.log(tau2hat)  # log of MLE of scale
+    negloglik += 1/2 * quad  # log of MLE of scale
 
-    # llmb, lsigma2 regularization
-    llmbreg = 15 * (llmb + 1) ** 2
-    llmbreg[-1] = 25 * llmb[-1] ** 2
-    negloglik += llmbreg.sum()
+    # regularization of hyperparameter
+    llmbreg = 1/2 * 10 * (llmb + 1) ** 2
+    llmbreg[-1] = 1/2 * 20 * llmb[-1] ** 2
+    ltau2reg = 1/2 * 2 * ltau2**2
+
+    negloglik += llmbreg.sum() + ltau2reg
 
     if torch.isnan(negloglik):
         print('unstable')
 
-    return negloglik #, Vh
+    Cinvdiag = Delta_inv_diag - (QRinvh @ QRinvh.T).diag()
+
+    return negloglik, Cinvdiag
