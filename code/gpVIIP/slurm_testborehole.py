@@ -73,6 +73,6 @@ test_single(method=args.method, n=args.n, seed=args.seed,
             fte=fte, fte0=fte0, xte=xte,
             noiseconst=args.noiseconst,
             rep=args.seed, ip_frac=args.ipfrac,
-            output_csv=save_csv, dir='./save/')
+            output_csv=save_csv, dir='./save/res_out/')
 
 
