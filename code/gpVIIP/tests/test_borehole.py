@@ -23,8 +23,9 @@ def build_surmise(ftr, thetatr):
     from surmise.emulation import emulator
     emu = emulator(x=np.arange(ftr.shape[0]),
                    theta=thetatr.numpy(),
-                   f=ftr.numpy(), method='PCGP',
-                   args={'warnings': True})
+                   f=ftr.numpy(), method='PCGPwM',
+                   args={'warnings': True,
+                         'nmaxhyptrain': 1000})
 
     return emu
 
@@ -158,11 +159,11 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
     fte = fte.numpy()
     ftr = ftr.numpy()
     fte0 = fte0.numpy()
-    dss = dss_individual(predmean=predmean, predcov=predcov, fte=fte)
+    dss = dss_individual(predmean=predmean, predcov=predcov, fte=fte0)
     rmsetr = rmse(predmean=predmeantr, fte=ftr)
-    rmsete = rmse(predmean=predmean, fte=fte)
-    crps0 = crps(f=fte, mu=predmean, sigma=predstd)
-    chi2 = chi2metric(predmean=predmean, predstd=predstd, fte=fte)
+    rmsete = rmse(predmean=predmean, fte=fte0)
+    crps0 = crps(f=fte0, mu=predmean, sigma=predstd)
+    chi2 = chi2metric(predmean=predmean, predstd=predstd, fte=fte0)
 
     ccover, cintwid, cintscore = interval_stats(mean=predmean, stdev=predstd, testf=fte0)
     pcover, pintwid, pintscore = interval_stats(mean=predmean, stdev=np.sqrt(((predstd**2).T + predaddvar).T), testf=fte)
@@ -202,21 +203,25 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
 
 if __name__ == '__main__':
     from pathlib import Path
-    res_dir = r'code/test_results/surmise_MVGP_MVIP/20221007/'
+    res_dir = r'code/test_results/surmise_MVGP_MVIP/20221010/'
     Path(res_dir).mkdir(parents=True, exist_ok=True)
 
     dir = r'code/data/borehole_data/'
     f, x, thetatr = read_data(dir)
+    fte0, thetate = read_test_data(dir)
+
+    f = f[:10]
+    fte0 = fte0[:10]
+    x = x[:10]
 
     m, ntr = f.shape
     fstd = f.std(1)
     ftr = np.zeros_like(f)
 
-    fte0, thetate = read_test_data(dir)
     fte = np.zeros_like(fte0)
     _, nte = fte.shape
 
-    noiseconst = 3
+    noiseconst = 5
     for j in range(m):
         ftr[j] = f[j] + np.random.normal(0, noiseconst * fstd[j], ntr)
         fte[j] = fte0[j] + np.random.normal(0, noiseconst * fstd[j], nte)
@@ -227,16 +232,16 @@ if __name__ == '__main__':
     thetatr = torch.tensor(thetatr)
     thetate = torch.tensor(thetate)
 
-    method_list = ['surmise', 'MVIP', 'MVGP']
-    n_list = [25, 50, 100, 250, 500] # 25, 50] #
-    ip_frac_list = [1/4, 1/2, 1]
+    method_list = ['surmise', 'MVIP'] #, 'MVGP'] 'MVIP',
+    n_list = [50] #, 250, 500] # 25, 50] #
+    ip_frac_list = [1/2] #, 1/2, 1]
 
-    nrep = 10
+    nrep = 1
     save_csv = True
     for rep in np.arange(nrep):
         for n in n_list:
             seed = torch.randint(0, 10000, (1, ))
-            torch.manual_seed(seed.item())
+            torch.manual_seed(seed.item()) #.item())
             tr_ind = torch.randperm(ntr)[:n]
             ftr_n = ftr[:, tr_ind]
             thetatr_n = thetatr[tr_ind]
