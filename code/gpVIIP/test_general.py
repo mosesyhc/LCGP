@@ -3,7 +3,6 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import torch
-from fayans_support import read_data, read_test_data
 from mvn_elbo_autolatent_model import MVN_elbo_autolatent
 from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
 from optim_elbo import optim_elbo_lbfgs
