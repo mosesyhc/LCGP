@@ -244,8 +244,9 @@ class MVN_elbo_autolatent(Module):
         return predvar
 
     def predictaddvar(self):
-        txPhi = (self.Phi * self.pcw * self.Fstd)
-        predictaddvar = self.lsigma2.exp() * (txPhi @ txPhi.T).diag()
+        _, lsigma2, _, _ = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs, self.ltau2GPs)
+
+        predictaddvar = (lsigma2.exp() * self.Fstd ** 2).squeeze(1)
         return predictaddvar
 
     def test_mse(self, theta0, f0):
@@ -344,7 +345,7 @@ class MVN_elbo_autolatent(Module):
     def parameter_clamp(lLmb, lsigma2, lnugs, ltau2s):
         # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
-        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 3)))
+        lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 1)))
         lnugs = parameter_clamping(lnugs, torch.tensor((-16, -8)))
         ltau2s = parameter_clamping(ltau2s, torch.tensor((-4, 4)))
 
