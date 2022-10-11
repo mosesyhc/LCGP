@@ -6,7 +6,7 @@ from likelihood import negloglik_gp_sp
 from hyperparameter_tuning import parameter_clamping
 from line_profiler_pycharm import profile
 
-JIT = False
+JIT = True
 if JIT:
     Module = jit.ScriptModule
 else:
@@ -427,6 +427,8 @@ class MVN_elbo_autolatent_sp(Module):
 
         if kap is None:
             kap = int(torch.argwhere(v > threshold)[0][0] + 1)
+            if kap > 1:
+                kap -= 1
 
         assert Phi.shape[1] == min(m, n)
         Phi = Phi[:, :kap]
