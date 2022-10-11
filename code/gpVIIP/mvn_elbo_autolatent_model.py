@@ -4,16 +4,15 @@ import torch.jit as jit
 from matern_covmat import covmat
 from likelihood import negloglik_gp
 from hyperparameter_tuning import parameter_clamping
-from line_profiler_pycharm import profile
 
-JIT = True
+JIT = False
 if JIT:
     Module = jit.ScriptModule
 else:
     Module = nn.Module
 
+
 class MVN_elbo_autolatent(Module):
-    @profile
     def __init__(self, F, theta,
                  Phi=None, kap=None, pcthreshold=0.9999,
                  lLmb=None, lsigma2=None,
@@ -68,14 +67,13 @@ class MVN_elbo_autolatent(Module):
 
         if initlsigma2 or lsigma2 is None:
             Fhat = (self.Phi * self.pcw) @ self.G
-            lsigma2 = torch.log(((Fhat - self.F) ** 2).mean())
+            lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()), 0.01 * (self.F**2).mean())
         self.lmse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
 
         self.buildtime: float = 0.0
 
-    # @jit.script_method
-    @profile
+
     def forward(self, theta0):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
@@ -105,7 +103,7 @@ class MVN_elbo_autolatent(Module):
         fhat = self.tx_F(fhat)
         return fhat  # , ghat
 
-    @profile
+
     def negelbo(self):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
@@ -141,11 +139,12 @@ class MVN_elbo_autolatent(Module):
         #       m * n / 2 * lsigma2.item(), 1 / (2 * lsigma2.exp().item()) * (residF ** 2).sum().item(),
         #       - 1 / 2 * torch.log(V).sum().item(), 1 / (2 * lsigma2.exp().item()) * V.sum().item())
 
-        negelbo += 8 * (lsigma2 - self.lmse0) ** 2
+        negelbo += 2 * (lsigma2 - self.lmse0) ** 2
 
         return negelbo
 
-    @profile
+    # @jit.script_method
+
     def compute_MV(self):
         lsigma2 = self.lsigma2
         lLmb = self.lLmb
@@ -184,14 +183,14 @@ class MVN_elbo_autolatent(Module):
         self.V = V
         self.Cinvhs = Cinvhs
 
-    @profile
+
     def predictmean(self, theta0):
         with torch.no_grad():
             self.compute_MV()
             fhat = self.forward(theta0)
         return fhat
 
-    @profile
+
     def predictcov(self, theta0):
         with torch.no_grad():
             self.compute_MV()
@@ -274,7 +273,7 @@ class MVN_elbo_autolatent(Module):
     def tx_F(self, Fs):
         return Fs * self.Fstd + self.Fmean
 
-    @profile
+    #
     def dss(self, theta0, f0, use_diag=False):
         """
         Returns the Dawid-Sebastani score averaged across test points.
@@ -360,8 +359,8 @@ class MVN_elbo_autolatent(Module):
 
         if kap is None:
             kap = int(torch.argwhere(v > threshold)[0][0] + 1)
-            if kap > 1:
-                kap -= 1
+            # if kap > 1:
+            #     kap -= 1
 
         assert Phi.shape[1] == min(m, n)
         Phi = Phi[:, :kap]
