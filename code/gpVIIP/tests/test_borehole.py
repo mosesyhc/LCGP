@@ -25,7 +25,7 @@ def build_surmise(ftr, thetatr):
                    theta=thetatr.numpy(),
                    f=ftr.numpy(), method='PCGPwM',
                    args={'warnings': True,
-                         'nmaxhyptrain': 1000})
+                         'nmaxhyptrain': 2000})
 
     return emu
 
@@ -86,9 +86,9 @@ def dss_individual(predmean, predcov, fte):
     return score
 
 
-def test_single(method, n, seed, ftr, thetatr, fte, thetate,
+def test_single(method, n, seed, ftr, xtr, fte, xte,
                 fte0, noiseconst=None, rep=None, ip_frac=None,
-                output_csv=False):
+                output_csv=False, dir=None):
     res = res_struct.copy()
 
     p = n
@@ -99,31 +99,32 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
     time_tr0 = time.time()
     # train model
     if method == 'surmise':
-        emu = build_surmise(ftr, thetatr)  #
-        kap = emu._info['pct'].shape[1]
+        model = build_surmise(ftr, xtr)  #
+        kap = model._info['pcto'].shape[1]
+        pct = model._info['pcto']
 
-        predmeantr = emu.predict().mean()
-        emupred = emu.predict(x=np.arange(fte.shape[0]),
-                              theta=thetate)
+        predmeantr = model.predict().mean()
+        emupred = model.predict(x=np.arange(fte.shape[0]),
+                              theta=xte)
         predmean = emupred.mean()
         predcov = emupred.covx().transpose(2, 0, 1)
         predstd = np.sqrt(emupred.var())
-        predaddvar = 0
+        predaddvar = model._info['standardpcinfo']['extravar']
 
         time_tr1 = time.time()
 
     elif method == 'MVGP':
-        model = MVN_elbo_autolatent(F=ftr, theta=thetatr,
+        model = MVN_elbo_autolatent(F=ftr, theta=xtr,
                                     clamping=True)
         kap = model.kap
         model, niter, flag = optim_elbo_lbfgs(model,
                                               maxiter=100, lr=lr)
 
-        predmeantr = model.predictmean(thetatr).detach().numpy()
-        predmean = model.predictmean(thetate).detach().numpy()
-        predcov = model.predictcov(thetate).detach().numpy()
+        predmeantr = model.predictmean(xtr).detach().numpy()
+        predmean = model.predictmean(xte).detach().numpy()
+        predcov = model.predictcov(xte).detach().numpy()
 
-        n0 = thetate.shape[0]
+        m, n0 = fte.shape
         predvar = np.zeros((m, n0))
         for i in range(n0):
             predvar[:, i] = np.diag(predcov[:, :, i])
@@ -134,18 +135,19 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
     elif method == 'MVIP':
         p = int(n * ip_frac)
 
-        model = MVN_elbo_autolatent_sp(F=ftr, theta=thetatr, p=p,
+        model = MVN_elbo_autolatent_sp(F=ftr, theta=xtr, p=p,
                                        clamping=True) #, thetai=thetai)
         kap = model.kap
         model, niter, flag = optim_elbo_lbfgs(model,
                                               maxiter=100,
                                               lr=lr)
 
-        predmeantr = model.predictmean(thetatr).detach().numpy()
-        predmean = model.predictmean(thetate).detach().numpy()
-        predcov = model.predictcov(thetate).detach().numpy()
 
-        n0 = thetate.shape[0]
+        predmeantr = model.predictmean(xtr).detach().numpy()
+        predmean = model.predictmean(xte).detach().numpy()
+        predcov = model.predictcov(xte).detach().numpy()
+
+        m, n0 = fte.shape
         predvar = np.zeros((m, n0))
         for i in range(n0):
             predvar[:, i] = np.diag(predcov[:, :, i])
@@ -196,7 +198,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
 
     if output_csv:
         df = pd.DataFrame(res, index=[0])
-        df.to_csv(res_dir + r'rep{:d}_n{:d}_p{:d}_{:s}_seed{:d}_{:s}.csv'.format(
+        df.to_csv(dir + r'rep{:d}_n{:d}_p{:d}_{:s}_seed{:d}_{:s}.csv'.format(
             rep, n, p, method, int(seed), datetime.today().strftime('%Y%m%d%H%M%S'))
         )
 

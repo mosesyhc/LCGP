@@ -3,6 +3,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import torch
+from fayans_support import read_data, read_test_data
 from mvn_elbo_autolatent_model import MVN_elbo_autolatent
 from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
 from optim_elbo import optim_elbo_lbfgs
@@ -22,9 +23,9 @@ def build_surmise(ftr, xtr):
     from surmise.emulation import emulator
     emu = emulator(x=np.arange(ftr.shape[0]),
                    theta=xtr.numpy(),
-                   f=ftr.numpy(), method='PCGP',
-                   args={'warnings': True})
-
+                   f=ftr.numpy(), method='PCGPwM',
+                   args={'warnings': True,
+                         'nmaxhyptrain': 2000})
     return emu
 
 def crps(f, mu, sigma):
@@ -85,7 +86,7 @@ def dss_individual(predmean, predcov, fte):
 
 
 def test_single(method, n, seed, ftr, xtr, fte, xte,
-                fte0, noiseconst=None, rep=0, kap=None, ip_frac=None,
+                fte0, noiseconst=None, rep=0, ip_frac=None,
                 output_csv=False, dir=None, return_quant=False):
     res = res_struct.copy()
 
@@ -107,17 +108,17 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
         predmean = emupred.mean()
         predcov = emupred.covx().transpose(2, 0, 1)
         predstd = np.sqrt(emupred.var())
-        sigma2 = 0
+        predaddvar = model._info['standardpcinfo']['extravar']
 
         time_tr1 = time.time()
 
     elif method == 'MVGP':
-        model = MVN_elbo_autolatent(F=ftr, theta=xtr, kap=kap,
+        model = MVN_elbo_autolatent(F=ftr, theta=xtr,
                                     clamping=True)
         kap = model.kap
         model, niter, flag = optim_elbo_lbfgs(model,
                                               maxiter=100, lr=lr)
-        pct = model.Phi
+
         predmeantr = model.predictmean(xtr).detach().numpy()
         predmean = model.predictmean(xte).detach().numpy()
         predcov = model.predictcov(xte).detach().numpy()
@@ -128,20 +129,20 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
             predvar[:, i] = np.diag(predcov[:, :, i])
         predstd = np.sqrt(predvar)
 
-        sigma2 = model.lsigma2.exp().detach().numpy()
+        predaddvar = model.predictaddvar().detach().numpy()
         time_tr1 = time.time()
 
     elif method == 'MVIP':
         p = int(n * ip_frac)
 
-        model = MVN_elbo_autolatent_sp(F=ftr, theta=xtr, p=p, kap=kap,
+        model = MVN_elbo_autolatent_sp(F=ftr, theta=xtr, p=p,
                                        clamping=True) #, thetai=thetai)
         kap = model.kap
         model, niter, flag = optim_elbo_lbfgs(model,
                                               maxiter=100,
                                               lr=lr)
 
-        pct = model.Phi
+
         predmeantr = model.predictmean(xtr).detach().numpy()
         predmean = model.predictmean(xte).detach().numpy()
         predcov = model.predictcov(xte).detach().numpy()
@@ -151,7 +152,7 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
         for i in range(n0):
             predvar[:, i] = np.diag(predcov[:, :, i])
         predstd = np.sqrt(predvar)
-        sigma2 = model.lsigma2.exp().detach().numpy()
+        predaddvar = model.predictaddvar().detach().numpy()
         time_tr1 = time.time()
 
     else:
@@ -160,14 +161,14 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
     fte = fte.numpy()
     ftr = ftr.numpy()
     fte0 = fte0.numpy()
-    dss = dss_individual(predmean=predmean, predcov=predcov, fte=fte)
+    dss = dss_individual(predmean=predmean, predcov=predcov, fte=fte0)
     rmsetr = rmse(predmean=predmeantr, fte=ftr)
-    rmsete = rmse(predmean=predmean, fte=fte)
-    crps0 = crps(f=fte, mu=predmean, sigma=predstd)
-    chi2 = chi2metric(predmean=predmean, predstd=predstd, fte=fte)
+    rmsete = rmse(predmean=predmean, fte=fte0)
+    crps0 = crps(f=fte0, mu=predmean, sigma=predstd)
+    chi2 = chi2metric(predmean=predmean, predstd=predstd, fte=fte0)
 
     ccover, cintwid, cintscore = interval_stats(mean=predmean, stdev=predstd, testf=fte0)
-    pcover, pintwid, pintscore = interval_stats(mean=predmean, stdev=np.sqrt((predstd**2 + sigma2)), testf=fte)
+    pcover, pintwid, pintscore = interval_stats(mean=predmean, stdev=np.sqrt(((predstd**2).T + predaddvar).T), testf=fte)
 
     res['method'] = method
     res['rep'] = rep
