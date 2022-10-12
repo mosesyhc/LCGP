@@ -126,8 +126,8 @@ class MVN_elbo_autolatent(Module):
         negelbo = 0
         for k in range(kap):
             negloggp_k, Cinvkdiag = negloglik_gp(llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], theta=theta, g=M[k])
-            negelbo += negloggp_k
-            negelbo += 1 / 2 * (Cinvkdiag * V[k]).sum()
+            negelbo += negloggp_k.item()
+            negelbo += 1 / 2 * (Cinvkdiag * V[k]).sum().item()
 
         residF = F - (self.Phi * self.pcw) @ M
         negelbo += m * n / 2 * lsigma2
@@ -143,7 +143,6 @@ class MVN_elbo_autolatent(Module):
 
         return negelbo
 
-    # @jit.script_method
 
     def compute_MV(self):
         lsigma2 = self.lsigma2
@@ -166,7 +165,8 @@ class MVN_elbo_autolatent(Module):
 
         Cinvhs = torch.zeros(self.kap, self.n, self.n)
         for k in range(kap):
-            C_k = covmat(theta, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            with torch.no_grad():
+                C_k = covmat(theta, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
 
             W_k, U_k = torch.linalg.eigh(C_k)
 
