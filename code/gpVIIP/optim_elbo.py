@@ -28,8 +28,8 @@ def optim_elbo_lbfgs(model,
               (epoch, 0, lr, loss, loss_prev - loss, model.test_mse(thetate, fte)))
     while True:
         options = {'closure': closure, 'current_loss': loss,
-                   'c1': 1e-2, 'c2': 0.7,
-                   'max_ls': 10, 'damping': True}
+                   # 'c1': 1e-2, 'c2': 0.7,
+                   'max_ls': 15, 'damping': True}
         loss, grad, lr, _, _, _, _, _ = optim.step(options)
 
         epoch += 1

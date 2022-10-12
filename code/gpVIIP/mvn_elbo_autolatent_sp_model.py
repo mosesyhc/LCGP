@@ -85,7 +85,7 @@ class MVN_elbo_autolatent_sp(Module):
 
         if initlsigma2 or lsigma2 is None:
             Fhat = (self.Phi * self.pcw) @ self.G
-            lsigma2 = torch.log(((Fhat - self.F) ** 2).mean())
+            lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()), 0.01 * (self.F**2).mean())
         self.lmse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
         self.buildtime: float = 0.0
@@ -145,8 +145,8 @@ class MVN_elbo_autolatent_sp(Module):
         for k in range(kap):
             negloggp_sp_k, Cinvkdiag_sp = negloglik_gp_sp(llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k],
                                             theta=theta, thetai=thetai, g=M[k])
-            negelbo += negloggp_sp_k
-            negelbo += 1 / 2 * (Cinvkdiag_sp * V[k]).sum()
+            negelbo += negloggp_sp_k.item()
+            negelbo += 1 / 2 * (Cinvkdiag_sp * V[k]).sum().item()
 
         residF = F - (self.Phi * self.pcw) @ M
         negelbo += m * n / 2 * lsigma2
@@ -154,7 +154,7 @@ class MVN_elbo_autolatent_sp(Module):
         negelbo -= 1 / 2 * torch.log(V).sum()
         negelbo += 1 / (2 * lsigma2.exp()) * V.sum()
 
-        negelbo += 10 * (lsigma2 - self.lmse0) ** 2
+        negelbo += 2 * (lsigma2 - self.lmse0) ** 2
         # negelbo += 4 * ((lnugGPs + 10) ** 2).sum()
 
         # # debug
@@ -191,9 +191,10 @@ class MVN_elbo_autolatent_sp(Module):
         Rinvhs = torch.zeros((self.kap, self.p, self.p))
         Ciinvhs = torch.zeros((self.kap, self.p, self.p))
         for k in range(kap):
-            Delta_k_inv_diag, Qk, Rkinvh, Qk_Rkinvh, \
-                logdet_Ck, ck_full_i, Ck_i = cov_sp(theta=theta, thetai=thetai,
-                                                    llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            with torch.no_grad():
+                Delta_k_inv_diag, Qk, Rkinvh, Qk_Rkinvh, \
+                    logdet_Ck, ck_full_i, Ck_i = cov_sp(theta=theta, thetai=thetai,
+                                                        llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
 
             W_Cki, U_Cki = torch.linalg.eigh(Ck_i)
             Ckiinvh = U_Cki / W_Cki.abs().sqrt()

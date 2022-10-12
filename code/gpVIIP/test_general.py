@@ -114,6 +114,7 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
     elif method == 'MVGP':
         model = MVN_elbo_autolatent(F=ftr, theta=xtr,
                                     clamping=True)
+        pct = model.Phi
         kap = model.kap
         model, niter, flag = optim_elbo_lbfgs(model,
                                               maxiter=100, lr=lr)
@@ -136,6 +137,7 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
 
         model = MVN_elbo_autolatent_sp(F=ftr, theta=xtr, p=p,
                                        clamping=True) #, thetai=thetai)
+        pct = model.Phi
         kap = model.kap
         model, niter, flag = optim_elbo_lbfgs(model,
                                               maxiter=100,
