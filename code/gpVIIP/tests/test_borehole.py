@@ -127,7 +127,7 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
                                     clamping=True)
         kap = model.kap
         model, niter, flag = optim_elbo_lbfgs(model,
-                                              maxiter=100, lr=lr)
+                                              maxiter=2, lr=lr)
 
         predmeantr = model.predictmean(xtr).detach().numpy()
         predmean = model.predictmean(xte).detach().numpy()
@@ -264,11 +264,11 @@ if __name__ == '__main__':
                                     fte=fte, fte0=fte0, xte=thetate,
                                     noiseconst=noiseconst,
                                     rep=rep, ip_frac=ip_frac,
-                                    output_csv=save_csv)
+                                    output_csv=save_csv, dir=res_dir)
                 else:
                     test_single(method=method, n=n, seed=seed,
                                 ftr=ftr_n, xtr=thetatr_n,
                                 fte=fte, fte0=fte0, xte=thetate,
                                 noiseconst=noiseconst,
                                 rep=rep,
-                                output_csv=save_csv)
+                                output_csv=save_csv, dir=res_dir)
