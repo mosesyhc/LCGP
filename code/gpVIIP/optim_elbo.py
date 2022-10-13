@@ -21,7 +21,7 @@ def optim_elbo_lbfgs(model,
     epoch = 0
     ls_fail_count = 0
 
-    header = ['iter', 'grad.mean()', 'lr', 'negelbo', 'diff.', 'test mse']
+    header = ['iter', 'grad.absmax()', 'lr', 'negelbo', 'diff.', 'test mse']
     if verbose:
         print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
     while True:

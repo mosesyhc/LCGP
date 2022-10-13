@@ -1,7 +1,5 @@
 import torch
-import torch.distributions.normal as Normal
 from matern_covmat import covmat, cov_sp
-norm = Normal.Normal(loc=0, scale=1)
 
 
 def negloglik_gp(llmb, lnug, ltau2, theta, g):
