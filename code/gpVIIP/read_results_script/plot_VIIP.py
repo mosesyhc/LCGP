@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 plt.style.use(['science', 'grid'])
 import glob
 
-res_dir = r'C:\Users\cmyh\Documents\git\VIGP\code\test_results\surmise_MVGP_MVIP\save_VIIP'
+res_dir = r'C:\Users\moses\Desktop\git\binary-hd-emulator\code\test_results\surmise_MVGP_MVIP\20221013'
+out_dir = r'C:\Users\moses\Desktop\git\binary-hd-emulator\code\fig\talk_figs'
 all_files = glob.glob(res_dir + "/*.csv")
 
 li = []
@@ -19,15 +20,15 @@ df['iipfrac'] = (df.n / df.p).astype(int).astype(str)
 df['group'] = df.method+df.iipfrac
 
 ylabels = {
-           #  'testrmse': 'Test RMSE',
-           # 'trainrmse': 'Train RMSE',
-           # 'timeconstruct': 'Construction Time',
-           # 'dss': 'DS Score',
+           'testrmse': 'Test RMSE',
+           'trainrmse': 'Train RMSE',
+           'timeconstruct': 'Construction Time',
+           'dss': 'DS Score',
            'crps': 'CRPS',
-           # 'ccover': '95\% Coverage (confidence)',
-           # 'pcover': '95\% Coverage (predictive)',
-           # 'cintwid': '95\% Confidence Interval Width',
-           # 'pintwid': '95\% Predictive Interval Width'
+           'ccover': '95\% Coverage (confidence)',
+           'pcover': '95\% Coverage (predictive)',
+           'cintwid': '95\% Confidence Interval Width',
+           'pintwid': '95\% Predictive Interval Width'
            }
 
 
@@ -43,6 +44,6 @@ for y, label in ylabels.items():
     if y != 'ccover' and y != 'pcover':
         plt.yscale('log')
     plt.tight_layout()
-    plt.savefig(r'{:s}.png'.format(y), dpi=75)
+    plt.savefig(out_dir + r'\{:s}.png'.format(y), dpi=75)
 
     plt.close()
