@@ -35,14 +35,15 @@ def test_n(n, noiseconst, save=False):
     #                                         fte0=ftest0, output_csv=True, dir=DIR,
     #                                         return_quant=True)
 
-    # model, predmean, predstd, Phi, \
-    #     _, _, _, _, _ = test_single(method='MVGP', n=n, seed=0, kap=1, noiseconst=noiseconst,
-    #                                         ftr=f, xtr=x, fte=ftest, xte=xtest,
-    #                                         fte0=ftest0, output_csv=True, dir=DIR,
-    #                                         return_quant=True)
+    model, predmean, predstd, Phi, \
+        _, _, _, _, _ = test_single(method='MVGP', n=n, seed=0, # kap=1,
+                                    noiseconst=noiseconst,
+                                    ftr=f, xtr=x, fte=ftest, xte=xtest,
+                                    fte0=ftest0, output_csv=True, dir=DIR,
+                                    return_quant=True)
 
     model, predmean, predstd, Phi, \
-        _, _, _, _, _ = test_single(method='MVIP', n=n, ip_frac=1/4, seed=0, kap=1,
+        _, _, _, _, _ = test_single(method='MVIP', n=n, ip_frac=1/4, seed=0, # kap=1,
                                     noiseconst=noiseconst,
                                     ftr=f, xtr=x, fte=ftest, xte=xtest,
                                     fte0=ftest0, output_csv=True, dir=DIR,

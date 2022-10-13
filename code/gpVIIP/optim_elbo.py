@@ -1,11 +1,10 @@
 import torch
-from optim_rules import convergence_f, convergence_g, convergence_f_abs
 
+LS_FAIL_MAX = 5
 
 def optim_elbo_lbfgs(model,
                      maxiter=500, lr=1e-1,
-                     gtol=1e-2,
-                     thetate=None, fte=None,
+                     gtol=1e-1,
                      verbose=False):
 
     optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
@@ -20,17 +19,16 @@ def optim_elbo_lbfgs(model,
     loss.backward()
 
     epoch = 0
+    ls_fail_count = 0
 
     header = ['iter', 'grad.mean()', 'lr', 'negelbo', 'diff.', 'test mse']
     if verbose:
         print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
-        print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f}'.format
-              (epoch, 0, lr, loss, loss_prev - loss, model.test_mse(thetate, fte)))
     while True:
         options = {'closure': closure, 'current_loss': loss,
-                   # 'c1': 1e-2, 'c2': 0.7,
                    'max_ls': 15, 'damping': True}
         loss, grad, lr, _, _, _, _, _ = optim.step(options)
+        ls_fail_count += (lr < 1e-12)
 
         epoch += 1
         if epoch > maxiter:
@@ -42,9 +40,13 @@ def optim_elbo_lbfgs(model,
                 print('exit after epoch {:d}, GTOL <= {:.3E}'.format(epoch, gtol))
                 flag = 'G_CONV'
                 break
-        if verbose and thetate is not None and fte is not None:
-            print('{:<5d} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f} {:<12.3f}'.format
-                  (epoch, grad.abs().mean(), lr, loss, loss_prev - loss, model.test_mse(thetate, fte)))
+        if ls_fail_count > LS_FAIL_MAX:
+            print('exit at epoch {:d}, line searches failed for {:d} iterations'.format(epoch, LS_FAIL_MAX))
+            flag = 'LS_FAIL_MAX_REACHED'
+            break
+        if verbose:
+            print('{:<5d} {:<12.3f} {:<12.3E} {:<12.3f} {:<12.3f}'.format
+                  (epoch, grad.abs().mean(), lr, loss, loss_prev - loss))
 
         with torch.no_grad():
             loss_prev = loss.clone()

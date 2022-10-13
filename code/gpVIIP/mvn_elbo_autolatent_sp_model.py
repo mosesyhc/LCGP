@@ -85,7 +85,7 @@ class MVN_elbo_autolatent_sp(Module):
 
         if initlsigma2 or lsigma2 is None:
             Fhat = (self.Phi * self.pcw) @ self.G
-            lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()), 0.01 * (self.F**2).mean())
+            lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()), torch.log(0.01 * (self.F**2).mean()))
         self.lmse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
         self.buildtime: float = 0.0
@@ -145,8 +145,8 @@ class MVN_elbo_autolatent_sp(Module):
         for k in range(kap):
             negloggp_sp_k, Cinvkdiag_sp = negloglik_gp_sp(llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k],
                                             theta=theta, thetai=thetai, g=M[k])
-            negelbo += negloggp_sp_k.item()
-            negelbo += 1 / 2 * (Cinvkdiag_sp * V[k]).sum().item()
+            negelbo += negloggp_sp_k
+            negelbo += 1 / 2 * (Cinvkdiag_sp * V[k]).sum()
 
         residF = F - (self.Phi * self.pcw) @ M
         negelbo += m * n / 2 * lsigma2
@@ -155,18 +155,10 @@ class MVN_elbo_autolatent_sp(Module):
         negelbo += 1 / (2 * lsigma2.exp()) * V.sum()
 
         negelbo += 2 * (lsigma2 - self.lmse0) ** 2
-        # negelbo += 4 * ((lnugGPs + 10) ** 2).sum()
-
-        # # debug
-        # print(negloggp_sp_k.item(), m * n / 2 * lsigma2.item(),
-        #       1 / (2 * lsigma2.exp().item()) * (residF ** 2).sum().item(),
-        #       1 / 2 * torch.log(V).sum().item(),
-        #       10 * (lsigma2.item() - self.lmse0) ** 2)
 
         return negelbo
 
-    
-    @jit.script_method
+
     def compute_MV(self):
         lsigma2 = self.lsigma2
         lLmb = self.lLmb
@@ -190,35 +182,36 @@ class MVN_elbo_autolatent_sp(Module):
         QRinvhs = torch.zeros((self.kap, self.n, self.p))
         Rinvhs = torch.zeros((self.kap, self.p, self.p))
         Ciinvhs = torch.zeros((self.kap, self.p, self.p))
-        for k in range(kap):
-            with torch.no_grad():
+
+        with torch.no_grad():
+            for k in range(kap):
                 Delta_k_inv_diag, Qk, Rkinvh, Qk_Rkinvh, \
                     logdet_Ck, ck_full_i, Ck_i = cov_sp(theta=theta, thetai=thetai,
                                                         llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
 
-            W_Cki, U_Cki = torch.linalg.eigh(Ck_i)
-            Ckiinvh = U_Cki / W_Cki.abs().sqrt()
-            Ciinvhs[k] = Ckiinvh
+                W_Cki, U_Cki = torch.linalg.eigh(Ck_i)
+                Ckiinvh = U_Cki / W_Cki.abs().sqrt()
+                Ciinvhs[k] = Ckiinvh
 
-            Dinvk_diag = 1 / (1 + sigma2 * Delta_k_inv_diag)
-            D2invk_diag = 1 / (1 / Delta_k_inv_diag + sigma2)
+                Dinvk_diag = 1 / (1 + sigma2 * Delta_k_inv_diag)
+                D2invk_diag = 1 / (1 / Delta_k_inv_diag + sigma2)
 
-            Tk = Ck_i + ck_full_i.T * D2invk_diag @ ck_full_i  #checked
+                Tk = Ck_i + ck_full_i.T * D2invk_diag @ ck_full_i  #checked
 
-            W_Tk, U_Tk = torch.linalg.eigh(Tk)
-            Tkinvh = U_Tk / W_Tk.abs().sqrt()
+                W_Tk, U_Tk = torch.linalg.eigh(Tk)
+                Tkinvh = U_Tk / W_Tk.abs().sqrt()
 
-            Sk = (D2invk_diag * ck_full_i.T).T
-            Sk_Tkinvh = Sk @ Tkinvh
+                Sk = (D2invk_diag * ck_full_i.T).T
+                Sk_Tkinvh = Sk @ Tkinvh
 
-            Mk = Dinvk_diag * G[k] + sigma2 * Sk_Tkinvh @ (Sk_Tkinvh.T * G[k]).sum(1)
+                Mk = Dinvk_diag * G[k] + sigma2 * Sk_Tkinvh @ (Sk_Tkinvh.T * G[k]).sum(1)
 
-            M[k] = Mk
-            V[k] = 1 / (1 / sigma2 + (Delta_k_inv_diag - (Qk_Rkinvh ** 2).sum(1)))
+                M[k] = Mk
+                V[k] = 1 / (1 / sigma2 + (Delta_k_inv_diag - (Qk_Rkinvh ** 2).sum(1)))
 
-            Delta_inv_diags[k] = Delta_k_inv_diag
-            QRinvhs[k] = Qk_Rkinvh
-            Rinvhs[k] = Rkinvh
+                Delta_inv_diags[k] = Delta_k_inv_diag
+                QRinvhs[k] = Qk_Rkinvh
+                Rinvhs[k] = Rkinvh
 
         self.M = M
         self.V = V

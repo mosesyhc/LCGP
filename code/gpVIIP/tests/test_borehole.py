@@ -3,7 +3,6 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import torch
-from fayans_support import read_data, read_test_data
 from mvn_elbo_autolatent_model import MVN_elbo_autolatent
 from mvn_elbo_autolatent_sp_model import MVN_elbo_autolatent_sp
 from optim_elbo import optim_elbo_lbfgs
@@ -18,6 +17,16 @@ res_struct = dict.fromkeys(['method', 'rep',
                             'pcover', 'pintwid', 'pintscore',
                             'optim_elbo_iter', 'optim_elbo_flag', 'optim_elbo_lr'])
 
+def read_test_data(dir):
+    testf = np.loadtxt(dir + r'testf.txt')
+    testtheta = np.loadtxt(dir + r'testtheta.txt')
+    return testf, testtheta
+
+def read_data(dir):
+    f = np.loadtxt(dir + r'f.txt')
+    x = np.loadtxt(dir + r'x.txt')
+    theta = np.loadtxt(dir + r'theta.txt')
+    return f, x, theta
 
 def build_surmise(ftr, thetatr):
     from surmise.emulation import emulator
@@ -208,13 +217,9 @@ if __name__ == '__main__':
     res_dir = r'code/test_results/surmise_MVGP_MVIP/20221010/'
     Path(res_dir).mkdir(parents=True, exist_ok=True)
 
-    dir = r'code/data/borehole_data/'
+    dir = r'../data/borehole_data/'
     f, x, thetatr = read_data(dir)
     fte0, thetate = read_test_data(dir)
-
-    f = f[:10]
-    fte0 = fte0[:10]
-    x = x[:10]
 
     m, ntr = f.shape
     fstd = f.std(1)
@@ -234,12 +239,12 @@ if __name__ == '__main__':
     thetatr = torch.tensor(thetatr)
     thetate = torch.tensor(thetate)
 
-    method_list = ['surmise', 'MVIP'] #, 'MVGP'] 'MVIP',
-    n_list = [50] #, 250, 500] # 25, 50] #
+    method_list = ['MVGP'] #, 'MVGP'] 'MVIP',
+    n_list = [500] #, 250, 500] # 25, 50] #
     ip_frac_list = [1/2] #, 1/2, 1]
 
     nrep = 1
-    save_csv = True
+    save_csv = False
     for rep in np.arange(nrep):
         for n in n_list:
             seed = torch.randint(0, 10000, (1, ))
@@ -255,15 +260,15 @@ if __name__ == '__main__':
                     for ip_frac in ip_frac_list:
                         print('ip_frac: {:.3f}'.format(ip_frac))
                         test_single(method=method, n=n, seed=seed,
-                                    ftr=ftr_n, thetatr=thetatr_n,
-                                    fte=fte, fte0=fte0, thetate=thetate,
+                                    ftr=ftr_n, xtr=thetatr_n,
+                                    fte=fte, fte0=fte0, xte=thetate,
                                     noiseconst=noiseconst,
                                     rep=rep, ip_frac=ip_frac,
                                     output_csv=save_csv)
                 else:
                     test_single(method=method, n=n, seed=seed,
-                                ftr=ftr_n, thetatr=thetatr_n,
-                                fte=fte, fte0=fte0, thetate=thetate,
+                                ftr=ftr_n, xtr=thetatr_n,
+                                fte=fte, fte0=fte0, xte=thetate,
                                 noiseconst=noiseconst,
                                 rep=rep,
                                 output_csv=save_csv)

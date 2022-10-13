@@ -67,7 +67,7 @@ class MVN_elbo_autolatent(Module):
 
         if initlsigma2 or lsigma2 is None:
             Fhat = (self.Phi * self.pcw) @ self.G
-            lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()), 0.01 * (self.F**2).mean())
+            lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()), torch.log(0.1 * (self.F**2).mean()))
         self.lmse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
 
@@ -126,18 +126,14 @@ class MVN_elbo_autolatent(Module):
         negelbo = 0
         for k in range(kap):
             negloggp_k, Cinvkdiag = negloglik_gp(llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], theta=theta, g=M[k])
-            negelbo += negloggp_k.item()
-            negelbo += 1 / 2 * (Cinvkdiag * V[k]).sum().item()
+            negelbo += negloggp_k
+            negelbo += 1 / 2 * (Cinvkdiag * V[k]).sum()
 
         residF = F - (self.Phi * self.pcw) @ M
         negelbo += m * n / 2 * lsigma2
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
         negelbo -= 1 / 2 * torch.log(V).sum()
         negelbo += 1 / (2 * lsigma2.exp()) * V.sum()
-
-        # print(negloggp_k.item(), 1 / 2 * (Cinvkdiag * V[k]).sum().item(),
-        #       m * n / 2 * lsigma2.item(), 1 / (2 * lsigma2.exp().item()) * (residF ** 2).sum().item(),
-        #       - 1 / 2 * torch.log(V).sum().item(), 1 / (2 * lsigma2.exp().item()) * V.sum().item())
 
         negelbo += 2 * (lsigma2 - self.lmse0) ** 2
 
@@ -164,20 +160,20 @@ class MVN_elbo_autolatent(Module):
         V = torch.zeros(self.kap, self.n)
 
         Cinvhs = torch.zeros(self.kap, self.n, self.n)
-        for k in range(kap):
-            with torch.no_grad():
+        with torch.no_grad():
+            for k in range(kap):
                 C_k = covmat(theta, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
 
-            W_k, U_k = torch.linalg.eigh(C_k)
+                W_k, U_k = torch.linalg.eigh(C_k)
 
-            Ckinvh = U_k / W_k.sqrt()
+                Ckinvh = U_k / W_k.sqrt()
 
-            Mk = torch.linalg.solve(torch.eye(n) + sigma2 * Ckinvh @ Ckinvh.T, G[k])
-            M[k] = Mk
-            V[k] = 1 / (1 / sigma2 + (Ckinvh ** 2).sum(1))
+                Mk = torch.linalg.solve(torch.eye(n) + sigma2 * Ckinvh @ Ckinvh.T, G[k])
+                M[k] = Mk
+                V[k] = 1 / (1 / sigma2 + (Ckinvh ** 2).sum(1))
 
-            # save
-            Cinvhs[k] = Ckinvh
+                # save
+                Cinvhs[k] = Ckinvh
 
         self.M = M
         self.V = V
@@ -222,14 +218,13 @@ class MVN_elbo_autolatent(Module):
                 predcov_g[k] = (ck0 - (ck_Ckinvh ** 2).sum(1)) + \
                                (ck_Ckinv_Vkh ** 2).sum(1)
 
-                term1[k] = (ck0 - (ck_Ckinvh ** 2).sum(1))
-                term2[k] = (ck_Ckinv_Vkh**2).sum(1)
+                # term1[k] = (ck0 - (ck_Ckinvh ** 2).sum(1))
+                # term2[k] = (ck_Ckinv_Vkh**2).sum(1)
             for i in range(n0):
                 predcov[:, :, i] = txPhi * predcov_g[:, i] @ txPhi.T
-                # torch.exp(lsigma2) * torch.eye(m)
 
-            self.GPvarterm1 = term1
-            self.GPvarterm2 = term2
+            # self.GPvarterm1 = term1
+            # self.GPvarterm2 = term2
         return predcov
 
     def predictvar(self, theta0):
