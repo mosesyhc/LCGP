@@ -11,7 +11,6 @@ if JIT:
 else:
     Module = nn.Module
 
-
 class MVN_elbo_autolatent(Module):
     def __init__(self, F, theta,
                  Phi=None, kap=None, pcthreshold=0.9999,
@@ -103,7 +102,6 @@ class MVN_elbo_autolatent(Module):
         fhat = self.tx_F(fhat)
         return fhat  # , ghat
 
-
     def negelbo(self):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
@@ -139,7 +137,7 @@ class MVN_elbo_autolatent(Module):
 
         return negelbo
 
-
+    @torch.no_grad()
     def compute_MV(self):
         lsigma2 = self.lsigma2
         lLmb = self.lLmb
@@ -154,27 +152,24 @@ class MVN_elbo_autolatent(Module):
 
         n = self.n
         G = self.G
-        sigma2 = torch.exp(lsigma2)
 
         M = torch.zeros(self.kap, self.n)
         V = torch.zeros(self.kap, self.n)
 
+        sigma2 = torch.exp(lsigma2)
         Cinvhs = torch.zeros(self.kap, self.n, self.n)
-        with torch.no_grad():
-            for k in range(kap):
-                C_k = covmat(theta, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+        for k in range(kap):
+            C_k = covmat(theta, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
 
-                W_k, U_k = torch.linalg.eigh(C_k)
+            W_k, U_k = torch.linalg.eigh(C_k)
 
-                Ckinvh = U_k / W_k.sqrt()
+            Ckinvh = U_k / W_k.sqrt()
 
-                Mk = torch.linalg.solve(torch.eye(n) + sigma2 * Ckinvh @ Ckinvh.T, G[k])
-                M[k] = Mk
-                V[k] = 1 / (1 / sigma2 + (Ckinvh ** 2).sum(1))
+            Mk = torch.linalg.solve(torch.eye(n) + sigma2 * Ckinvh @ Ckinvh.T, G[k])
+            M[k] = Mk
+            V[k] = 1 / (1 / sigma2 + (Ckinvh ** 2).sum(1))
 
-                # save
-                Cinvhs[k] = Ckinvh
-
+            Cinvhs[k] = Ckinvh
         self.M = M
         self.V = V
         self.Cinvhs = Cinvhs
