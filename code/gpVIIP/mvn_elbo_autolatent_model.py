@@ -200,8 +200,8 @@ class MVN_elbo_autolatent(Module):
             predcov = torch.zeros(m, m, n0)
             predcov_g = torch.zeros(kap, n0)
 
-            term1 = torch.zeros(kap, n0)
-            term2 = torch.zeros(kap, n0)
+            # term1 = torch.zeros(kap, n0)
+            # term2 = torch.zeros(kap, n0)
             for k in range(kap):
                 ck0 = covmat(theta0, theta0, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], diag_only=True)
                 ck = covmat(theta0, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
