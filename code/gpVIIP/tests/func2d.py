@@ -30,8 +30,8 @@ def forrester2008(x, noisy=True, noiseconst=1):
     y2 = forrester1d(y1, x, 0.5, 5, -5)
 
     if noisy:
-        e1 = np.random.normal(0, noiseconst * (x + 0.5) ** 2, x.shape)
-        e2 = np.random.normal(0, noiseconst * (x + 0.5) ** 2, x.shape)
+        e1 = np.random.normal(0, noiseconst * 0.5 * np.std(y1), x.shape)
+        e2 = np.random.normal(0, noiseconst * 0.5 * np.std(y2), x.shape)
 
         y1 += e1
         y2 += e2

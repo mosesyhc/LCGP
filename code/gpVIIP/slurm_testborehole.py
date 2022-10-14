@@ -51,8 +51,8 @@ _, nte = fte.shape
 
 noiseconst = args.noiseconst
 for j in range(m):
-    ftr[j] = f[j] + np.random.normal(0, noiseconst * fstd[j], ntr)
-    fte[j] = fte0[j] + np.random.normal(0, noiseconst * fstd[j], nte)
+    ftr[j] = f[j] + np.random.normal(0, 1/2 * noiseconst * fstd[j], ntr)
+    fte[j] = fte0[j] + np.random.normal(0, 1/2 * noiseconst * fstd[j], nte)
 
 ftr = torch.tensor(ftr)
 fte0 = torch.tensor(fte0)
