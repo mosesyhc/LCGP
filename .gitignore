@@ -32,3 +32,5 @@ code/gpVIIP/tests/code/test_results/surmise_MVGP_MVIP/2dExample_separate/
 *.dat
 
 code/fig/talk-figs/
+
+code/fig/talk_figs/
