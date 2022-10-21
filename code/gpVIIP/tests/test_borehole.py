@@ -118,7 +118,7 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
         predmean = emupred.mean()
         predcov = emupred.covx().transpose(2, 0, 1)
         predstd = np.sqrt(emupred.var())
-        predaddvar = model._info['standardpcinfo']['extravar']
+        predaddvar = model._info['extravar']
 
         time_tr1 = time.time()
 
@@ -240,7 +240,7 @@ if __name__ == '__main__':
     thetate = torch.tensor(thetate)
 
     method_list = ['MVGP'] #, 'MVGP'] 'MVIP',
-    n_list = [500] #, 250, 500] # 25, 50] #
+    n_list = [100] #, 250, 500] # 25, 50] #
     ip_frac_list = [1/2] #, 1/2, 1]
 
     nrep = 1

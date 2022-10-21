@@ -103,11 +103,11 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
 
         predmeantr = model.predict().mean()
         emupred = model.predict(x=np.arange(fte.shape[0]),
-                              theta=xte)
+                                theta=xte)
         predmean = emupred.mean()
         predcov = emupred.covx().transpose(2, 0, 1)
         predstd = np.sqrt(emupred.var())
-        predaddvar = model._info['standardpcinfo']['extravar']
+        predaddvar = model._info['extravar']
 
         time_tr1 = time.time()
 

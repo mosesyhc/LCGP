@@ -18,7 +18,6 @@ class MVN_elbo_autolatent(Module):
                  initlLmb=True, initlsigma2=True,
                  clamping=True):
         """
-
         :param Phi:
         :param F:
         :param theta:
@@ -66,7 +65,8 @@ class MVN_elbo_autolatent(Module):
 
         if initlsigma2 or lsigma2 is None:
             Fhat = (self.Phi * self.pcw) @ self.G
-            lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()), torch.log(0.1 * (self.F**2).mean()))
+            lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()),
+                                torch.log(0.01 * (self.F ** 2).mean()))
         self.lmse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
 
@@ -80,7 +80,8 @@ class MVN_elbo_autolatent(Module):
         ltau2GPs = self.ltau2GPs
 
         if self.clamping:
-            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
+            lLmb, lsigma2, lnugGPs, ltau2GPs = \
+                self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
 
         M = self.M
         Cinvhs = self.Cinvhs
@@ -263,7 +264,6 @@ class MVN_elbo_autolatent(Module):
     def tx_F(self, Fs):
         return Fs * self.Fstd + self.Fmean
 
-    #
     def dss(self, theta0, f0, use_diag=False):
         """
         Returns the Dawid-Sebastani score averaged across test points.
@@ -310,8 +310,6 @@ class MVN_elbo_autolatent(Module):
         r = f - mu
         diagV = Sigma.diag()
         score_single = torch.log(diagV).sum() + (r * r / diagV).sum()
-        # print('mse {:.6f}'.format((r**2).mean()))
-        # print('diag cov mean: {:.6f}'.format(diagV.mean()))
         return score_single
 
     @staticmethod
@@ -332,7 +330,6 @@ class MVN_elbo_autolatent(Module):
 
     @staticmethod
     def parameter_clamp(lLmb, lsigma2, lnugs, ltau2s):
-        # clamping
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 1)))
         lnugs = parameter_clamping(lnugs, torch.tensor((-16, -8)))

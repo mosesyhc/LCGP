@@ -13,7 +13,9 @@ def negloglik_gp(llmb, lnug, ltau2, theta, g):
     negloglik += 1/2 * (fcenter**2).sum()
 
     # regularization of hyperparameter
-    llmbreg = 1/2 * 20 * (llmb + 1) ** 2
+    llmbreg = 1/2 * 10 * (llmb + 1) ** 2
+    # llmbreg = 2 * ((5 + 1) * llmb + 5 / llmb.exp())  # invgamma(5, 5)
+
     llmbreg[-1] = 1/2 * 10 * llmb[-1] ** 2
     ltau2reg = 1/2 * 2 * ltau2**2
 
