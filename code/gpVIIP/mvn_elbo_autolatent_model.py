@@ -201,8 +201,8 @@ class MVN_elbo_autolatent(Module):
             predcov = torch.zeros(m, m, n0)
             predcov_g = torch.zeros(kap, n0)
 
-            # term1 = torch.zeros(kap, n0)
-            # term2 = torch.zeros(kap, n0)
+            term1 = torch.zeros(kap, n0)
+            term2 = torch.zeros(kap, n0)
             for k in range(kap):
                 ck0 = covmat(theta0, theta0, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], diag_only=True)
                 ck = covmat(theta0, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
@@ -214,13 +214,13 @@ class MVN_elbo_autolatent(Module):
                 predcov_g[k] = (ck0 - (ck_Ckinvh ** 2).sum(1)) + \
                                (ck_Ckinv_Vkh ** 2).sum(1)
 
-                # term1[k] = (ck0 - (ck_Ckinvh ** 2).sum(1))
-                # term2[k] = (ck_Ckinv_Vkh**2).sum(1)
+                term1[k] = (ck0 - (ck_Ckinvh ** 2).sum(1))
+                term2[k] = (ck_Ckinv_Vkh**2).sum(1)
             for i in range(n0):
                 predcov[:, :, i] = txPhi * predcov_g[:, i] @ txPhi.T
 
-            # self.GPvarterm1 = term1
-            # self.GPvarterm2 = term2
+            self.GPvarterm1 = term1
+            self.GPvarterm2 = term2
         return predcov
 
     def predictvar(self, theta0):
@@ -330,7 +330,7 @@ class MVN_elbo_autolatent(Module):
 
     @staticmethod
     def parameter_clamp(lLmb, lsigma2, lnugs, ltau2s):
-        lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T
+        lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T  # + 1/2 * log dimension
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 1)))
         lnugs = parameter_clamping(lnugs, torch.tensor((-16, -8)))
         ltau2s = parameter_clamping(ltau2s, torch.tensor((-4, 4)))

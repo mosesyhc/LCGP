@@ -165,7 +165,7 @@ if __name__ == '__main__':
     for i in range(1):
         save = False
         for n in ns:
-            m = test_n(n=n, noiseconst=2, save=False)  # , ms
+            m = test_n(n=n, noiseconst=1, save=False)  # , ms
             res.append(m)
             # res_sp.append(ms)
 
@@ -177,7 +177,7 @@ if __name__ == '__main__':
         Gvar = m.G.var()
         Mvar = m.M.var()
         print('{:<6d} {:<6.3f} {:<6.3f} {:<6.3f} {:<6.3f} {:<6.3f} {:<6.3f} {:<10.6f} {:<10.6f} {:<10.6f} {:<10.6f}'.format(
-            m.n, ltau.item(), lnug.item(), lLmb[:, -1].item(), lsigma2.item(), Gvar, Mvar, trainGPvar1, trainGPvar2, testGPvar1, testGPvar2))
+            m.n, ltau[0].item(), lnug[0].item(), lLmb[0, -1].item(), lsigma2.item(), Gvar, Mvar, trainGPvar1, trainGPvar2, testGPvar1, testGPvar2))
 
     header = ['n', 'ltau2gps', 'lnug', 'llmb[-1]', 'lsigma2', 'Gvar', 'Mvar', 'train_term1', 'train_term2', 'test_term1', 'test_term2']
     print('Full VI')
