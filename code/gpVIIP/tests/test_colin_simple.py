@@ -94,10 +94,10 @@ if __name__ == '__main__':
     ftr = ((ftr.T - ftrmean) / ftrstd).T
     fte = ((fte.T - ftrmean) / ftrstd).T
 
-    model = MVN_elbo_autolatent(F=ftr, theta=thetatr, pcthreshold=0.999, clamping=True)
+    model = MVN_elbo_autolatent(F=ftr, x=thetatr, pcthreshold=0.999, clamping=True)
 
-    print('train mse: {:.3E}, test mse: {:.3E}'.format(model.test_mse(theta0=thetatr, f0=ftr),
-                                                       model.test_mse(theta0=thetate, f0=fte)))
+    print('train mse: {:.3E}, test mse: {:.3E}'.format(model.test_mse(x0=thetatr, f0=ftr),
+                                                       model.test_mse(x0=thetate, f0=fte)))
 
     model.compute_MV()
 

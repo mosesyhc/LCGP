@@ -49,7 +49,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         lr = 5e-4
         model = MVN_elbo_autolatent(lLmb=None, initlLmb=True,
                                     lsigma2=None, initlsigma2=True,
-                                    Phi=Phi, F=ftr, theta=thetatr)
+                                    Phi=Phi, F=ftr, x=thetatr)
         model, niter, flag = optim_elbo_lbfgs(model, #ftr, thetatr, fte, thetate,
                                               maxiter=100, lr=lr)
 
@@ -187,7 +187,7 @@ if __name__ == '__main__':
     model_mvgp = MVN_elbo_autolatent(lLmb=None, initlLmb=True,
                                      lsigma2=None, initlsigma2=True,
                                      # lsigma2=torch.Tensor((-12,)), initlsigma2=False,
-                                     Phi=Phi, F=f, theta=theta)  # , thetai=thetai)
+                                     Phi=Phi, F=f, x=theta)  # , thetai=thetai)
 
     model_mvgp, niter, flag = optim_elbo_lbfgs(model_mvgp,
                                                maxiter=100,

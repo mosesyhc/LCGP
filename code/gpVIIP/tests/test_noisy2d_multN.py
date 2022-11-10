@@ -98,10 +98,10 @@ if __name__ == '__main__':
 
         ##############################################
         vi0 = time.time()
-        model = MVN_elbo_autolatent(F=f, theta=x, kap=1, clamping=True)
+        model = MVN_elbo_autolatent(F=f, x=x, kap=1, clamping=True)
 
-        print('train mse: {:.3E}, test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
-                                                           model.test_mse(theta0=xtest, f0=ftest)))
+        print('train mse: {:.3E}, test mse: {:.3E}'.format(model.test_mse(x0=x, f0=f),
+                                                           model.test_mse(x0=xtest, f0=ftest)))
 
         model, niter, flag = optim_elbo_lbfgs(model, maxiter=200,
                                               lr=1e-1, gtol=1e-4,
@@ -114,8 +114,8 @@ if __name__ == '__main__':
         predmean = model.predictmean(xtest)
         predstd = model.predictvar(xtest).sqrt()
         print('after training\ntrain mse: {:.3E}, '
-              'test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
-                                        model.test_mse(theta0=xtest, f0=ftest)))
+              'test mse: {:.3E}'.format(model.test_mse(x0=x, f0=f),
+                                        model.test_mse(x0=xtest, f0=ftest)))
 
         emuresult[i, :] = np.array((n, 0, emu1 - emu0, rmse(ftest.numpy(), emumean),
                                  crps(ftest.numpy(), emumean, emustd),

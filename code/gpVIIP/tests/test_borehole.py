@@ -123,7 +123,7 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
         time_tr1 = time.time()
 
     elif method == 'MVGP':
-        model = MVN_elbo_autolatent(F=ftr, theta=xtr,
+        model = MVN_elbo_autolatent(F=ftr, x=xtr,
                                     clamping=True)
         kap = model.kap
         model, niter, flag = optim_elbo_lbfgs(model,

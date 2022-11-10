@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
     # with profile(activities=[ProfilerActivity.CPU],
     #              with_modules=True, record_shapes=True) as prof:
-    model = MVN_elbo_autolatent(Phi=Phi, F=ftr, theta=thetatr)
+    model = MVN_elbo_autolatent(Phi=Phi, F=ftr, x=thetatr)
 
     model, _, _ = optim_elbo_lbfgs(model, maxiter=100, lr=lr)
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))

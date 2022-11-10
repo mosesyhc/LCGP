@@ -92,7 +92,7 @@ m, _ = F.shape
 model = MVN_elbo_autolatent(lLmb=None, initlLmb=True,
                             lsigma2=None, initlsigma2=True,
                             psi=torch.zeros_like(psi),
-                            Phi=Phi, F=F, theta=thetatr)
+                            Phi=Phi, F=F, x=thetatr)
 model.double()
 
 optim = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),

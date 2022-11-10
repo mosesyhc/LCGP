@@ -47,18 +47,18 @@ def test_n(n):
     emupct = emu._info['pct']
 
     ##############################################
-    model = MVN_elbo_autolatent(F=f, theta=x, kap=1, clamping=True)
+    model = MVN_elbo_autolatent(F=f, x=x, kap=1, clamping=True)
 
-    print('train mse: {:.3f}, test mse: {:.3f}'.format(model.test_mse(theta0=x, f0=f),
-                                                       model.test_mse(theta0=xtest, f0=ftest)))
+    print('train mse: {:.3f}, test mse: {:.3f}'.format(model.test_mse(x0=x, f0=f),
+                                                       model.test_mse(x0=xtest, f0=ftest)))
 
     model, niter, flag = optim_elbo_lbfgs(model, maxiter=100,
                                           lr=1e-1, gtol=1e-4,
                                           thetate=xtest, fte=ftest, verbose=False)
 
     print('after training\ntrain mse: {:.3f}, '
-          'test mse: {:.3f}'.format(model.test_mse(theta0=x, f0=f),
-                                    model.test_mse(theta0=xtest, f0=ftest)))
+          'test mse: {:.3f}'.format(model.test_mse(x0=x, f0=f),
+                                    model.test_mse(x0=xtest, f0=ftest)))
 
     print(model.lLmb)
 
@@ -67,7 +67,7 @@ def test_n(n):
     predstd = model.predictvar(xtest).sqrt()
 
     emurmse = np.sqrt(((emumean - ftest.numpy()) ** 2).mean())
-    virmse = model.test_rmse(theta0=xtest, f0=ftest)
+    virmse = model.test_rmse(x0=xtest, f0=ftest)
 
     emuchi2 = (((emumean - ftest.numpy()) / emustd)**2).mean()
     VIchi2 = (((predmean - ftest) / predstd)**2).mean()

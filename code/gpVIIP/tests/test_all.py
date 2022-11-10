@@ -50,7 +50,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
         lr = 5e-4
         model = MVN_elbo_autolatent(lLmb=None, initlLmb=True,
                                     lsigma2=None, initlsigma2=True,
-                                    Phi=Phi, F=ftr, theta=thetatr)
+                                    Phi=Phi, F=ftr, x=thetatr)
         model, niter, flag = optim_elbo_lbfgs(model, #ftr, thetatr, fte, thetate,
                                               maxiter=100, lr=lr)
 

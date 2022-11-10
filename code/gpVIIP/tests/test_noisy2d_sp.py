@@ -60,15 +60,15 @@ def test_n(n):
                                           thetate=xtest, fte=ftest, verbose=False)
 
     print('after training\ntrain mse: {:.3E}, '
-          'test mse: {:.3E}'.format(model.test_mse(theta0=x, f0=f),
-                                    model.test_mse(theta0=xtest, f0=ftest)))
+          'test mse: {:.3E}'.format(model.test_mse(x0=x, f0=f),
+                                    model.test_mse(x0=xtest, f0=ftest)))
 
     model.eval()
     predmean = model.predictmean(xtest)
     predstd = model.predictvar(xtest).sqrt()
 
     emurmse = np.sqrt(((emumean - ftest.numpy()) ** 2).mean())
-    virmse = model.test_rmse(theta0=xtest, f0=ftest)
+    virmse = model.test_rmse(x0=xtest, f0=ftest)
 
     emuchi2 = (((emumean - ftest.numpy()) / emustd)**2).mean()
     VIchi2 = (((predmean - ftest) / predstd)**2).mean()

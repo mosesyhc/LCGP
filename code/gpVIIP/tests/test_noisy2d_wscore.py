@@ -159,7 +159,7 @@ def plot(noiseconst, n, emupct, emumean, emustd,
 
 
 if __name__ == '__main__':
-    ns = [10, 25, 50, 100, 250, 500] #, 1000]  # 25,
+    ns = [50] #, 100, 250, 500] #, 1000]  # 25,
     res = []
     res_sp = []
     for i in range(1):
@@ -172,7 +172,7 @@ if __name__ == '__main__':
     def print_diagnostics(m):
         lLmb, lsigma2, lnug, ltau = m.parameter_clamp(m.lLmb, m.lsigma2, m.lnugGPs, m.ltau2GPs)
         testGPvar1, testGPvar2 = m.GPvarterm1.mean().item(), m.GPvarterm2.mean().item()
-        _ = m.predictcov(m.theta)
+        _ = m.predictcov(m.x)
         trainGPvar1, trainGPvar2 = m.GPvarterm1.mean().item(), m.GPvarterm2.mean().item()
         Gvar = m.G.var()
         Mvar = m.M.var()
