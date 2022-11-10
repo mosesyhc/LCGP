@@ -43,7 +43,7 @@ def test_single(method, n, seed, ftr, thetatr, fte, thetate,
     # train model
     if method == 'MVGP':
         with record_function("model_init"):
-            model = MVN_elbo_autolatent(F=ftr, theta=thetatr,
+            model = MVN_elbo_autolatent(F=ftr, x=thetatr,
                                         clamping=True)
         kap = model.kap
         with record_function("model_optim"):
