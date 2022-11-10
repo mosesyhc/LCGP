@@ -330,7 +330,8 @@ class MVN_elbo_autolatent(Module):
 
     @staticmethod
     def parameter_clamp(lLmb, lsigma2, lnugs, ltau2s):
-        lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5, 2.5)))).T  # + 1/2 * log dimension
+        d = torch.tensor(lLmb.shape[1] - 1,)
+        lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5 + 1/2 * torch.log(d), 2.5)))).T  # + 1/2 * log dimension
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 1)))
         lnugs = parameter_clamping(lnugs, torch.tensor((-16, -8)))
         ltau2s = parameter_clamping(ltau2s, torch.tensor((-4, 4)))
@@ -346,8 +347,6 @@ class MVN_elbo_autolatent(Module):
 
         if kap is None:
             kap = int(torch.argwhere(v > threshold)[0][0] + 1)
-            # if kap > 1:
-            #     kap -= 1
 
         assert Phi.shape[1] == min(m, n)
         Phi = Phi[:, :kap]
