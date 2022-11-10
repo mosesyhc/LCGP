@@ -20,12 +20,14 @@ def optim_elbo_lbfgs(model,
 
     epoch = 0
     ls_fail_count = 0
+    restart_count = 0
 
     header = ['iter', 'grad.absmax()', 'lr', 'negelbo', 'diff.', 'test mse']
     if verbose:
         print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
     while True:
         options = {'closure': closure, 'current_loss': loss,
+                   'history_size': 4,
                    'max_ls': 15, 'damping': True}
         loss, grad, lr, _, _, _, _, _ = optim.step(options)
         ls_fail_count += (lr < 1e-12)
@@ -42,9 +44,15 @@ def optim_elbo_lbfgs(model,
                 flag = 'G_CONV'
                 break
         if ls_fail_count > LS_FAIL_MAX:
-            print('exit at epoch {:d}, line searches failed for {:d} iterations'.format(epoch, LS_FAIL_MAX))
-            flag = 'LS_FAIL_MAX_REACHED'
-            break
+            if restart_count < 1:
+                restart_count += 1
+                optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+                ls_fail_count = 0
+            else:
+                print('exit at epoch {:d}, line searches failed for {:d} iterations'.format(epoch, LS_FAIL_MAX))
+                flag = 'LS_FAIL_MAX_REACHED'
+
+                break
         if verbose:
             print('{:<5d} {:<12.3f} {:<12.3E} {:<12.3f} {:<12.3f}'.format
                   (epoch, grad.abs().mean(), lr, loss, loss_prev - loss))
