@@ -4,6 +4,8 @@ import torch.jit as jit
 from matern_covmat import covmat
 from likelihood import negloglik_gp
 from hyperparameter_tuning import parameter_clamping
+from optim_elbo import optim_elbo_lbfgs
+torch.set_default_dtype(torch.double)
 
 JIT = False
 if JIT:
@@ -12,7 +14,7 @@ else:
     Module = nn.Module
 
 class MVN_elbo_autolatent(Module):
-    def __init__(self, F, theta,
+    def __init__(self, F, x,
                  Phi=None, kap=None, pcthreshold=0.9999,
                  lLmb=None, lsigma2=None,
                  initlLmb=True, initlsigma2=True,
@@ -20,7 +22,7 @@ class MVN_elbo_autolatent(Module):
         """
         :param Phi:
         :param F:
-        :param theta:
+        :param x:
         :param lLmb:
         :param lsigma2:
         :param initlLmb:
@@ -29,10 +31,11 @@ class MVN_elbo_autolatent(Module):
         super().__init__()
         self.method = 'MVGP'
         self.clamping = clamping
-        self.m, self.n = F.shape
+        self.p, self.n = F.shape
         self.F = F
-
         self.standardize_F()
+        self.x = x
+        self.init_standard_x()
 
         if Phi is None:
             self.G, self.Phi, self.pcw, self.kap = self.__PCs(F=self.F, kap=kap, threshold=pcthreshold)
@@ -50,11 +53,10 @@ class MVN_elbo_autolatent(Module):
         self.V = torch.full_like(self.M, torch.nan)
         self.Cinvhs = torch.full((self.kap, self.n, self.n), torch.nan)
 
-        self.theta = theta
-        self.d = theta.shape[1]
+        self.d = x.shape[1]
         if initlLmb or lLmb is None:
-            llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([theta.shape[1]])) +
-                                torch.log(torch.std(theta, 0)))
+            llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([x.shape[1]])) +
+                                torch.log(torch.std(x, 0)))
             llmb = torch.cat((llmb, torch.Tensor([0])))
             lLmb = llmb.repeat(self.kap, 1)
             lLmb[:, -1] = torch.log(torch.var(self.G, 1))
@@ -73,7 +75,7 @@ class MVN_elbo_autolatent(Module):
         self.buildtime: float = 0.0
 
 
-    def forward(self, theta0):
+    def forward(self, x0):
         lLmb = self.lLmb
         lsigma2 = self.lsigma2
         lnugGPs = self.lnugGPs
@@ -85,14 +87,15 @@ class MVN_elbo_autolatent(Module):
 
         M = self.M
         Cinvhs = self.Cinvhs
-        theta = self.theta
+        x = self.x
+        x0 = self.standardize_x(x0)
 
         kap = self.kap
 
-        n0 = theta0.shape[0]
+        n0 = x0.shape[0]
         ghat = torch.zeros(kap, n0)
         for k in range(kap):
-            ck = covmat(theta0, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            ck = covmat(x0, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
 
             Ckinvh = Cinvhs[k]
             Ckinv_Mk = Ckinvh @ Ckinvh.T @ M[k]
@@ -113,9 +116,9 @@ class MVN_elbo_autolatent(Module):
             lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
 
         F = self.F
-        theta = self.theta
+        x = self.x
 
-        m = self.m
+        m = self.p
         n = self.n
         kap = self.kap
 
@@ -124,7 +127,7 @@ class MVN_elbo_autolatent(Module):
 
         negelbo = 0
         for k in range(kap):
-            negloggp_k, Cinvkdiag = negloglik_gp(llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], theta=theta, g=M[k])
+            negloggp_k, Cinvkdiag = negloglik_gp(llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], theta=x, g=M[k])
             negelbo += negloggp_k
             negelbo += 1 / 2 * (Cinvkdiag * V[k]).sum()
 
@@ -149,7 +152,7 @@ class MVN_elbo_autolatent(Module):
             lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
 
         kap = self.kap
-        theta = self.theta
+        x = self.x
 
         n = self.n
         G = self.G
@@ -160,7 +163,7 @@ class MVN_elbo_autolatent(Module):
         sigma2 = torch.exp(lsigma2)
         Cinvhs = torch.zeros(self.kap, self.n, self.n)
         for k in range(kap):
-            C_k = covmat(theta, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            C_k = covmat(x, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
 
             W_k, U_k = torch.linalg.eigh(C_k)
 
@@ -176,25 +179,27 @@ class MVN_elbo_autolatent(Module):
         self.Cinvhs = Cinvhs
 
 
-    def predictmean(self, theta0):
+    def predictmean(self, x0):
         with torch.no_grad():
             self.compute_MV()
-            fhat = self.forward(theta0)
+            fhat = self.forward(x0)
         return fhat
 
 
-    def predictcov(self, theta0):
+    def predictcov(self, x0):
         with torch.no_grad():
             self.compute_MV()
-            theta = self.theta
+            x = self.x
+            x0 = self.standardize_x(x0)
+
             lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs, self.ltau2GPs)
 
             txPhi = (self.Phi * self.pcw * self.Fstd)
             V = self.V
 
-            n0 = theta0.shape[0]
+            n0 = x0.shape[0]
             kap = self.kap
-            m = self.m
+            m = self.p
 
             Cinvhs = self.Cinvhs
 
@@ -204,8 +209,8 @@ class MVN_elbo_autolatent(Module):
             term1 = torch.zeros(kap, n0)
             term2 = torch.zeros(kap, n0)
             for k in range(kap):
-                ck0 = covmat(theta0, theta0, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], diag_only=True)
-                ck = covmat(theta0, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+                ck0 = covmat(x0, x0, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], diag_only=True)
+                ck = covmat(x0, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
                 Ckinvh = Cinvhs[k]
 
                 ck_Ckinvh = ck @ Ckinvh
@@ -223,11 +228,11 @@ class MVN_elbo_autolatent(Module):
             self.GPvarterm2 = term2
         return predcov
 
-    def predictvar(self, theta0):
-        predcov = self.predictcov(theta0)
+    def predictvar(self, x0):
+        predcov = self.predictcov(x0)
 
-        n0 = theta0.shape[0]
-        m = self.m
+        n0 = x0.shape[0]
+        m = self.p
         predvar = torch.zeros(m, n0)
         for i in range(n0):
             predvar[:, i] = predcov[:, :, i].diag()
@@ -239,36 +244,48 @@ class MVN_elbo_autolatent(Module):
         predictaddvar = (lsigma2.exp() * self.Fstd ** 2).squeeze(1)
         return predictaddvar
 
-    def test_mse(self, theta0, f0):
+    def test_mse(self, x0, f0):
         with torch.no_grad():
             m, n = f0.shape
-            fhat = self.predictmean(theta0)
+            fhat = self.predictmean(x0)
             return ((fhat - f0) ** 2).sum() / (m * n)
 
-    def test_rmse(self, theta0, f0):
-        return torch.sqrt(self.test_mse(theta0=theta0, f0=f0))
+    def test_rmse(self, x0, f0):
+        return torch.sqrt(self.test_mse(x0=x0, f0=f0))
 
-    def test_individual_error(self, theta0, f0):
+    def test_individual_error(self, x0, f0):
         with torch.no_grad():
-            fhat = self.predictmean(theta0)
+            fhat = self.predictmean(x0)
             return torch.sqrt((fhat - f0) ** 2).mean(0)
 
+    def init_standard_x(self):
+        x = self.x
+        self.x_orig = x.clone()
+        self.x_max = 1.1 * x.max(0).values
+        self.x_min = 0.9 * x.min(0).values
+        self.x = (x - self.x_min) / (self.x_max - self.x_min)
+
+    def standardize_x(self, x0):
+        return (x0 - self.x_min) / (self.x_max - self.x_min)
+
     def standardize_F(self):
-        if self.F is not None:
-            F = self.F
-            self.Fraw = F.clone()
-            self.Fmean = F.mean(1).unsqueeze(1)
-            self.Fstd = F.std(1).unsqueeze(1)
-            self.F = (F - self.Fmean) / self.Fstd
+        F = self.F
+        self.Fraw = F.clone()
+        self.Fmean = F.mean(1).unsqueeze(1)
+        self.Fstd = F.std(1).unsqueeze(1)
+        self.F = (F - self.Fmean) / self.Fstd
+
+    def tx_x(self, xs):
+        return xs * (self.x_max - self.x_min) + self.x_min
 
     def tx_F(self, Fs):
         return Fs * self.Fstd + self.Fmean
 
-    def dss(self, theta0, f0, use_diag=False):
+    def dss(self, x0, f0, use_diag=False):
         """
         Returns the Dawid-Sebastani score averaged across test points.
 
-        :param theta0:
+        :param x0:
         :param f0:
         :return:
         """
@@ -276,10 +293,10 @@ class MVN_elbo_autolatent(Module):
         if use_diag:
             __score_single = self.__dss_single_diag
 
-        predmean = self.predictmean(theta0)
-        predcov = self.predictcov(theta0)
+        predmean = self.predictmean(x0)
+        predcov = self.predictcov(x0)
 
-        n0 = theta0.shape[0]
+        n0 = x0.shape[0]
 
         score = 0
         for i in range(n0):
@@ -288,12 +305,12 @@ class MVN_elbo_autolatent(Module):
 
         return score
 
-    def chi2mean(self, theta0, f0):
+    def chi2mean(self, x0, f0):
 
-        predmean = self.predictmean(theta0)
-        predcov = self.predictcov(theta0)
+        predmean = self.predictmean(x0)
+        predcov = self.predictcov(x0)
 
-        n0 = theta0.shape[0]
+        n0 = x0.shape[0]
 
         chi2arr = torch.zeros(n0)
 
@@ -357,3 +374,6 @@ class MVN_elbo_autolatent(Module):
 
         G = (Phi / pcw).T @ F  # kap x n
         return G, Phi, pcw, kap
+
+    def fit(self, **kwargs):
+        _, niter, flag = optim_elbo_lbfgs(self, **kwargs)
