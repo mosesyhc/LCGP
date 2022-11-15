@@ -4,7 +4,7 @@ import torch.jit as jit
 from matern_covmat import covmat
 from likelihood import negloglik_gp
 from hyperparameter_tuning import parameter_clamping
-from optim_elbo import optim_elbo_lbfgs
+from optim_elbo import optim_elbo_lbfgs, optim_elbo_adam
 torch.set_default_dtype(torch.double)
 
 JIT = False
@@ -34,8 +34,7 @@ class MVN_elbo_autolatent(Module):
         self.p, self.n = F.shape
         self.F = F
         self.standardize_F()
-        self.x = x
-        self.init_standard_x()
+        self.init_standard_x(x)
 
         if Phi is None:
             self.G, self.Phi, self.pcw, self.kap = self.__PCs(F=self.F, kap=kap, threshold=pcthreshold)
@@ -68,12 +67,11 @@ class MVN_elbo_autolatent(Module):
         if initlsigma2 or lsigma2 is None:
             Fhat = (self.Phi * self.pcw) @ self.G
             lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()),
-                                torch.log(0.01 * (self.F ** 2).mean()))
+                                torch.log(0.1 * (self.F ** 2).mean()))
         self.lmse0 = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)
 
         self.buildtime: float = 0.0
-
 
     def forward(self, x0):
         lLmb = self.lLmb
@@ -178,6 +176,14 @@ class MVN_elbo_autolatent(Module):
         self.V = V
         self.Cinvhs = Cinvhs
 
+    @torch.no_grad()
+    def get_param_grad(self):
+        grad = []
+        for p in self.parameters():
+            view = p.grad.data.view(-1)
+            grad.append(view)
+        grad = torch.cat(grad, 0)
+        return grad
 
     def predictmean(self, x0):
         with torch.no_grad():
@@ -232,8 +238,8 @@ class MVN_elbo_autolatent(Module):
         predcov = self.predictcov(x0)
 
         n0 = x0.shape[0]
-        m = self.p
-        predvar = torch.zeros(m, n0)
+        p = self.p
+        predvar = torch.zeros(p, n0)
         for i in range(n0):
             predvar[:, i] = predcov[:, :, i].diag()
         return predvar
@@ -258,11 +264,10 @@ class MVN_elbo_autolatent(Module):
             fhat = self.predictmean(x0)
             return torch.sqrt((fhat - f0) ** 2).mean(0)
 
-    def init_standard_x(self):
-        x = self.x
+    def init_standard_x(self, x):
         self.x_orig = x.clone()
-        self.x_max = 1.1 * x.max(0).values
-        self.x_min = 0.9 * x.min(0).values
+        self.x_max = x.max(0).values
+        self.x_min = x.min(0).values
         self.x = (x - self.x_min) / (self.x_max - self.x_min)
 
     def standardize_x(self, x0):
@@ -351,7 +356,7 @@ class MVN_elbo_autolatent(Module):
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5 + 1/2 * torch.log(d), 2.5)))).T  # + 1/2 * log dimension
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 1)))
         lnugs = parameter_clamping(lnugs, torch.tensor((-16, -8)))
-        ltau2s = parameter_clamping(ltau2s, torch.tensor((-4, 4)))
+        ltau2s = parameter_clamping(ltau2s, torch.tensor((-4, 2)))
 
         return lLmb, lsigma2, lnugs, ltau2s
 
@@ -374,5 +379,23 @@ class MVN_elbo_autolatent(Module):
         G = (Phi / pcw).T @ F  # kap x n
         return G, Phi, pcw, kap
 
-    def fit(self, **kwargs):
-        _, niter, flag = optim_elbo_lbfgs(self, **kwargs)
+    def fit(self, sep=True, verbose=False):
+        niter, flag = self.fit_bfgs(sep=sep, verbose=verbose)
+        if flag == 'G_CONV':
+            return niter, flag
+        else:
+            self.fit_adam(verbose=verbose)
+            return niter, flag
+
+    def fit_bfgs(self, sep=True, **kwargs):
+        if sep:
+            self.lsigma2.requires_grad = False
+            _, niter, flag = optim_elbo_lbfgs(self, maxiter=10, **kwargs)
+            self.lsigma2.requires_grad = True
+            _, niter, flag = optim_elbo_lbfgs(self, **kwargs)
+        else:
+            _, niter, flag = optim_elbo_lbfgs(self, **kwargs)
+        return niter, flag
+    def fit_adam(self, **kwargs):
+        _, niter, flag = optim_elbo_adam(self, maxiter=100, **kwargs)
+        return niter, flag
