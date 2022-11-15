@@ -104,7 +104,7 @@ if __name__ == '__main__':
                                                            model.test_mse(x0=xtest, f0=ftest)))
 
         model, niter, flag = optim_elbo_lbfgs(model, maxiter=200,
-                                              lr=1e-1, gtol=1e-4,
+                                              lr=1e-1, pgtol=1e-4,
                                               thetate=xtest, fte=ftest)
         vi1 = time.time()
 

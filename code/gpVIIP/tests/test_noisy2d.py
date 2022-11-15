@@ -53,7 +53,7 @@ def test_n(n):
                                                        model.test_mse(x0=xtest, f0=ftest)))
 
     model, niter, flag = optim_elbo_lbfgs(model, maxiter=100,
-                                          lr=1e-1, gtol=1e-4,
+                                          lr=1e-1, pgtol=1e-4,
                                           thetate=xtest, fte=ftest, verbose=False)
 
     print('after training\ntrain mse: {:.3f}, '

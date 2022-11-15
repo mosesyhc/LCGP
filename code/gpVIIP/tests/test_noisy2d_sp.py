@@ -56,7 +56,7 @@ def test_n(n):
     predmean = model.predictmean(xtest)
 
     model, niter, flag = optim_elbo_lbfgs(model, maxiter=100,
-                                          lr=1e-1, gtol=1e-2,
+                                          lr=1e-1, pgtol=1e-2,
                                           thetate=xtest, fte=ftest, verbose=False)
 
     print('after training\ntrain mse: {:.3E}, '
