@@ -2,7 +2,7 @@ import numpy as np
 
 fnames = ['borehole', 'piston', 'wingweight', 'otlcircuit']
 ns = [100, 250, 500]
-noiseconsts = [0.1]
+noiseconsts = [0.25]
 methods = ['MVGP', 'surmise']
 ipfracs = [1]
 
@@ -17,4 +17,4 @@ for i in range(rep):
     comb = np.insert(base, 2, np.tile(seeds, len(methods)), axis=1)
     combs.extend(comb)
 
-np.savetxt('params_gen.txt', combs, delimiter='\t', fmt='%s')
+np.savetxt('params_gen2.txt', combs, delimiter='\t', fmt='%s')
