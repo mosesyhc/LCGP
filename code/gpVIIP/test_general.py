@@ -116,9 +116,9 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
                                     clamping=True)
         pct = model.Phi
         kap = model.kap
-        model, niter, flag = optim_elbo_lbfgs(model,
-                                              maxiter=100, lr=lr)
-
+        # model, niter, flag = optim_elbo_lbfgs(model,
+        #                                       maxiter=100, lr=lr)
+        niter, flag = model.fit() #sep=False) #, verbose=True)
         predmeantr = model.predictmean(xtr).detach().numpy()
         predmean = model.predictmean(xte).detach().numpy()
         predcov = model.predictcov(xte).detach().numpy()
