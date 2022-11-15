@@ -1,6 +1,8 @@
-250	MVGP	27956	0.1 1   borehole
-250	MVGP	27956	0.1 1   piston
-250	MVGP	27956	0.1 1   wingweight
-250	MVGP	27956	0.1 1   otlcircuit
-250	surmise	27956	0.1 1   wingweight
-250	surmise	27956	0.1 1   otlcircuit
+100	MVGP	4342	0.1	1	borehole
+100	MVGP	59880	0.1	1	piston
+100	MVGP	61699	0.1	1	wingweight
+100	MVGP	61672	0.1	1	otlcircuit
+100	surmise	4342	0.1	1	borehole
+100	surmise	59880	0.1	1	piston
+100	surmise	61699	0.1	1	wingweight
+100	surmise	61672	0.1	1	otlcircuit
