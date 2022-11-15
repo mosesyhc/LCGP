@@ -397,5 +397,5 @@ class MVN_elbo_autolatent(Module):
             _, niter, flag = optim_elbo_lbfgs(self, **kwargs)
         return niter, flag
     def fit_adam(self, **kwargs):
-        _, niter, flag = optim_elbo_adam(self, maxiter=100, **kwargs)
+        _, niter, flag = optim_elbo_adam(self, maxiter=50, **kwargs)
         return niter, flag

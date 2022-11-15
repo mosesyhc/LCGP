@@ -5,7 +5,7 @@ LS_FAIL_MAX = 3
 def optim_elbo_lbfgs(model,
                      maxiter=500, lr=1e-1, history_size=4,
                      max_ls=15, c1=1e-2, c2=0.7,
-                     pgtol=1e-4,
+                     pgtol=1e-3,
                      verbose=False):
 
     optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
@@ -21,7 +21,7 @@ def optim_elbo_lbfgs(model,
 
     epoch = 0
     ls_fail_count = 0
-    reset_optim = False # True if reset it once
+    reset_optim = False # True if reset
 
     header = ['iter', 'grad.absmax()', 'pgrad.absmax()','lr', 'negelbo', 'diff.']
     if verbose:
