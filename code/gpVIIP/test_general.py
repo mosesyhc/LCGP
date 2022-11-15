@@ -84,7 +84,7 @@ def dss_individual(predmean, predcov, fte):
     return score
 
 
-def test_single(method, n, seed, ftr, xtr, fte, xte,
+def test_single(method, fname, n, seed, ftr, xtr, fte, xte,
                 fte0, noiseconst=None, rep=0, ip_frac=None,
                 output_csv=False, dir=None, return_quant=False):
     res = res_struct.copy()
@@ -92,7 +92,6 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
     p = n
     niter = None
     flag = None
-    lr = 1e-1
 
     time_tr0 = time.time()
     # train model
@@ -116,9 +115,7 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
                                     clamping=True)
         pct = model.Phi
         kap = model.kap
-        # model, niter, flag = optim_elbo_lbfgs(model,
-        #                                       maxiter=100, lr=lr)
-        niter, flag = model.fit() #sep=False) #, verbose=True)
+        niter, flag = model.fit()
         predmeantr = model.predictmean(xtr).detach().numpy()
         predmean = model.predictmean(xte).detach().numpy()
         predcov = model.predictcov(xte).detach().numpy()
@@ -131,30 +128,30 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
 
         predaddvar = model.predictaddvar().detach().numpy()
         time_tr1 = time.time()
-
-    elif method == 'MVIP':
-        p = int(n * ip_frac)
-
-        model = MVN_elbo_autolatent_sp(F=ftr, theta=xtr, p=p,
-                                       clamping=True) #, thetai=thetai)
-        pct = model.Phi
-        kap = model.kap
-        model, niter, flag = optim_elbo_lbfgs(model,
-                                              maxiter=100,
-                                              lr=lr)
-
-
-        predmeantr = model.predictmean(xtr).detach().numpy()
-        predmean = model.predictmean(xte).detach().numpy()
-        predcov = model.predictcov(xte).detach().numpy()
-
-        m, n0 = fte.shape
-        predvar = np.zeros((m, n0))
-        for i in range(n0):
-            predvar[:, i] = np.diag(predcov[:, :, i])
-        predstd = np.sqrt(predvar)
-        predaddvar = model.predictaddvar().detach().numpy()
-        time_tr1 = time.time()
+    #
+    # elif method == 'MVIP':
+    #     p = int(n * ip_frac)
+    #
+    #     model = MVN_elbo_autolatent_sp(F=ftr, theta=xtr, p=p,
+    #                                    clamping=True) #, thetai=thetai)
+    #     pct = model.Phi
+    #     kap = model.kap
+    #     model, niter, flag = optim_elbo_lbfgs(model,
+    #                                           maxiter=100,
+    #                                           lr=lr)
+    #
+    #
+    #     predmeantr = model.predictmean(xtr).detach().numpy()
+    #     predmean = model.predictmean(xte).detach().numpy()
+    #     predcov = model.predictcov(xte).detach().numpy()
+    #
+    #     m, n0 = fte.shape
+    #     predvar = np.zeros((m, n0))
+    #     for i in range(n0):
+    #         predvar[:, i] = np.diag(predcov[:, :, i])
+    #     predstd = np.sqrt(predvar)
+    #     predaddvar = model.predictaddvar().detach().numpy()
+    #     time_tr1 = time.time()
 
     else:
         raise ValueError('Specify a valid method.')
@@ -172,6 +169,7 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
     pcover, pintwid, pintscore = interval_stats(mean=predmean, stdev=np.sqrt(((predstd**2).T + predaddvar).T), testf=fte)
 
     res['method'] = method
+    res['fname'] = fname
     res['rep'] = rep
     res['n'] = n
     res['p'] = p
@@ -180,7 +178,7 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
 
     res['timeconstruct'] = time_tr1 - time_tr0
     res['optim_elbo_iter'] = niter
-    res['optim_elbo_lr'] = lr
+    res['optim_elbo_lr'] = 'default'
     res['optim_elbo_flag'] = flag
 
     res['trainrmse'] = rmsetr
@@ -199,8 +197,8 @@ def test_single(method, n, seed, ftr, xtr, fte, xte,
 
     if output_csv:
         df = pd.DataFrame(res, index=[0])
-        df.to_csv(dir + r'rep{:d}_n{:d}_p{:d}_{:s}_seed{:d}_{:s}.csv'.format(
-            rep, n, p, method, int(seed), datetime.today().strftime('%Y%m%d%H%M%S'))
+        df.to_csv(dir + r'{:s}_rep{:d}_n{:d}_p{:d}_{:s}_seed{:d}_{:s}.csv'.format(
+            fname, rep, n, p, method, int(seed), datetime.today().strftime('%Y%m%d%H%M%S'))
         )
 
     if return_quant:

@@ -19,6 +19,7 @@ def read_test_data(dir):
     testtheta = np.loadtxt(dir + r'testtheta.txt')
     return testf, testtheta
 
+
 def read_data(dir):
     f = np.loadtxt(dir + r'f.txt')
     x = np.loadtxt(dir + r'x.txt')
@@ -31,16 +32,13 @@ parser.add_argument('--n', type=int, help='number of parameters')
 parser.add_argument('--ipfrac', type=float, help='fraction of failures')
 parser.add_argument('--noiseconst', type=float, help='noise multiplier')
 parser.add_argument('--seed', type=int, help='id of replication')
+parser.add_argument('--fname', help='name of function, in {borehole, piston, wingweight, ')
 
 args = parser.parse_args()
 
-dir = r'../data/borehole_data/'
+dir = r'../data/{:s}_data/'.format(args.fname)
 f, x0, xtr = read_data(dir)
 fte0, xte = read_test_data(dir)
-
-# f = f[:nx]
-# fte0 = fte0[:nx]
-# x = x[:nx]
 
 m, ntr = f.shape
 fstd = f.std(1)
@@ -68,11 +66,9 @@ torch.seed()
 
 save_csv = True
 
-test_single(method=args.method, n=args.n, seed=args.seed,
+test_single(method=args.method, fname=args.fname, n=args.n, seed=args.seed,
             ftr=ftr_n, xtr=xtr_n,
             fte=fte, fte0=fte0, xte=xte,
             noiseconst=args.noiseconst,
             rep=args.seed, ip_frac=args.ipfrac,
             output_csv=save_csv, dir='./save/res_out/')
-
-

@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.stats.qmc import LatinHypercube
-from TestingfunctionBorehole import borehole_model, _dict as borehole_dict
-
+from TestingfunctionBorehole import borehole_model as borehole_model, _dict as borehole_dict
 
 def gen_data(ntrain, ntest, m, save=True, savedir=None):
     xdim = borehole_dict['xdim']
@@ -26,4 +25,4 @@ def gen_data(ntrain, ntest, m, save=True, savedir=None):
 
 
 if __name__ == '__main__':
-    gen_data(2000, 500, 100, save=True, savedir=r'C:\Users\cmyh\Documents\git\binary-hd-emulator\code\data\borehole_m100_data')
+    gen_data(2000, 500, 100, save=True, savedir=r'C:\Users\cmyh\Documents\git\binary-hd-emulator\code\data')
