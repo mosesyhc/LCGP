@@ -29,25 +29,25 @@ def test_n(n, noiseconst, save=False):
     ftest = torch.tensor(ftest)
     ftest0 = torch.tensor(ftest0)
 
-    # emu, emumean, emustd, emupcto, \
-    #     n, xtr, ftr, xte, fte = test_single(method='surmise', n=n, seed=0, noiseconst=noiseconst,
-    #                                         ftr=f, xtr=x, fte=ftest, xte=xtest,
-    #                                         fte0=ftest0, output_csv=True, dir=DIR,
-    #                                         return_quant=True)
+    emu, emumean, emustd, emupcto, \
+        n, xtr, ftr, xte, fte = test_single(method='surmise', fname='forrester2d', n=n, seed=0, noiseconst=noiseconst,
+                                            ftr=f, xtr=x, fte=ftest, xte=xtest,
+                                            fte0=ftest0, output_csv=True, dir=DIR,
+                                            return_quant=True)
 
     model, predmean, predstd, Phi, \
-        _, _, _, _, _ = test_single(method='MVGP', n=n, seed=0, # kap=1,
+        _, _, _, _, _ = test_single(method='MVGP', fname='forrester2d', n=n, seed=0, # kap=1,
                                     noiseconst=noiseconst,
                                     ftr=f, xtr=x, fte=ftest, xte=xtest,
                                     fte0=ftest0, output_csv=True, dir=DIR,
                                     return_quant=True)
-
-    model, predmean, predstd, Phi, \
-        _, _, _, _, _ = test_single(method='MVIP', n=n, ip_frac=1/4, seed=0, # kap=1,
-                                    noiseconst=noiseconst,
-                                    ftr=f, xtr=x, fte=ftest, xte=xtest,
-                                    fte0=ftest0, output_csv=True, dir=DIR,
-                                    return_quant=True)
+    #
+    # model, predmean, predstd, Phi, \
+    #     _, _, _, _, _ = test_single(method='MVIP', n=n, ip_frac=1/4, seed=0, # kap=1,
+    #                                 noiseconst=noiseconst,
+    #                                 ftr=f, xtr=x, fte=ftest, xte=xtest,
+    #                                 fte0=ftest0, output_csv=True, dir=DIR,
+    #                                 return_quant=True)
 
 
     if False:

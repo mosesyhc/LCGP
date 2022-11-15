@@ -106,7 +106,7 @@ def test_single(method, fname, n, seed, ftr, xtr, fte, xte,
         predmean = emupred.mean()
         predcov = emupred.covx().transpose(2, 0, 1)
         predstd = np.sqrt(emupred.var())
-        predaddvar = model._info['extravar']
+        predaddvar = model._info['standardpcinfo']['extravar']  # This corresponds to surmise PCGPwM develop version (after standardpcinfo)
 
         time_tr1 = time.time()
 
