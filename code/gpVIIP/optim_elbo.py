@@ -1,10 +1,11 @@
 import torch
 
 LS_FAIL_MAX = 3
+PG_CONV_FLAG = 0
 
 def optim_elbo_lbfgs(model,
                      maxiter=500, lr=1e-1, history_size=4,
-                     max_ls=15, c1=1e-2, c2=0.7,
+                     max_ls=15, c1=1e-4, c2=0.9,
                      pgtol=1e-3,
                      verbose=False):
 
@@ -41,11 +42,11 @@ def optim_elbo_lbfgs(model,
             flag = 'MAX_ITER'
             print('exit after maximum epoch {:d}'.format(epoch))
             break
-        if epoch >= 4:
+        if epoch >= 10:
             if pg.abs().max() <= pgtol:
                 # stopping rules relaxed
                 print('exit after epoch {:d}, PGTOL <= {:.3E}'.format(epoch, pgtol))
-                flag = 'G_CONV'
+                flag = 'PG_CONV'
                 break
         if ls_fail_count >= LS_FAIL_MAX:
             if not reset_optim:
