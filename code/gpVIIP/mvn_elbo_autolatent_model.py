@@ -39,7 +39,7 @@ class MVN_elbo_autolatent(Module):
         if Phi is None:
             self.G, self.Phi, self.pcw, self.kap = self.__PCs(F=self.F, kap=kap, threshold=pcthreshold)
 
-            Fhat = self.tx_F((self.Phi * self.pcw) @ self.G)
+            Fhat = self.tx_F((self.Phi / self.pcw) @ self.G)
             Phi_mse = ((Fhat - self.Fraw) ** 2).mean()
             print('#PCs: {:d}, recovery mse: {:.3E}'.format(self.kap, Phi_mse.item()))
         else:
@@ -65,7 +65,7 @@ class MVN_elbo_autolatent(Module):
         self.ltau2GPs = nn.Parameter(torch.Tensor(torch.zeros(self.kap)))
 
         if initlsigma2 or lsigma2 is None:
-            Fhat = (self.Phi * self.pcw) @ self.G
+            Fhat = (self.Phi / self.pcw) @ self.G
             lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()),
                                 torch.log(0.1 * (self.F ** 2).mean()))
         self.lmse0 = lsigma2.item()
@@ -100,7 +100,7 @@ class MVN_elbo_autolatent(Module):
 
             ghat[k] = ck @ Ckinv_Mk
 
-        fhat = (self.Phi * self.pcw) @ ghat
+        fhat = (self.Phi / self.pcw) @ ghat
         fhat = self.tx_F(fhat)
         return fhat  # , ghat
 
@@ -129,7 +129,7 @@ class MVN_elbo_autolatent(Module):
             negelbo += negloggp_k
             negelbo += 1 / 2 * (Cinvkdiag * V[k]).sum()
 
-        residF = F - (self.Phi * self.pcw) @ M
+        residF = F - (self.Phi / self.pcw) @ M
         negelbo += m * n / 2 * lsigma2
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
         negelbo -= 1 / 2 * torch.log(V).sum()
@@ -200,7 +200,7 @@ class MVN_elbo_autolatent(Module):
 
             lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs, self.ltau2GPs)
 
-            txPhi = (self.Phi * self.pcw * self.Fstd)
+            txPhi = (self.Phi / self.pcw * self.Fstd)
             V = self.V
 
             n0 = x0.shape[0]
@@ -376,18 +376,19 @@ class MVN_elbo_autolatent(Module):
 
         pcw = ((S ** 2).abs() / n).sqrt()
 
-        G = (Phi / pcw).T @ F  # kap x n
+        G = (Phi * pcw).T @ F  # kap x n
         return G, Phi, pcw, kap
 
-    def fit(self, sep=True, verbose=False):
+    def fit(self, sep=False, adam=False, verbose=False):
         niter, flag = self.fit_bfgs(sep=sep, verbose=verbose)
         if flag == 'G_CONV':
             return niter, flag
-        else:
-            self.fit_adam(verbose=verbose)
-            return niter, flag
+        if adam:
+            adamiter, _ = self.fit_adam(lr=1, verbose=verbose)
+            return niter, '+'.join((flag, r'adam', adamiter))
+        return niter, flag
 
-    def fit_bfgs(self, sep=True, **kwargs):
+    def fit_bfgs(self, sep=False, **kwargs):
         if sep:
             self.lsigma2.requires_grad = False
             _, niter, flag = optim_elbo_lbfgs(self, maxiter=10, **kwargs)
@@ -396,6 +397,6 @@ class MVN_elbo_autolatent(Module):
         else:
             _, niter, flag = optim_elbo_lbfgs(self, **kwargs)
         return niter, flag
-    def fit_adam(self, **kwargs):
-        _, niter, flag = optim_elbo_adam(self, maxiter=50, **kwargs)
+    def fit_adam(self, maxiter=100, **kwargs):
+        _, niter, flag = optim_elbo_adam(self, maxiter=maxiter, **kwargs)
         return niter, flag
