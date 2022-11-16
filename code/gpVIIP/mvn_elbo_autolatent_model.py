@@ -381,7 +381,7 @@ class MVN_elbo_autolatent(Module):
 
     def fit(self, sep=False, adam=False, verbose=False):
         niter, flag = self.fit_bfgs(sep=sep, verbose=verbose)
-        if flag == 'G_CONV':
+        if flag == 'PG_CONV':
             return niter, flag
         if adam:
             adamiter, _ = self.fit_adam(lr=1, verbose=verbose)
