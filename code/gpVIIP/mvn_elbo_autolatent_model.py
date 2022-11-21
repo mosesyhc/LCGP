@@ -4,7 +4,7 @@ import torch.jit as jit
 from matern_covmat import covmat
 from likelihood import negloglik_gp
 from hyperparameter_tuning import parameter_clamping
-from optim_elbo import optim_elbo_lbfgs, optim_elbo_adam
+from optim_elbo import optim_elbo_lbfgs, optim_elbo_adam, optim_elbo_qhadam
 torch.set_default_dtype(torch.double)
 
 JIT = False
@@ -384,8 +384,8 @@ class MVN_elbo_autolatent(Module):
         if flag == 'PG_CONV':
             return niter, flag
         if adam:
-            adamiter, _ = self.fit_adam(lr=1, verbose=verbose)
-            return niter, '+'.join((flag, r'adam', adamiter))
+            adamiter, _ = self.fit_qhadam(lr=1, verbose=verbose)
+            return niter, '+'.join((flag, r'qhadam', adamiter))
         return niter, flag
 
     def fit_bfgs(self, sep=False, **kwargs):
@@ -397,6 +397,11 @@ class MVN_elbo_autolatent(Module):
         else:
             _, niter, flag = optim_elbo_lbfgs(self, **kwargs)
         return niter, flag
+
     def fit_adam(self, maxiter=100, **kwargs):
         _, niter, flag = optim_elbo_adam(self, maxiter=maxiter, **kwargs)
+        return niter, flag
+
+    def fit_qhadam(self, maxiter=100, **kwargs):
+        _, niter, flag = optim_elbo_qhadam(self, maxiter=maxiter, **kwargs)
         return niter, flag

@@ -20,7 +20,7 @@ def read_data(dir):
 
 
 fname = r'\wingweight_data\\'
-dir = r'C:\Users\moses\Desktop\git\VIGP\code\data' + fname
+dir = r'C:\Users\cmyh\Documents\git\VIGP\code\data' + fname
 f, x0, xtr = read_data(dir)
 fte0, xte = read_test_data(dir)
 

@@ -1,4 +1,6 @@
 import torch
+import torch_optimizer as optim2
+
 
 LS_FAIL_MAX = 3
 PG_CONV_FLAG = 0
@@ -69,7 +71,7 @@ def optim_elbo_lbfgs(model,
 def optim_elbo_adam(model, maxiter=500,
                     lr=1e-1,
                     verbose=False):
-    optim = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()))
+    optim = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
     model.compute_MV()
     optim.zero_grad(set_to_none=True)
     loss_prev = torch.inf
@@ -94,6 +96,47 @@ def optim_elbo_adam(model, maxiter=500,
         if epoch > maxiter:
             flag = 'MAX_ITER'
             print('exit after maximum epoch {:d}'.format(epoch))
+            break
+        if verbose:
+            print('{:<5d} {:<12.3f} {:<12.3E} {:<12.3f} {:<12.3f}'.format
+                  (epoch, grad.abs().max(), lr, loss, loss_prev - loss))
+
+        with torch.no_grad():
+            loss_prev = loss.clone()
+    return model, epoch, flag
+
+def optim_elbo_qhadam(model, maxiter=500,
+                      lr=1e-1, gtol=1e-1,
+                      verbose=False):
+    optim = optim2.QHAdam(params=filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+    model.compute_MV()
+    optim.zero_grad(set_to_none=True)
+    loss_prev = torch.inf
+    loss = model.negelbo()
+    loss.backward()
+
+    epoch = 0
+    header = ['iter', 'grad.absmax()', 'lr', 'negelbo', 'diff.']
+    if verbose:
+        print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
+
+    while True:
+        model.compute_MV()
+        optim.zero_grad(set_to_none=True)
+        loss = model.negelbo()
+        loss.backward()
+        optim.step()
+
+        grad = model.get_param_grad()
+
+        epoch += 1
+        if epoch > maxiter:
+            flag = 'MAX_ITER'
+            print('exit after maximum epoch {:d}'.format(epoch))
+            break
+        if grad.abs().max() <= gtol:
+            flag = 'G_CONV'
+            print('reached convergence with grad.abs().max() <= {:f}'.format(gtol))
             break
         if verbose:
             print('{:<5d} {:<12.3f} {:<12.3E} {:<12.3f} {:<12.3f}'.format
