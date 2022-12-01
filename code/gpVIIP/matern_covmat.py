@@ -14,17 +14,17 @@ def covmat(x1, x2, llmb, lnug, ltau2, diag_only:bool=False):
 
     else:
         V = torch.zeros((x1.shape[0], x2.shape[0]))
-        C0 = torch.ones((x1.shape[0], x2.shape[0])) / (1 + torch.exp(llmb[-1]))
+        C0 = torch.ones((x1.shape[0], x2.shape[0])) #/ (1 + torch.exp(llmb[-1]))
 
-        x1scal = x1 / torch.exp(llmb[:-1])
-        x2scal = x2 / torch.exp(llmb[:-1])
+        x1scal = x1 / torch.exp(llmb)#[:-1])
+        x2scal = x2 / torch.exp(llmb)#[:-1])
         for j in range(d):
             S = torch.abs(x1scal[:, j].reshape(-1, 1) - x2scal[:, j])  # outer diff
             C0 *= (1 + S)
             V -= S
 
         C0 *= torch.exp(V)
-        C0 += torch.exp(llmb[-1]) / (1 + torch.exp(llmb[-1]))
+        # C0 += torch.exp(llmb[-1]) / (1 + torch.exp(llmb[-1]))
 
         nug = lnug.exp() / (1 + lnug.exp())
         if torch.equal(x1, x2):
