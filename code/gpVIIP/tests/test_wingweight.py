@@ -20,7 +20,7 @@ def read_data(dir):
 
 
 fname = r'\wingweight_data\\'
-dir = r'C:\Users\cmyh\Documents\git\VIGP\code\data' + fname
+dir = r'code\data' + fname
 f, x0, xtr = read_data(dir)
 fte0, xte = read_test_data(dir)
 
@@ -49,15 +49,22 @@ ftr_n = ftr[:, tr_ind]
 xtr_n = xtr[tr_ind]
 torch.seed()
 
-model = MVN_elbo_autolatent(F=ftr_n, x=xtr_n,
-                                    clamping=True)
-pct = model.Phi
+model = MVN_elbo_autolatent(F=ftr_n, x=xtr_n, kap=49, #pcthreshold=0.98,
+                                    clamping=False)
+model.predictvar(xtr_n)
+pct = model.pct
 kap = model.kap
-niter, flag = model.fit(sep=False, verbose=True)
+niter, flag = model.fit(verbose=True)
+predvar = model.predictvar(xtr_n).detach().numpy()
+
 predmeantr = model.predictmean(xtr_n).detach().numpy()
 predmean = model.predictmean(xte).detach().numpy()
-predcov = model.predictcov(xte).detach().numpy()
+# predcov = model.predictcov(xte).detach().numpy()
 
 from surmise.emulation import emulator
 emu = emulator(x=np.arange(ftr_n.shape[0]), theta=xtr_n.numpy(), f=ftr_n.numpy(),
                method='PCGPwM')
+emupredtr = emu.predict(x=np.arange(ftr_n.shape[0]), theta=xtr_n.numpy())
+emumeantr = emupredtr.mean()
+emupredte = emu.predict(x=np.arange(ftr_n.shape[0]), theta=xte.numpy())
+emumeante = emupredte.mean()

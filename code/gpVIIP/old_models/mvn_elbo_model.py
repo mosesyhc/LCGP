@@ -70,7 +70,7 @@ class MVN_elbo(nn.Module):
 
         Mupred = torch.zeros((kap, n))
         for k in range(kap):
-            negloggp_k, Vh_k = negloglik_gp(llmb=Lmb[k], theta=theta, g=Mu[k])
+            negloggp_k, Vh_k = negloglik_gp(llmb=Lmb[k], x=theta, g=Mu[k])
             negelbo += negloggp_k
             negelbo += 1/2 * torch.diag(Vh_k @ Vh_k.T) @ V[k]
             Mupred[k] = predmean_gp_(Vh=Vh_k, lmb=Lmb[k], theta=theta,

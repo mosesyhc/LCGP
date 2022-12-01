@@ -53,14 +53,14 @@ xtr = x[trind]
 xte = x[teind]
 ftr = f[:, trind]
 fte = f[:, teind]
-
-from surmise.emulation import emulator
-emu = emulator(x=np.arange(ftr.shape[0]), theta=xtr.numpy(), f=ftr.numpy(),
-               method='PCGPwM', args={'epsilon': 20})
-
-emupred = emu.predict(x=np.arange(ftr.shape[0]), theta=xte.numpy())
-emumean = emupred.mean()
-emurmse = np.sqrt(((fte.numpy() - emumean)**2).mean())
+#
+# from surmise.emulation import emulator
+# emu = emulator(x=np.arange(ftr.shape[0]), theta=xtr.numpy(), f=ftr.numpy(),
+#                method='PCGPwM', args={'epsilon': 20})
+#
+# emupred = emu.predict(x=np.arange(ftr.shape[0]), theta=xte.numpy())
+# emumean = emupred.mean()
+# emurmse = np.sqrt(((fte.numpy() - emumean)**2).mean())
 
 model = MVN_elbo_autolatent(F=ftr, x=xtr, kap=25,
                             clamping=True)

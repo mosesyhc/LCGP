@@ -113,7 +113,7 @@ def test_single(method, fname, n, seed, ftr, xtr, fte, xte,
     elif method == 'MVGP':
         model = MVN_elbo_autolatent(F=ftr, x=xtr,
                                     clamping=True)
-        pct = model.Phi
+        pct = model.pct
         kap = model.kap
         niter, flag = model.fit()
         predmeantr = model.predictmean(xtr).detach().numpy()

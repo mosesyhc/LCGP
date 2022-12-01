@@ -87,7 +87,7 @@ def negloglik_mvlatent(Lmb, G, lsigma, theta, f, psi, Phi):
     nll_gp = torch.zeros(kap)
     Gpred = torch.zeros_like(G)
     for k in range(kap):
-        nll_gp[k], Vh = negloglik_gp(llmb=Lmb[k], theta=theta, g=G[:, k])
+        nll_gp[k], Vh = negloglik_gp(llmb=Lmb[k], x=theta, g=G[:, k])
         Gpred[:, k] = predmean_gp_(Vh, Lmb[k], theta, theta, G[:, k])
 
     D = f - (psi + Phi @ Gpred.T)

@@ -114,7 +114,7 @@ def plot(noiseconst, n, emupct, emumean, emustd,
          xtest, ftest,
          save=True):
     lw = 3
-    modelpct = model.Phi[:, 0] / (model.pcw * np.sqrt(model.n))
+    modelpct = model.pct[:, 0] / (model.pcw * np.sqrt(model.n))
     # modelsppct = modelsp.Phi[:, 0] / (modelsp.pcw * np.sqrt(modelsp.n))
     ymax = np.max((np.max((emupct.T @ (emumean + 2*emustd))),
                    np.max((modelpct.T @ (predmean + 2*predstd)).numpy())))

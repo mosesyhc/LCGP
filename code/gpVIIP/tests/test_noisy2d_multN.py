@@ -32,8 +32,8 @@ def ls(f, mu, sigma):
 def plot():
     lw = 3
     ymax = np.max((np.max(-(emupct.T @ (emumean + 2*emustd))),
-                   np.max(((model.Phi / model.pcw).T @ (predmean + 2*predstd)).numpy())))
-    ymin = np.min((np.min(-(emupct.T @ (emumean - 2*emustd))), np.min(((model.Phi / model.pcw).T @ (predmean - 2*predstd)).numpy())))
+                   np.max(((model.pct / model.pcw).T @ (predmean + 2 * predstd)).numpy())))
+    ymin = np.min((np.min(-(emupct.T @ (emumean - 2*emustd))), np.min(((model.pct / model.pcw).T @ (predmean - 2 * predstd)).numpy())))
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 6))
     ax[0].plot(xtest, -(emupct.T @ ftest.numpy()).T, linewidth=lw, label='True', color='k')
@@ -43,11 +43,11 @@ def plot():
     ax[0].plot(xtest, -(emupct.T @ (emumean - 2*emustd)).T, linewidth=lw, linestyle='--', color='r')
     ax[0].set_title('PCGP', fontsize=30)
 
-    ax[1].plot(xtest, ((model.Phi / model.pcw).T @ ftest).T, linewidth=lw, label='True', color='k')
-    ax[1].scatter(x, ((model.Phi / model.pcw).T @ f).T, label='Data', color='gray')
-    ax[1].plot(xtest, ((model.Phi / model.pcw).T @ predmean).T, linewidth=lw, label='Prediction', color='r')
-    ax[1].plot(xtest, ((model.Phi / model.pcw).T @ (predmean + 2*predstd)).T, linewidth=lw, linestyle='--', color='r')
-    ax[1].plot(xtest, ((model.Phi / model.pcw).T @ (predmean - 2*predstd)).T, linewidth=lw, linestyle='--', color='r')
+    ax[1].plot(xtest, ((model.pct / model.pcw).T @ ftest).T, linewidth=lw, label='True', color='k')
+    ax[1].scatter(x, ((model.pct / model.pcw).T @ f).T, label='Data', color='gray')
+    ax[1].plot(xtest, ((model.pct / model.pcw).T @ predmean).T, linewidth=lw, label='Prediction', color='r')
+    ax[1].plot(xtest, ((model.pct / model.pcw).T @ (predmean + 2 * predstd)).T, linewidth=lw, linestyle='--', color='r')
+    ax[1].plot(xtest, ((model.pct / model.pcw).T @ (predmean - 2 * predstd)).T, linewidth=lw, linestyle='--', color='r')
     ax[1].set_title('PCGP w/ VI', fontsize=30)
 
     for axi in ax.flatten():
