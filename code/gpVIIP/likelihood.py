@@ -2,8 +2,8 @@ import torch
 from matern_covmat import covmat, cov_sp
 
 
-def negloglik_gp(llmb, lnug, ltau2, theta, g):
-    C = covmat(theta, theta, llmb=llmb, lnug=lnug, ltau2=ltau2)
+def negloglik_gp(llmb, lnug, ltau2, x, g):
+    C = covmat(x, x, llmb=llmb, lnug=lnug, ltau2=ltau2)
 
     W, V = torch.linalg.eigh(C)
     Vh = V / torch.sqrt(W.abs())
@@ -13,14 +13,11 @@ def negloglik_gp(llmb, lnug, ltau2, theta, g):
     negloglik += 1/2 * (fcenter**2).sum()
 
     # regularization of hyperparameter
-    llmbreg = 1/2 * 10 * (llmb + 1) ** 2
-    # llmbreg = 2 * ((5 + 1) * llmb + 5 / llmb.exp())  # invgamma(5, 5)
-
-    llmbreg[-1] = 1/2 * 10 * llmb[-1] ** 2
+    llmbreg = 1/2 * 10 * (llmb + 2) ** 2
+    lnugreg = 1/2 * 4 * (lnug + 12) ** 2
     ltau2reg = 1/2 * 2 * ltau2**2
 
-    negloglik += llmbreg.sum() + ltau2reg
-
+    negloglik += llmbreg.sum() + ltau2reg + lnugreg.sum()
     Cinvdiag = (Vh @ Vh.T).diag()
 
     return negloglik, Cinvdiag
