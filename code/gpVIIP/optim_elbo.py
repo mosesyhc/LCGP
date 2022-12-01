@@ -8,32 +8,44 @@ PG_CONV_FLAG = 0
 def optim_elbo_lbfgs(model,
                      maxiter=500, lr=1e-1, history_size=4,
                      max_ls=15, c1=1e-4, c2=0.9,
-                     pgtol=1e-3,
+                     pgtol=1e-1, ftol=2e-9,
                      verbose=False):
-
-    optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
-    optim.zero_grad(set_to_none=True)
     def closure():
         model.compute_MV()
         optim.zero_grad(set_to_none=True)
         negelbo = model.negelbo()
         return negelbo
-    loss_prev = torch.inf
-    loss = closure()
-    loss.backward()
 
+    # precheck learning rate
+    while True:
+        optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+        optim.zero_grad(set_to_none=True)
+        loss = closure()
+        loss.backward()
+
+        options = {'closure': closure, 'current_loss': loss,
+                   'history_size': history_size,
+                   'c1': c1, 'c2': c2,
+                   'max_ls': max_ls, 'damping': False}
+        loss, grad, lr, _, _, _, _, _ = optim.step(options)
+        if torch.isfinite(loss) and torch.isfinite(grad).all():
+            break
+
+        model.init_params()
+        lr /= 10
+    loss_prev = torch.inf
     epoch = 0
     ls_fail_count = 0
     reset_optim = False # True if reset
 
-    header = ['iter', 'grad.absmax()', 'pgrad.absmax()','lr', 'negelbo', 'diff.']
+    header = ['iter', 'grad.absmax()', 'pgrad.absmax()', 'lsigma2', 'lr', 'negelbo', 'diff.']
     if verbose:
-        print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
+        print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
     while True:
-        options = {'closure': closure, 'current_loss': loss,
-                   'history_size': history_size,
-                   'c1': c1, 'c2': c2,
-                   'max_ls': max_ls, 'damping': True}
+        # options = {'closure': closure, 'current_loss': loss,
+        #            'history_size': history_size,
+        #            'c1': c1, 'c2': c2,
+        #            'max_ls': max_ls, 'damping': True}
         loss, grad, lr, _, _, _, _, _ = optim.step(options)
         d = optim.state['global_state'].get('d')
         pg = d.dot(grad) / grad.norm()**2 * grad
@@ -50,6 +62,12 @@ def optim_elbo_lbfgs(model,
                 print('exit after epoch {:d}, PGTOL <= {:.3E}'.format(epoch, pgtol))
                 flag = 'PG_CONV'
                 break
+            ## if line search fails, this criterion can be triggered
+            if (lr > 1e-8) and ((loss_prev - loss) / torch.max(torch.tensor((loss_prev.abs(), loss.abs(), torch.tensor(1,))))) <= ftol:
+                print('exit after epoch {:d}, FTOL <= {:.3E}'.format(epoch, ftol))
+                flag = 'F_CONV'
+                break
+
         if ls_fail_count >= LS_FAIL_MAX:
             if not reset_optim:
                 flag = 'LS_FAIL_MAX_REACHED'
@@ -61,8 +79,8 @@ def optim_elbo_lbfgs(model,
                 ls_fail_count = 0
                 print('reset optimizer')
         if verbose:
-            print('{:<5d} {:<12.3f} {:<12.3E} {:<12.3E} {:<12.3f} {:<12.3f}'.format
-                  (epoch, grad.abs().max(), pg.abs().max(), lr, loss, loss_prev - loss))
+            print('{:<5d} {:<12.3f} {:<12.3E} {:<12.3f} {:<12.3E} {:<12.3f} {:<12.3f}'.format
+                  (epoch, grad.abs().max(), pg.abs().max(), model.lsigma2, lr, loss, loss_prev - loss))
 
         with torch.no_grad():
             loss_prev = loss.clone()
