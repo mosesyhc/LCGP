@@ -33,53 +33,60 @@ class MVN_elbo_autolatent(Module):
         self.F = F
         self.standardize_F()
         self.init_standard_x(x)
+        self.verify_dim(f=self.F, x=self.x)
 
         if Phi is None:
-            self.G, self.Phi, self.pcw, self.kap = self.__PCs(F=self.F, kap=kap, threshold=pcthreshold)
-
-            Fhat = self.tx_F((self.Phi / self.pcw) @ self.G)
-            Phi_mse = ((Fhat - self.Fraw) ** 2).mean()
-            print('#PCs: {:d}, recovery mse: {:.3E}'.format(self.kap, Phi_mse.item()))
+            self.G, self.pct, self.pcti, self.pcw, self.kap = self.__PCs(F=self.F, kap=kap, threshold=pcthreshold)
         else:
-            self.G = Phi.T @ self.F
-            self.Phi = Phi
+            self.pct = Phi / torch.sqrt(torch.tensor(self.n,))
+            self.pcti = Phi * torch.sqrt(torch.tensor(self.n,))
+            self.G = self.pct.T @ self.F
             self.kap = kap
             self.pcw = torch.ones(kap)
+        # report recovery MSE
+        Frawhat = self.tx_F(self.pcti @ self.G)
+        Phi_mse = ((Frawhat - self.Fraw) ** 2).mean()
+        print('#PCs: {:d}, recovery mse: {:.3E}'.format(self.kap, Phi_mse.item()))
 
         self.M = torch.zeros(self.kap, self.n)
         self.V = torch.full_like(self.M, torch.nan)
         self.Cinvhs = torch.full((self.kap, self.n, self.n), torch.nan)
 
-        self.d = x.shape[1]
-        if initlLmb or lLmb is None:
-            llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([x.shape[1]])) +
-                                torch.log(torch.std(x, 0)))
-            llmb = torch.cat((llmb, torch.Tensor([0])))
-            lLmb = llmb.repeat(self.kap, 1)
-            lLmb[:, -1] = torch.log(torch.var(self.G, 1))
-
-        self.lLmb = nn.Parameter(lLmb)
-        self.lnugGPs = nn.Parameter(torch.Tensor(-14 * torch.ones(self.kap)))
-        self.ltau2GPs = nn.Parameter(torch.Tensor(torch.zeros(self.kap)))
-
-        if initlsigma2 or lsigma2 is None:
-            Fhat = (self.Phi / self.pcw) @ self.G
-            lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()),
-                                torch.log(0.1 * (self.F ** 2).mean()))
-        self.lmse0 = lsigma2.item()
-        self.lsigma2 = nn.Parameter(lsigma2)
-
+        # set initial parameters
+        self.init_params()
+        # fill M and V
+        self.compute_MV()
         self.buildtime: float = 0.0
 
-    def forward(self, x0):
-        lLmb = self.lLmb
-        lsigma2 = self.lsigma2
-        lnugGPs = self.lnugGPs
-        ltau2GPs = self.ltau2GPs
+    def init_params(self):
+        x = self.x
+        self.d = x.shape[1]
+        llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([x.shape[1]])) +
+                            torch.log(torch.std(x, 0)))
+        # llmb = torch.cat((llmb, torch.Tensor([0])))
+        lLmb = llmb.repeat(self.kap, 1)
+        # lLmb[:, -1] = torch.log(torch.var(self.G, 1))
 
-        if self.clamping:
-            lLmb, lsigma2, lnugGPs, ltau2GPs = \
-                self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
+        self.lLmb = nn.Parameter(lLmb, requires_grad=False)
+        self.lnugGPs = nn.Parameter(torch.Tensor(-14 * torch.ones(self.kap)), requires_grad=False)
+        self.ltau2GPs = nn.Parameter(torch.Tensor(torch.zeros(self.kap)), requires_grad=False)
+
+        Fhat = self.pcti @ self.G
+        lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()),
+                            torch.log(0.01 * (self.F ** 2).mean())) # torch.log(torch.tensor(0.25,))#
+        self.lmse0 = torch.log(((Fhat - self.F) ** 2).mean())
+        self.lsigma2reg = lsigma2.item()
+        self.lsigma2 = nn.Parameter(lsigma2 + 1)  # !!!
+        return
+
+    def set_lsigma2(self, lsigma2):
+        self.lsigma2 = nn.Parameter(lsigma2)
+
+    def forward(self, x0):
+        if x0.ndim < 2:
+            x0 = x0.unsqueeze(1)
+
+        lLmb, lsigma2, lnugGPs, ltau2GPs = self.get_param()
 
         M = self.M
         Cinvhs = self.Cinvhs
@@ -98,18 +105,12 @@ class MVN_elbo_autolatent(Module):
 
             ghat[k] = ck @ Ckinv_Mk
 
-        fhat = (self.Phi / self.pcw) @ ghat
+        fhat = self.pcti @ ghat
         fhat = self.tx_F(fhat)
         return fhat  # , ghat
 
     def negelbo(self):
-        lLmb = self.lLmb
-        lsigma2 = self.lsigma2
-        lnugGPs = self.lnugGPs
-        ltau2GPs = self.ltau2GPs
-
-        if self.clamping:
-            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
+        lLmb, lsigma2, lnugGPs, ltau2GPs = self.get_param()
 
         F = self.F
         x = self.x
@@ -123,29 +124,23 @@ class MVN_elbo_autolatent(Module):
 
         negelbo = 0
         for k in range(kap):
-            negloggp_k, Cinvkdiag = negloglik_gp(llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], theta=x, g=M[k])
+            negloggp_k, Cinvkdiag = negloglik_gp(llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], x=x, g=M[k])
             negelbo += negloggp_k
             negelbo += 1 / 2 * (Cinvkdiag * V[k]).sum()
 
-        residF = F - (self.Phi / self.pcw) @ M
+        residF = F - self.pcti @ M
         negelbo += m * n / 2 * lsigma2
         negelbo += 1 / (2 * lsigma2.exp()) * (residF ** 2).sum()
         negelbo -= 1 / 2 * torch.log(V).sum()
         negelbo += 1 / (2 * lsigma2.exp()) * V.sum()
 
-        negelbo += 2 * (lsigma2 - self.lmse0) ** 2
+        negelbo += 1 / 2 * (lsigma2 - self.lsigma2reg) ** 2
 
         return negelbo
 
     @torch.no_grad()
     def compute_MV(self):
-        lsigma2 = self.lsigma2
-        lLmb = self.lLmb
-        lnugGPs = self.lnugGPs
-        ltau2GPs = self.ltau2GPs
-
-        if self.clamping:
-            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(lLmb, lsigma2, lnugGPs, ltau2GPs)
+        lLmb, lsigma2, lnugGPs, ltau2GPs = self.get_param()
 
         kap = self.kap
         x = self.x
@@ -174,10 +169,18 @@ class MVN_elbo_autolatent(Module):
         self.V = V
         self.Cinvhs = Cinvhs
 
+    # @torch.no_grad()
+    def get_param(self):
+        if self.clamping:
+            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs, self.ltau2GPs)
+        else:
+            lLmb, lsigma2, lnugGPs, ltau2GPs = self.lLmb, self.lsigma2, self.lnugGPs, self.ltau2GPs
+        return lLmb, lsigma2, lnugGPs, ltau2GPs
+
     @torch.no_grad()
     def get_param_grad(self):
         grad = []
-        for p in self.parameters():
+        for p in filter(lambda p: p.requires_grad, self.parameters()):
             view = p.grad.data.view(-1)
             grad.append(view)
         grad = torch.cat(grad, 0)
@@ -189,62 +192,65 @@ class MVN_elbo_autolatent(Module):
             fhat = self.forward(x0)
         return fhat
 
-
-    def predictcov(self, x0):
-        with torch.no_grad():
-            self.compute_MV()
-            x = self.x
-            x0 = self.standardize_x(x0)
-
-            lLmb, lsigma2, lnugGPs, ltau2GPs = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs, self.ltau2GPs)
-
-            txPhi = (self.Phi / self.pcw * self.Fstd)
-            V = self.V
-
-            n0 = x0.shape[0]
-            kap = self.kap
-            m = self.p
-
-            Cinvhs = self.Cinvhs
-
-            predcov = torch.zeros(m, m, n0)
-            predcov_g = torch.zeros(kap, n0)
-
-            term1 = torch.zeros(kap, n0)
-            term2 = torch.zeros(kap, n0)
-            for k in range(kap):
-                ck0 = covmat(x0, x0, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], diag_only=True)
-                ck = covmat(x0, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
-                Ckinvh = Cinvhs[k]
-
-                ck_Ckinvh = ck @ Ckinvh
-                ck_Ckinv_Vkh = ck @ Ckinvh @ Ckinvh.T * torch.sqrt(V[k])
-
-                predcov_g[k] = (ck0 - (ck_Ckinvh ** 2).sum(1)) + \
-                               (ck_Ckinv_Vkh ** 2).sum(1)
-
-                term1[k] = (ck0 - (ck_Ckinvh ** 2).sum(1))
-                term2[k] = (ck_Ckinv_Vkh**2).sum(1)
-            for i in range(n0):
-                predcov[:, :, i] = txPhi * predcov_g[:, i] @ txPhi.T
-
-            self.GPvarterm1 = term1
-            self.GPvarterm2 = term2
-        return predcov
-
+    @torch.no_grad()
     def predictvar(self, x0):
-        predcov = self.predictcov(x0)
+        self.compute_MV()
+        x = self.x
+        x0 = self.standardize_x(x0)
+
+        lLmb, lsigma2, lnugGPs, ltau2GPs = self.get_param()
+
+        txPhi = self.pcti * self.Fstd
+        V = self.V
 
         n0 = x0.shape[0]
-        p = self.p
-        predvar = torch.zeros(p, n0)
-        for i in range(n0):
-            predvar[:, i] = predcov[:, :, i].diag()
+        kap = self.kap
+        m = self.p
+
+        Cinvhs = self.Cinvhs
+
+        predcov = torch.zeros(m, m, n0)
+        predcov_g = torch.zeros(kap, n0)
+
+        term1 = torch.zeros(kap, n0)
+        term2 = torch.zeros(kap, n0)
+        for k in range(kap):
+            ck0 = covmat(x0, x0, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], diag_only=True)
+            ck = covmat(x0, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            Ckinvh = Cinvhs[k]
+
+            ck_Ckinvh = ck @ Ckinvh
+            ck_Ckinv_Vkh = ck @ Ckinvh @ Ckinvh.T * torch.sqrt(V[k])
+
+            predcov_g[k] = (ck0 - (ck_Ckinvh ** 2).sum(1)) \
+                            + (ck_Ckinv_Vkh ** 2).sum(1)
+
+            term1[k] = (ck0 - (ck_Ckinvh ** 2).sum(1))
+            term2[k] = (ck_Ckinv_Vkh**2).sum(1)
+
+        predvar = (predcov_g.T @ (txPhi ** 2).T).T
+        # for i in range(n0):
+        #     predcov[:, :, i] = txPhi * predcov_g[:, i] @ txPhi.T
+        return_cov = True
+        if return_cov:
+            CH = predcov_g.T.sqrt()[:, :, None] * txPhi.T[None, :, :]
+
+        self.GPvarterm1 = term1
+        self.GPvarterm2 = term2
         return predvar
+    #
+    # def predictvar(self, x0):
+    #     predcov = self.predictcov(x0)
+    #
+    #     n0 = x0.shape[0]
+    #     p = self.p
+    #     predvar = torch.zeros(p, n0)
+    #     for i in range(n0):
+    #         predvar[:, i] = predcov[:, :, i].diag()
+    #     return predvar
 
     def predictaddvar(self):
-        _, lsigma2, _, _ = self.parameter_clamp(self.lLmb, self.lsigma2, self.lnugGPs, self.ltau2GPs)
-
+        lLmb, lsigma2, lnugGPs, ltau2GPs = self.get_param()
         predictaddvar = (lsigma2.exp() * self.Fstd ** 2).squeeze(1)
         return predictaddvar
 
@@ -263,6 +269,8 @@ class MVN_elbo_autolatent(Module):
             return torch.sqrt((fhat - f0) ** 2).mean(0)
 
     def init_standard_x(self, x):
+        if x.ndim < 2:
+            x = x.unsqueeze(1)
         self.x_orig = x.clone()
         self.x_max = x.max(0).values
         self.x_min = x.min(0).values
@@ -275,7 +283,7 @@ class MVN_elbo_autolatent(Module):
         F = self.F
         self.Fraw = F.clone()
         self.Fmean = F.mean(1).unsqueeze(1)
-        self.Fstd = F.std(1).unsqueeze(1)
+        self.Fstd = F.std(1).unsqueeze(1) # / torch.sqrt(torch.tensor(self.n / (self.n-1),))
         self.F = (F - self.Fmean) / self.Fstd
 
     def tx_x(self, xs):
@@ -350,11 +358,11 @@ class MVN_elbo_autolatent(Module):
 
     @staticmethod
     def parameter_clamp(lLmb, lsigma2, lnugs, ltau2s):
-        d = torch.tensor(lLmb.shape[1] - 1,)
-        lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5 + 1/2 * torch.log(d), 2.5)))).T  # + 1/2 * log dimension
+        d = torch.tensor(lLmb.shape[1],)
+        # lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5 + 1/2 * torch.log(d), 2.5)))).T  # + 1/2 * log dimension
         lsigma2 = parameter_clamping(lsigma2, torch.tensor((-12, 1)))
-        lnugs = parameter_clamping(lnugs, torch.tensor((-16, -8)))
-        ltau2s = parameter_clamping(ltau2s, torch.tensor((-4, 2)))
+        # lnugs = parameter_clamping(lnugs, torch.tensor((-16, -8)))
+        # ltau2s = parameter_clamping(ltau2s, torch.tensor((-4, 4)))
 
         return lLmb, lsigma2, lnugs, ltau2s
 
@@ -369,31 +377,21 @@ class MVN_elbo_autolatent(Module):
             kap = int(torch.argwhere(v > threshold)[0][0] + 1)
 
         assert Phi.shape[1] == min(m, n)
-        Phi = Phi[:, :kap]
         S = S[:kap]
 
-        pcw = ((S ** 2).abs() / n).sqrt()
+        pcw = ((S ** 2).abs()).sqrt()
+        pct = Phi[:, :kap] * pcw / torch.sqrt(torch.tensor(n,))
+        pcti = Phi[:, :kap] * torch.sqrt(torch.tensor(n,)) / pcw
 
-        G = (Phi * pcw).T @ F  # kap x n
-        return G, Phi, pcw, kap
+        G = pct.T @ F  # kap x n
+        return G, pct, pcti, pcw, kap
 
-    def fit(self, sep=False, adam=False, verbose=False):
-        niter, flag = self.fit_bfgs(sep=sep, verbose=verbose)
-        if flag == 'PG_CONV':
-            return niter, flag
-        if adam:
-            adamiter, _ = self.fit_qhadam(lr=1, verbose=verbose)
-            return niter, '+'.join((flag, r'qhadam', adamiter))
+    def fit(self, verbose=False):
+        niter, flag = self.fit_bfgs(verbose=verbose)
         return niter, flag
 
-    def fit_bfgs(self, sep=False, **kwargs):
-        if sep:
-            self.lsigma2.requires_grad = False
-            _, niter, flag = optim_elbo_lbfgs(self, maxiter=10, **kwargs)
-            self.lsigma2.requires_grad = True
-            _, niter, flag = optim_elbo_lbfgs(self, **kwargs)
-        else:
-            _, niter, flag = optim_elbo_lbfgs(self, **kwargs)
+    def fit_bfgs(self, **kwargs):
+        _, niter, flag = optim_elbo_lbfgs(self, **kwargs)
         return niter, flag
 
     def fit_adam(self, maxiter=100, **kwargs):
@@ -403,3 +401,11 @@ class MVN_elbo_autolatent(Module):
     def fit_qhadam(self, maxiter=100, **kwargs):
         _, niter, flag = optim_elbo_qhadam(self, maxiter=maxiter, **kwargs)
         return niter, flag
+
+    def verify_dim(self, f, x):
+        m, nf = f.shape
+        nx, d = x.shape
+
+        if nf != nx:
+            raise ValueError('Number of inputs (x) differs from number of outputs (f), '
+                             'f.shape[1] != x.shape[0]')
