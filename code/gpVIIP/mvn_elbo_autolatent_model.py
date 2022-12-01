@@ -16,8 +16,6 @@ else:
 class MVN_elbo_autolatent(Module):
     def __init__(self, F, x,
                  Phi=None, kap=None, pcthreshold=0.9999,
-                 lLmb=None, lsigma2=None,
-                 initlLmb=True, initlsigma2=True,
                  clamping=True):
         """
         :param Phi:
