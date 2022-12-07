@@ -26,6 +26,43 @@ for i in range(int(m / 2)):
 
 f = torch.tensor(f)
 x = torch.tensor(xtr[:n])
+model = MVN_elbo_autolatent(F=f, x=x, kap=2, clamping=False)
+
+# model.fit_adam(verbose=True)
+# model.fit_bfgs(verbose=True, lr=8e-4)
+
+negelbos = []
+lsigma2grads = []
+lsigma2s = torch.arange(-6, 0, 0.01)
+for lsigma2 in lsigma2s:
+    model.set_lsigma2(lsigma2)
+    model.compute_MV()
+    model.zero_grad()
+    l = model.negelbo()
+    l.backward()
+    negelbos.append(l)
+    lsigma2grads.append(model.lsigma2.grad)
+
+negelbos = torch.tensor(negelbos)
+lsigma2grads = torch.tensor(lsigma2grads)
+import matplotlib.pyplot as plt
+
+plt.figure()
+plt.plot(lsigma2s, negelbos)
+plt.xlabel('lsigma2')
+plt.ylabel('approx log p(G|F)')
+plt.title('negelbo value')
+
+plt.figure()
+plt.plot(lsigma2s, lsigma2grads)
+plt.xlabel('lsigma2')
+plt.ylabel('grad lsigma2')
+plt.title('gradient wrt lsigma2')
+
+
+
+
+
 #
 # models = []
 # lsigma2s = []
@@ -43,22 +80,6 @@ x = torch.tensor(xtr[:n])
 # # lsigma2s = torch.tensor(lsigma2s)
 # lsigma2start = torch.tensor(lsigma2start)
 # #
-model = MVN_elbo_autolatent(F=f, x=x, kap=2, clamping=False)
-
-# model.fit_adam(verbose=True)
-model.fit(verbose=True)
-
-negelbos = []
-lsigma2s = torch.arange(-6, 0, 0.01)
-for lsigma2 in lsigma2s:
-    model.set_lsigma2(lsigma2)
-    negelbos.append(model.negelbo())
-
-negelbos = torch.tensor(negelbos)
-import matplotlib.pyplot as plt
-
-plt.plot(lsigma2s, negelbos)
-
 import matplotlib.pyplot as plt
 #
 # # plt.plot()

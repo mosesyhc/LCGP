@@ -14,11 +14,13 @@ def optim_elbo_lbfgs(model,
         model.compute_MV()
         optim.zero_grad(set_to_none=True)
         negelbo = model.negelbo()
+        print(model.lsigma2, negelbo)
         return negelbo
 
     # precheck learning rate
     while True:
-        optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+        optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr,
+                                           debug=True, dtype=torch.float64)
         optim.zero_grad(set_to_none=True)
         loss = closure()
         loss.backward()
@@ -26,7 +28,8 @@ def optim_elbo_lbfgs(model,
         options = {'closure': closure, 'current_loss': loss,
                    'history_size': history_size,
                    'c1': c1, 'c2': c2,
-                   'max_ls': max_ls, 'damping': False}
+                   'max_ls': max_ls, 'damping': False,
+                   'ls_debug': True}
         loss, grad, lr, _, _, _, _, _ = optim.step(options)
         if torch.isfinite(loss) and torch.isfinite(grad).all():
             break
@@ -36,16 +39,16 @@ def optim_elbo_lbfgs(model,
     loss_prev = torch.inf
     epoch = 0
     ls_fail_count = 0
-    reset_optim = False # True if reset
+    reset_optim = False  # True if reset
 
     header = ['iter', 'grad.absmax()', 'pgrad.absmax()', 'lsigma2', 'lr', 'negelbo', 'diff.']
     if verbose:
         print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
     while True:
-        # options = {'closure': closure, 'current_loss': loss,
-        #            'history_size': history_size,
-        #            'c1': c1, 'c2': c2,
-        #            'max_ls': max_ls, 'damping': True}
+        options = {'closure': closure, 'current_loss': loss,
+                   'history_size': history_size,
+                   'c1': c1, 'c2': c2,
+                   'max_ls': max_ls, 'damping': True}
         loss, grad, lr, _, _, _, _, _ = optim.step(options)
         d = optim.state['global_state'].get('d')
         pg = d.dot(grad) / grad.norm()**2 * grad
