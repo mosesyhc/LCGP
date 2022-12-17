@@ -1,5 +1,4 @@
 import torch
-import torch_optimizer as optim2
 
 
 LS_FAIL_MAX = 3
@@ -8,19 +7,19 @@ PG_CONV_FLAG = 0
 def optim_elbo_lbfgs(model,
                      maxiter=500, lr=1e-1, history_size=4,
                      max_ls=15, c1=1e-4, c2=0.9,
-                     pgtol=1e-1, ftol=2e-9,
+                     pgtol=1e-4, ftol=2e-9,
                      verbose=False):
     def closure():
         model.compute_MV()
         optim.zero_grad(set_to_none=True)
         negelbo = model.negelbo()
-        print(model.lsigma2, negelbo)
         return negelbo
 
     # precheck learning rate
     while True:
         optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr,
-                                           debug=True, dtype=torch.float64)
+                                           # debug=True,
+                                           dtype=torch.float64)
         optim.zero_grad(set_to_none=True)
         loss = closure()
         loss.backward()
@@ -29,7 +28,8 @@ def optim_elbo_lbfgs(model,
                    'history_size': history_size,
                    'c1': c1, 'c2': c2,
                    'max_ls': max_ls, 'damping': False,
-                   'ls_debug': True}
+                   # 'ls_debug': True
+                   }
         loss, grad, lr, _, _, _, _, _ = optim.step(options)
         if torch.isfinite(loss) and torch.isfinite(grad).all():
             break

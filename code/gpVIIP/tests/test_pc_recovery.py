@@ -11,6 +11,8 @@ def read_data(dir):
 
 fname = r'\wingweight_data\\'
 dir = r'code\data' + fname
+
+dir = r'C:\Users\cmyh\Documents\git\VIGP\code\data\wingweight_data\\'
 f0, x0, xtr = read_data(dir)
 
 
@@ -26,38 +28,60 @@ for i in range(int(m / 2)):
 
 f = torch.tensor(f)
 x = torch.tensor(xtr[:n])
-model = MVN_elbo_autolatent(F=f, x=x, kap=2, clamping=False)
+model2 = MVN_elbo_autolatent(F=f, x=x, kap=20, clamping=False)
 
 # model.fit_adam(verbose=True)
-# model.fit_bfgs(verbose=True, lr=8e-4)
-
-negelbos = []
-lsigma2grads = []
-lsigma2s = torch.arange(-6, 0, 0.01)
-for lsigma2 in lsigma2s:
-    model.set_lsigma2(lsigma2)
-    model.compute_MV()
-    model.zero_grad()
-    l = model.negelbo()
-    l.backward()
-    negelbos.append(l)
-    lsigma2grads.append(model.lsigma2.grad)
-
-negelbos = torch.tensor(negelbos)
-lsigma2grads = torch.tensor(lsigma2grads)
-import matplotlib.pyplot as plt
-
-plt.figure()
-plt.plot(lsigma2s, negelbos)
-plt.xlabel('lsigma2')
-plt.ylabel('approx log p(G|F)')
-plt.title('negelbo value')
-
-plt.figure()
-plt.plot(lsigma2s, lsigma2grads)
-plt.xlabel('lsigma2')
-plt.ylabel('grad lsigma2')
-plt.title('gradient wrt lsigma2')
+model2.fit_bfgs(verbose=True)# , lr=8e-4)
+#
+# negelbos = []
+# lsigma2grads_elbo = []
+# lsigma2s = torch.arange(-6, 0, 0.01)
+# for lsigma2 in lsigma2s:
+#     model.set_lsigma2(lsigma2)
+#     model.compute_MV()
+#     model.zero_grad()
+#     l = model.negelbo()
+#     l.backward()
+#     negelbos.append(l)
+#     lsigma2grads_elbo.append(model.lsigma2.grad)
+#
+# negelbos = torch.tensor(negelbos)
+# lsigma2grads_elbo = torch.tensor(lsigma2grads_elbo)
+#
+#
+# negposts = []
+# lsigma2grads_post = []
+# lsigma2s = torch.arange(-6, 0, 0.01)
+# for lsigma2 in lsigma2s:
+#     model.set_lsigma2(lsigma2)
+#     model.zero_grad()
+#     l = model.negpost()
+#     l.backward()
+#     negposts.append(l)
+#     lsigma2grads_post.append(model.lsigma2.grad)
+#
+# negposts = torch.tensor(negposts)
+# lsigma2grads_post = torch.tensor(lsigma2grads_post)
+#
+#
+# import matplotlib.pyplot as plt
+#
+# plt.figure()
+# plt.plot(lsigma2s, negelbos, label='neg. ELBO')
+# plt.plot(lsigma2s, negposts, label='neg. posterior')
+# plt.xlabel('lsigma2')
+# plt.ylabel('log p(G|F)')
+# # plt.yscale('log')
+# plt.legend()
+#
+# plt.figure()
+# plt.plot(lsigma2s, lsigma2grads_elbo, label='neg. ELBO')
+# plt.plot(lsigma2s, lsigma2grads_post, label='neg. posterior')
+# plt.hlines(0, xmin=min(lsigma2s), xmax=max(lsigma2s), colors='k')
+# plt.xlabel('lsigma2')
+# plt.ylabel('grad lsigma2')
+# plt.title('gradient wrt lsigma2')
+# plt.legend()
 
 
 
@@ -83,7 +107,7 @@ plt.title('gradient wrt lsigma2')
 import matplotlib.pyplot as plt
 #
 # # plt.plot()
-#
+
 # from surmise.emulation import emulator
 # emu2 = emulator(x=np.arange(50), theta=x.numpy(), f=f.numpy(),
-#                method='PCGPwM', args={'epsilonPC':5})
+#                method='PCGP', args={'epsilon':1})

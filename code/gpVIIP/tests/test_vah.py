@@ -7,13 +7,13 @@ from mvn_elbo_autolatent_model import MVN_elbo_autolatent
 from load_file import simulation
 
 # VAH root
-vah_root = r'C:\Users\moses\Desktop\git\VAH_SURMISE'
+vah_root = r'C:\Users\cmyh\Documents\git\VAH_SURMISE'
 # Use information in the map_sim_to_design file to find the corresponding design files for each simulation batch
 maps_sim_design = {}
 with open(vah_root + '\simulation_data\map_sim_to_design') as f:
     for l in f:
         l = l.split('\n')[0]
-        maps_sim_design[l.split(' ')[1]]=l.split(' ')[2]
+        maps_sim_design[l.split(' ')[1]] = l.split(' ')[2]
 
 # We use a class object to load data from each simulation batch.
 # sim_d*_e&_train/test_b@: here * stands for number of design points and & for number of events per design
@@ -71,6 +71,6 @@ predte = model(xte)
 
 r2 = 1 - ((ftr - predtr)**2).sum(1) / (((ftr.T - ftr.mean(1)).T)**2).sum(1)
 r2te = 1 - ((fte - predte) **2).sum(1) / (((fte.T - fte.mean(1)).T)**2).sum(1)
-r2emutr = 1 - ((ftr - emu.predict().mean())**2).sum(1) / (((ftr.T - ftr.mean(1)).T)**2).sum(1)
-r2emute = 1 - ((fte - emumean)**2).sum(1) / (((fte.T - fte.mean(1)).T)**2).sum(1)
-plt.scatter(np.arange(98), r2emutr.detach().numpy())
+# r2emutr = 1 - ((ftr - emu.predict().mean())**2).sum(1) / (((ftr.T - ftr.mean(1)).T)**2).sum(1)
+# r2emute = 1 - ((fte - emumean)**2).sum(1) / (((fte.T - fte.mean(1)).T)**2).sum(1)
+# plt.scatter(np.arange(98), r2emutr.detach().numpy())
