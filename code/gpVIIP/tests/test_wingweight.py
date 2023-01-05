@@ -49,7 +49,7 @@ ftr_n = ftr[:, tr_ind]
 xtr_n = xtr[tr_ind]
 torch.seed()
 
-model = MVN_elbo_autolatent(F=ftr_n, x=xtr_n, kap=49, #pcthreshold=0.98,
+model = MVN_elbo_autolatent(F=ftr_n, x=xtr_n, kap=2, #pcthreshold=0.98,
                                     clamping=False)
 model.predictvar(xtr_n)
 pct = model.pct

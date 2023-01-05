@@ -106,7 +106,42 @@ class MVN_elbo_autolatent(Module):
         fhat = self.tx_F(fhat)
         return fhat  # , ghat
 
-    def negpost(self):
+    def negpost(self):  #
+        lLmb, lsigma2, lnugGPs, ltau2GPs = self.get_param()
+
+        x = self.x
+
+        n = self.n
+        p = self.p
+        kap = self.kap
+        F = self.F
+        D = self.D
+
+        b = (self.G.T / D).T  # this is (pcti / D) @ F
+
+        sigma2 = lsigma2.exp()
+
+        negpost = 0
+        for k in range(kap):
+            Ck = covmat(x, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+
+            Wk_C, Uk_C = torch.linalg.eigh(Ck)
+            Ckinvh = Uk_C / Wk_C.sqrt()
+
+            Ak = 1 / D[k] * torch.eye(n) + sigma2 * Ckinvh @ Ckinvh.T
+
+            Wk, Uk = torch.linalg.eigh(Ak)
+            Akinvh = Uk / Wk.sqrt()
+            Akinvhbk = Akinvh.T @ b[k]
+
+            negpost += 1/2 * (torch.sum(torch.log(Wk.abs())) + torch.sum(torch.log(Wk_C.abs())))
+            negpost -= 1/(2 * sigma2) * (Akinvhbk ** 2).sum()
+
+        negpost += 1/(2 * sigma2) * (F ** 2).sum()
+        negpost += n * (p + kap) / 2 * lsigma2
+        return negpost
+
+    def negprofilepost(self):
         lLmb, lsigma2, lnugGPs, ltau2GPs = self.get_param()
 
         F = self.F

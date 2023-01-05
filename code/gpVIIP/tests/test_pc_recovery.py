@@ -28,63 +28,75 @@ for i in range(int(m / 2)):
 
 f = torch.tensor(f)
 x = torch.tensor(xtr[:n])
-model2 = MVN_elbo_autolatent(F=f, x=x, kap=20, clamping=False)
-
+model = MVN_elbo_autolatent(F=f, x=x, kap=20, clamping=False)
+# model.negpost()
 # model.fit_adam(verbose=True)
-model2.fit_bfgs(verbose=True)# , lr=8e-4)
-#
-# negelbos = []
-# lsigma2grads_elbo = []
-# lsigma2s = torch.arange(-6, 0, 0.01)
-# for lsigma2 in lsigma2s:
-#     model.set_lsigma2(lsigma2)
-#     model.compute_MV()
-#     model.zero_grad()
-#     l = model.negelbo()
-#     l.backward()
-#     negelbos.append(l)
-#     lsigma2grads_elbo.append(model.lsigma2.grad)
-#
-# negelbos = torch.tensor(negelbos)
-# lsigma2grads_elbo = torch.tensor(lsigma2grads_elbo)
-#
-#
-# negposts = []
-# lsigma2grads_post = []
-# lsigma2s = torch.arange(-6, 0, 0.01)
-# for lsigma2 in lsigma2s:
-#     model.set_lsigma2(lsigma2)
-#     model.zero_grad()
-#     l = model.negpost()
-#     l.backward()
-#     negposts.append(l)
-#     lsigma2grads_post.append(model.lsigma2.grad)
-#
-# negposts = torch.tensor(negposts)
-# lsigma2grads_post = torch.tensor(lsigma2grads_post)
-#
-#
-# import matplotlib.pyplot as plt
-#
-# plt.figure()
-# plt.plot(lsigma2s, negelbos, label='neg. ELBO')
-# plt.plot(lsigma2s, negposts, label='neg. posterior')
-# plt.xlabel('lsigma2')
-# plt.ylabel('log p(G|F)')
-# # plt.yscale('log')
-# plt.legend()
-#
-# plt.figure()
-# plt.plot(lsigma2s, lsigma2grads_elbo, label='neg. ELBO')
-# plt.plot(lsigma2s, lsigma2grads_post, label='neg. posterior')
-# plt.hlines(0, xmin=min(lsigma2s), xmax=max(lsigma2s), colors='k')
-# plt.xlabel('lsigma2')
-# plt.ylabel('grad lsigma2')
-# plt.title('gradient wrt lsigma2')
-# plt.legend()
+# model2.fit_bfgs(verbose=True)# , lr=8e-4)
+
+negelbos = []
+lsigma2grads_elbo = []
+lsigma2s = torch.arange(-8, 0, 0.1)
+for lsigma2 in lsigma2s:
+    model.set_lsigma2(lsigma2)
+    model.compute_MV()
+    model.zero_grad()
+    l = model.negelbo()
+    l.backward()
+    negelbos.append(l)
+    lsigma2grads_elbo.append(model.lsigma2.grad)
+
+negelbos = torch.tensor(negelbos)
+lsigma2grads_elbo = torch.tensor(lsigma2grads_elbo)
 
 
+negprofileposts = []
+lsigma2grads_profilepost = []
+for lsigma2 in lsigma2s:
+    model.set_lsigma2(lsigma2)
+    model.zero_grad()
+    l = model.negprofilepost()
+    l.backward()
+    negprofileposts.append(l)
+    lsigma2grads_profilepost.append(model.lsigma2.grad)
 
+negprofileposts = torch.tensor(negprofileposts)
+lsigma2grads_profilepost = torch.tensor(lsigma2grads_profilepost)
+
+negposts = []
+lsigma2grads_post = []
+for lsigma2 in lsigma2s:
+    model.set_lsigma2(lsigma2)
+    model.zero_grad()
+    l = model.negpost()
+    l.backward()
+    negposts.append(l)
+    lsigma2grads_post.append(model.lsigma2.grad)
+
+negposts = torch.tensor(negposts)
+lsigma2grads_post = torch.tensor(lsigma2grads_post)
+
+import matplotlib.pyplot as plt
+
+plt.figure()
+plt.plot(lsigma2s, negelbos - negelbos.mean(), label='neg. ELBO')
+plt.plot(lsigma2s, negprofileposts - negprofileposts.mean(), label='neg. profile posterior')
+plt.plot(lsigma2s, negposts - negposts.mean(), label='neg. posterior')
+plt.xlabel('lsigma2')
+plt.ylabel('log p(G|F)')
+# plt.yscale('log')
+plt.legend()
+plt.tight_layout()
+
+plt.figure()
+plt.plot(lsigma2s, lsigma2grads_elbo, label='neg. ELBO')
+plt.plot(lsigma2s, lsigma2grads_profilepost, label='neg. profile posterior')
+plt.plot(lsigma2s, lsigma2grads_post, label='neg. posterior')
+plt.hlines(0, xmin=min(lsigma2s), xmax=max(lsigma2s), colors='k')
+plt.xlabel('lsigma2')
+plt.ylabel('grad lsigma2')
+plt.title('gradient wrt lsigma2')
+plt.legend()
+plt.tight_layout()
 
 
 #
