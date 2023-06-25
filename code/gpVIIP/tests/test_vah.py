@@ -7,7 +7,7 @@ from mvn_elbo_autolatent_model import MVN_elbo_autolatent
 from load_file import simulation
 
 # VAH root
-vah_root = r'C:\Users\cmyh\Documents\git\VAH_SURMISE'
+vah_root = r'..\..\git\VAH_SURMISE'
 # Use information in the map_sim_to_design file to find the corresponding design files for each simulation batch
 maps_sim_design = {}
 with open(vah_root + '\simulation_data\map_sim_to_design') as f:
@@ -45,14 +45,16 @@ for i in experiment.columns:
     exp_label.append(words[0] + '_[' + words[1])
 
 # retain only available experimental observables
-f_drop = f_orig[exp_label]
+f_avail = f_orig[exp_label]
+f_sd_avail = f_sd[exp_label]
 
 # remove 'fluct' as observables
-fluct_colnames = [col for col in f_drop.columns if 'fluct' in col]
-f_drop = f_drop[f_drop.columns.drop(fluct_colnames)]
+fluct_colnames = [col for col in f_avail.columns if 'fluct' in col]
+f_avail = f_avail[f_avail.columns.drop(fluct_colnames)]
+f_sd_avail = f_sd_avail[f_sd_avail.columns.drop(fluct_colnames)]
 
 x = torch.tensor(x_orig.values)
-f = torch.tensor(f_drop.values.T)
+f = torch.tensor(f_avail.values.T)
 
 trind = torch.randperm(x.shape[0])[:290].numpy()
 teind = np.setdiff1d(np.arange(x.shape[0]), trind)

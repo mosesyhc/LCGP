@@ -158,9 +158,9 @@ class LCGP_old(nn.Module):
         lLmb = llmb.repeat(self.kap, 1)
         # lLmb[:, -1] = torch.log(torch.var(self.G, 1))
 
-        self.lLmb = nn.Parameter(lLmb) #, requires_grad=False)
-        self.lnugGPs = nn.Parameter(torch.Tensor(-14 * torch.ones(self.kap))) #, requires_grad=False)
-        self.ltau2GPs = nn.Parameter(torch.Tensor(torch.zeros(self.kap))) #, requires_grad=False)
+        self.lLmb = nn.Parameter(lLmb)  #, requires_grad=False)
+        self.lnugGPs = nn.Parameter(torch.Tensor(-14 * torch.ones(self.kap)))  #, requires_grad=False)
+        self.ltau2GPs = nn.Parameter(torch.Tensor(torch.zeros(self.kap)))  #, requires_grad=False)
 
         Fhat = (self.pcti / self.D) @ self.G
         lsigma2 = torch.max(torch.log(((Fhat - self.Y) ** 2).mean()),

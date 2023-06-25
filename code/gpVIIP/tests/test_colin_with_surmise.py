@@ -23,16 +23,17 @@ if __name__ == '__main__':
     fte = f[:, indte]
     thetate = theta[indte]
 
-    kap = 1
+    kap = 2
     Phi, _, _ = np.linalg.svd(ftr, full_matrices=False)
     Phi = Phi[:, :kap]
     Phi_mse = ((ftr - Phi @ Phi.T @ ftr)**2).mean()
     print('recovery mse: {:.3f}'.format(Phi_mse))
 
-    x = np.arange(ntr).reshape(1, ntr)
+    x = np.arange(kap).reshape(kap, 1)
     g = Phi.T @ ftr
 
+    g[0, 100] = np.nan
 
     from surmise.emulation import emulator
-    emu = emulator(x=x, theta=thetatr, f=g)
+    emu = emulator(x=x, theta=thetatr, f=g, method='PCGPwM', )
     emupred = emu.predict(x=x, theta=thetate)
