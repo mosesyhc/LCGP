@@ -1,49 +1,142 @@
 import torch
 import torch.nn as nn
-import torch.jit as jit
 from matern_covmat import covmat
 from likelihood import negloglik_gp
 from hyperparameter_tuning import parameter_clamping
 from optim_elbo import optim_elbo_lbfgs, optim_elbo_adam, optim_elbo_qhadam
 torch.set_default_dtype(torch.double)
 
-JIT = False
-if JIT:
-    Module = jit.ScriptModule
-else:
-    Module = nn.Module
 
-class LCGP(Module):
-    def __init__(self, F, x,
-                 Phi=None, kap=None, pcthreshold=0.9999,
+class LCGP(nn.Module):
+    def __init__(self,
+                 y: torch.double,
+                 x: torch.double,
+                 q: int = None,
+                 var_threshold: float = None,
+                 param_clamp=True):
+        super().__init__()
+        self.method = 'LCGP'
+        self.x = x
+        self.y = y
+        self.param_clamp = param_clamp
+        if (q is not None) and (var_threshold is not None):
+            raise ValueError('Include only q or var_threshold but not both.')
+        self.q = q
+        self.var_threshold = var_threshold
+
+        self.n, self.d, self.p = (None, None, None)
+        self.x_orig, self.x_max, self.x_min = (None, None, None)
+        # verify that input and output dimensions match
+        self.verify_dim(y, x)
+        # standardize x to unit hypercube
+        self.init_standard_x(x)
+
+        self.g, self.phi, self.diag_D = self.init_phi(y=y, q=q, var_threshold=var_threshold)
+
+    @staticmethod
+    def init_phi(y, q: int = None, var_threshold: float = None):
+        n, p = y.shape
+
+        left_u, singvals, _ = torch.linalg.svd(y.T, full_matrices=False)
+
+        # no reduction
+        if (q is None) and (var_threshold is None):
+            q = p
+        elif (q is None) and (var_threshold is not None):
+            cumvar = (singvals ** 2).cumsum(0) / (singvals ** 2).sum()
+            q = int(torch.argwhere(cumvar > var_threshold)[0][0] + 1)
+
+        assert left_u.shape[1] == min(n, p)
+        singvals = singvals[:q]
+
+        singvals_abs = singvals.abs()
+        phi = left_u[:, :q] * torch.sqrt(torch.tensor(n,)) / singvals_abs
+
+        diag_D = (phi ** 2).sum(0)
+
+        g = phi.T @ y.T
+
+        return g, phi, diag_D
+
+    def init_params(self):
+        x = self.x
+        d = self.d
+        llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([d])) +
+                            torch.log(torch.std(x, 0)))
+        lLmb = llmb.repeat(self.q, 1)
+        lnugGPs = torch.Tensor(-12 * torch.ones(self.kap))
+
+
+
+        pass
+
+    def verify_dim(self, y, x):
+        ny, p = y.shape
+        nx, d = x.shape
+
+        if ny != nx:
+            raise ValueError('Number of inputs (x) differs from number of outputs (y), '
+                             'y.shape[0] != x.shape[0]')
+        else:
+            self.n = nx
+            self.d = d
+            self.p = p
+
+    def init_standard_x(self, x):
+        if x.ndim < 2:
+            x = x.unsqueeze(1)
+        self.x_orig = x.clone()
+        self.x_max = x.max(0).values
+        self.x_min = x.min(0).values
+        self.x = (x - self.x_min) / (self.x_max - self.x_min)
+
+
+class LCGP_homogeneous_error(LCGP):
+    def __init__(self, y, x, param_clamp):
+        super(LCGP_homogeneous_error, self).__init__(y, x, param_clamp)
+
+
+class LCGP_diagonal_error(LCGP):
+    def __init__(self, y, x, param_clamp):
+        super(LCGP_diagonal_error, self).__init__(y, x, param_clamp)
+
+
+class LCGP_block_error(LCGP):
+    def __init__(self, y, x, param_clamp):
+        super(LCGP_block_error, self).__init__(y, x, param_clamp)
+
+
+class LCGP_heterogeneous_error(LCGP):
+    def __init__(self, y, x, param_clamp):
+        super(LCGP_heterogeneous_error, self).__init__(y, x, param_clamp)
+
+
+class LCGP_old(nn.Module):
+    def __init__(self, Y, x,
+                 Phi=None,
                  clamping=True):
-        """
-        :param Phi:
-        :param F:
-        :param x:
-        """
         super().__init__()
         self.method = 'LCGP'
         self.clamping = clamping
-        self.p, self.n = F.shape
-        self.F = F
-        self.standardize_F()
+        self.p, self.n = Y.shape
+        self.Y = Y
+        self.standardize_Y()
         self.init_standard_x(x)  # standardize x to unit hypercube
-        self.verify_dim(f=self.F, x=self.x)
+        self.verify_dim(Y=self.Y, x=self.x)
 
         if Phi is None:
             self.G, self.pct, self.pcti, self.pcw, \
-                self.D, self.kap = self.__PCs(F=self.F, kap=kap, threshold=pcthreshold)
+                self.D, self.kap = self.__PCs(Y=self.Y, kap=kap, threshold=pcthreshold)
         else:
             self.pct = Phi / torch.sqrt(torch.tensor(self.n,))
             self.pcti = Phi * torch.sqrt(torch.tensor(self.n,))
             self.D = (self.pcti ** 2).sum(0)
-            self.G = self.pcti.T @ self.F
+            self.G = self.pcti.T @ self.Y
             self.kap = kap
             self.pcw = torch.ones(kap)
         # report recovery MSE
-        Frawhat = self.tx_F((1 / self.D * self.pcti) @ self.G)
-        Phi_mse = ((Frawhat - self.Fraw) ** 2).mean()
+        Frawhat = self.tx_Y((1 / self.D * self.pcti) @ self.G)
+        Phi_mse = ((Frawhat - self.Yraw) ** 2).mean()
         print('#PCs: {:d}, recovery mse: {:.3E}'.format(self.kap, Phi_mse.item()))
 
         self.M = torch.zeros(self.kap, self.n)
@@ -70,9 +163,9 @@ class LCGP(Module):
         self.ltau2GPs = nn.Parameter(torch.Tensor(torch.zeros(self.kap))) #, requires_grad=False)
 
         Fhat = (self.pcti / self.D) @ self.G
-        lsigma2 = torch.max(torch.log(((Fhat - self.F) ** 2).mean()),
-                            torch.log(0.01 * (self.F ** 2).mean())) # torch.log(torch.tensor(0.25,))#
-        self.lmse0 = torch.log(((Fhat - self.F) ** 2).mean())
+        lsigma2 = torch.max(torch.log(((Fhat - self.Y) ** 2).mean()),
+                            torch.log(0.01 * (self.Y ** 2).mean())) # torch.log(torch.tensor(0.25,))#
+        self.lmse0 = torch.log(((Fhat - self.Y) ** 2).mean())
         self.lsigma2reg = lsigma2.item()
         self.lsigma2 = nn.Parameter(lsigma2)  # !!!
         return
@@ -104,7 +197,7 @@ class LCGP(Module):
             ghat[k] = ck @ Ckinv_Mk
 
         fhat = (self.pcti / self.D) @ ghat
-        fhat = self.tx_F(fhat)
+        fhat = self.tx_Y(fhat)
         return fhat  # , ghat
 
     def negpost(self):  #
@@ -115,7 +208,7 @@ class LCGP(Module):
         n = self.n
         p = self.p
         kap = self.kap
-        F = self.F
+        F = self.Y
         D = self.D
 
         b = (self.G.T / D).T  # this is (pcti / D) @ F
@@ -145,7 +238,7 @@ class LCGP(Module):
     def negprofilepost(self):
         lLmb, lsigma2, lnugGPs, ltau2GPs = self.get_param()
 
-        F = self.F
+        F = self.Y
         x = self.x
 
         p = self.p
@@ -171,7 +264,7 @@ class LCGP(Module):
     def negelbo(self):
         lLmb, lsigma2, lnugGPs, ltau2GPs = self.get_param()
 
-        F = self.F
+        F = self.Y
         x = self.x
 
         p = self.p
@@ -356,18 +449,18 @@ class LCGP(Module):
     def standardize_x(self, x0):
         return (x0 - self.x_min) / (self.x_max - self.x_min)
 
-    def standardize_F(self):
-        F = self.F
-        self.Fraw = F.clone()
-        self.Fmean = F.mean(1).unsqueeze(1)
-        self.Fstd = F.std(1).unsqueeze(1) # / torch.sqrt(torch.tensor(self.n / (self.n-1),))
-        self.F = (F - self.Fmean) / self.Fstd
+    def standardize_Y(self):
+        Y = self.Y
+        self.Yraw = Y.clone()
+        self.Ymean = Y.mean(1).unsqueeze(1)
+        self.Fstd = Y.std(1).unsqueeze(1)  # / torch.sqrt(torch.tensor(self.n / (self.n-1),))
+        self.Y = (Y - self.Ymean) / self.Fstd
 
     def tx_x(self, xs):
         return xs * (self.x_max - self.x_min) + self.x_min
 
-    def tx_F(self, Fs):
-        return Fs * self.Fstd + self.Fmean
+    def tx_Y(self, Ys):
+        return Ys * self.Fstd + self.Ymean
 
     def dss(self, x0, f0, use_diag=False):
         """
@@ -444,10 +537,10 @@ class LCGP(Module):
         return lLmb, lsigma2, lnugs, ltau2s
 
     @staticmethod
-    def __PCs(F, kap=None, threshold=0.9999):
-        m, n = F.shape
+    def __PCs(Y, kap=None, threshold=0.9999):
+        m, n = Y.shape
 
-        Phi, S, _ = torch.linalg.svd(F, full_matrices=False)
+        Phi, S, _ = torch.linalg.svd(Y, full_matrices=False)
         v = (S ** 2).cumsum(0) / (S ** 2).sum()
 
         if kap is None:
@@ -462,7 +555,7 @@ class LCGP(Module):
 
         D = (pcti ** 2).sum(0)
 
-        G = pcti.T @ F  # kap x n
+        G = pcti.T @ Y  # kap x n
         return G, pct, pcti, pcw, D, kap
 
     def fit(self, verbose=False):
@@ -481,8 +574,8 @@ class LCGP(Module):
         _, niter, flag = optim_elbo_qhadam(self, maxiter=maxiter, **kwargs)
         return niter, flag
 
-    def verify_dim(self, f, x):
-        m, nf = f.shape
+    def verify_dim(self, Y, x):
+        m, nf = Y.shape
         nx, d = x.shape
 
         if nf != nx:

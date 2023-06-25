@@ -27,6 +27,13 @@ sim_d300_e200_train = simulation(vah_root + f'/simulation_data/{name}',
 
 x_orig = sim_d300_e200_train.design
 f_orig = sim_d300_e200_train.obs
+f_sd_orig = sim_d300_e200_train.obs_sd
+
+plt.style.use(['science', 'grid', 'high-vis'])
+plt.scatter(np.arange(f_sd_orig.shape[1]), f_sd_orig.mean(0),
+            marker='x')
+plt.xlabel('response')
+plt.ylabel('response stdev')
 
 # Load experimental data
 experiment = pd.read_csv(filepath_or_buffer=vah_root + r"\HIC_experimental_data\PbPb2760_experiment", index_col=0)
