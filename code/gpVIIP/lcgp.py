@@ -3,7 +3,7 @@ import torch.nn as nn
 from matern_covmat import covmat
 from likelihood import negloglik_gp
 from hyperparameter_tuning import parameter_clamping
-from optim_elbo import optim_elbo_lbfgs, optim_elbo_adam, optim_elbo_qhadam
+from optim_elbo import optim_elbo_lbfgs
 torch.set_default_dtype(torch.double)
 
 
@@ -13,6 +13,7 @@ class LCGP(nn.Module):
                  x: torch.double,
                  q: int = None,
                  var_threshold: float = None,
+                 error_structure: str = 'diagonal',
                  param_clamp=True):
         super().__init__()
         self.method = 'LCGP'
@@ -24,14 +25,24 @@ class LCGP(nn.Module):
         self.q = q
         self.var_threshold = var_threshold
 
-        self.n, self.d, self.p = (None, None, None)
+        # placeholders for variables
+        self.n, self.d, self.p = 0, 0, 0
         self.x_orig, self.x_max, self.x_min = (None, None, None)
+        self.lLmb, self.lnugGPs, self.lsigma2s = (None, None, None)
+
         # verify that input and output dimensions match
         self.verify_dim(y, x)
         # standardize x to unit hypercube
         self.init_standard_x(x)
 
-        self.g, self.phi, self.diag_D = self.init_phi(y=y, q=q, var_threshold=var_threshold)
+        # reset q if none is provided
+        self.g, self.phi, self.diag_D, self.q = self.init_phi(y=y, q=q, var_threshold=var_threshold)
+
+        self.init_params()
+
+        yhat0 = self.phi / self.lsigma2s.exp().sqrt() @ self.g
+
+        print((yhat0 - y)**2).mean()
 
     @staticmethod
     def init_phi(y, q: int = None, var_threshold: float = None):
@@ -53,22 +64,26 @@ class LCGP(nn.Module):
         phi = left_u[:, :q] * torch.sqrt(torch.tensor(n,)) / singvals_abs
 
         diag_D = (phi ** 2).sum(0)
-
         g = phi.T @ y.T
 
-        return g, phi, diag_D
+        return g, phi, diag_D, q
 
     def init_params(self):
         x = self.x
         d = self.d
+        diag_D = self.diag_D
+
         llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([d])) +
                             torch.log(torch.std(x, 0)))
         lLmb = llmb.repeat(self.q, 1)
-        lnugGPs = torch.Tensor(-12 * torch.ones(self.kap))
+        lnugGPs = torch.Tensor(-12 * torch.ones(self.q))
 
+        lsigma2_diag = torch.Tensor(torch.log(diag_D))
 
-
-        pass
+        self.lLmb = nn.Parameter(lLmb)
+        self.lnugGPs = nn.Parameter(lnugGPs)
+        self.lsigma2s = nn.Parameter(lsigma2_diag)
+        return
 
     def verify_dim(self, y, x):
         ny, p = y.shape
@@ -81,6 +96,7 @@ class LCGP(nn.Module):
             self.n = nx
             self.d = d
             self.p = p
+            return
 
     def init_standard_x(self, x):
         if x.ndim < 2:
@@ -89,7 +105,7 @@ class LCGP(nn.Module):
         self.x_max = x.max(0).values
         self.x_min = x.min(0).values
         self.x = (x - self.x_min) / (self.x_max - self.x_min)
-
+        return
 
 class LCGP_homogeneous_error(LCGP):
     def __init__(self, y, x, param_clamp):
