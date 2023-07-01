@@ -46,42 +46,31 @@ x = np.random.uniform(0, 1, n)
 np.random.seed(150)
 torch.manual_seed(1)
 
-f = forrester2008(x, noisy=True, noiseconst=noise)
+f = forrester2008(x, noisy=False, noiseconst=noise)
 
 x = torch.tensor(x).unsqueeze(1)
 f = torch.tensor(f)
 
-fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-for j in range(f.shape[0]):
-#     ax[j].plot(x0, f0[j], lw=2, alpha=0.2, color='gray')
-    ax[0].scatter(x, f[j], marker='.', label=noise, alpha=0.5)
-    ax[0].set_ylabel('$f(x)$')
-    ax[0].set_xlabel('$x$')
-ax[0].legend(labels=['$f_1$', '$f_2$', '$f_3$'])
-
-U, S, V = np.linalg.svd(f)
-
-print(S)
-
-g = (f.T @ (U / np.sqrt(S))).T
-for j in range(g.shape[0]):
-    ax[1].scatter(x, g[j], marker='.', alpha=0.8)
-ax[1].legend(labels=['$g_1$', '$g_2$', '$g_3$'])
-ax[1].set_xlabel('$x$')
-ax[1].set_ylabel('$g(x)$')
-
-
-plt.tight_layout()
-
-
-# In[4]:
-
-
-from lcgp import LCGP
+from lcgp import LCGP, LCGP_diagonal_error
 
 
 # In[5]:
 
 
-model = LCGP(y=f.T, x=x)
+model = LCGP(y=f.T, x=x, q=2)
+model.compute_aux_predictive_quantities()
+yhat0 = model.predict(x)[0]
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 5), sharey=True)
+for j in range(f.shape[0]):
+    ax[0].scatter(x, yhat0.detach().T[j], marker='.', label=noise, alpha=0.5)
+    ax[0].set_ylabel('$f(x)$')
+    ax[0].set_xlabel('$x$')
+ax[0].legend(labels=['$f_1$', '$f_2$', '$f_3$'])
+
+for j in range(f.shape[0]):
+    ax[1].scatter(x, model.y_orig.detach().T[j], marker='.', label=noise, alpha=0.5)
+    ax[1].set_ylabel('$f(x)$')
+    ax[1].set_xlabel('$x$')
+ax[1].legend(labels=['$f_1$', '$f_2$', '$f_3$'])
 

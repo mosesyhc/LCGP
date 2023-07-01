@@ -111,7 +111,7 @@ class MVN_elbo_autolatent_sp(Module):
         n0 = theta0.shape[0]
         ghat_sp = torch.zeros(kap, n0)
         for k in range(kap):
-            cki = covmat(theta0, thetai, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            cki = covmat(theta0, thetai, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k])
             Ckinv_Mk = Rinvhs[k] @ (QRinvhs[k].T * M[k]).sum(1)
 
             ghat_sp[k] = cki @ Ckinv_Mk
@@ -185,8 +185,8 @@ class MVN_elbo_autolatent_sp(Module):
 
         for k in range(kap):
             Delta_k_inv_diag, Qk, Rkinvh, Qk_Rkinvh, \
-                logdet_Ck, ck_full_i, Ck_i = cov_sp(theta=theta, thetai=thetai,
-                                                    llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+                logdet_Ck, ck_full_i, Ck_i = cov_sp(theta=theta, thetai=thetai, llmb=lLmb[k], llmb0=ltau2GPs[k],
+                                                    lnug=lnugGPs[k])
 
             W_Cki, U_Cki = torch.linalg.eigh(Ck_i)
             Ckiinvh = U_Cki / W_Cki.abs().sqrt()
@@ -252,9 +252,9 @@ class MVN_elbo_autolatent_sp(Module):
             predcov = torch.zeros(m, m, n0)
             predcov_g = torch.zeros(kap, n0)
             for k in range(kap):
-                ck0 = covmat(theta0, theta0, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], diag_only=True)
-                cki = covmat(theta0, thetai, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
-                ck = covmat(theta0, theta, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+                ck0 = covmat(theta0, theta0, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k], diag_only=True)
+                cki = covmat(theta0, thetai, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k])
+                ck = covmat(theta0, theta, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k])
 
                 Ckiinv = Ciinvhs[k]
                 Rkinvh = Rinvhs[k]

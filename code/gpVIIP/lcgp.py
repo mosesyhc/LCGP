@@ -3,7 +3,7 @@ import torch.nn as nn
 from matern_covmat import covmat
 from likelihood import negloglik_gp
 from hyperparameter_tuning import parameter_clamping
-from optim_elbo import optim_elbo_lbfgs
+from optim_elbo import optim_elbo_lbfgs, optim_elbo_adam, optim_elbo_qhadam
 torch.set_default_dtype(torch.double)
 
 
@@ -18,7 +18,9 @@ class LCGP(nn.Module):
         super().__init__()
         self.method = 'LCGP'
         self.x = x
-        self.y = y
+
+        self.y_orig, self.ymean, self.y = self.center_y(y)
+
         self.param_clamp = param_clamp
         if (q is not None) and (var_threshold is not None):
             raise ValueError('Include only q or var_threshold but not both.')
@@ -27,26 +29,37 @@ class LCGP(nn.Module):
 
         # placeholders for variables
         self.n, self.d, self.p = 0, 0, 0
-        self.x_orig, self.x_max, self.x_min = (None, None, None)
-        self.lLmb, self.lnugGPs, self.lsigma2s = (None, None, None)
-
         # verify that input and output dimensions match
         self.verify_dim(y, x)
+
+        self.x_orig, self.x_max, self.x_min = (x.clone(), torch.zeros(size=([self.d]), dtype=torch.double),
+                                               torch.zeros(size=([self.d]), dtype=torch.double))
+
         # standardize x to unit hypercube
         self.init_standard_x(x)
 
         # reset q if none is provided
-        self.g, self.phi, self.diag_D, self.q = self.init_phi(y=y, q=q, var_threshold=var_threshold)
+        self.g, self.phi, self.diag_D, self.q = self.init_phi(var_threshold=var_threshold)
+
+        self.lLmb, self.lLmb0, \
+            self.lnugGP, self.lsigma2s = (torch.zeros(size=[self.q, self.d], dtype=torch.double),
+                                          torch.zeros(size=[self.q], dtype=torch.double),
+                                          torch.zeros(size=[self.q], dtype=torch.double),
+                                          torch.zeros(size=[self.p], dtype=torch.double))
 
         self.init_params()
 
-        yhat0 = self.phi / self.lsigma2s.exp().sqrt() @ self.g
+        # placeholders for predictive quantities
+        self.CinvMs = torch.zeros(size=[self.q, self.n])
+        self.Ths = torch.zeros(size=[self.q, self.n, self.n])
 
-        print((yhat0 - y)**2).mean()
+        # yhat0 = (self.phi / self.lsigma2s.exp().sqrt() @ self.g).T  # diagonal or scalar
+        # self.yhat0 = yhat0
+        # print((yhat0 - y)**2).mean()
 
-    @staticmethod
-    def init_phi(y, q: int = None, var_threshold: float = None):
-        n, p = y.shape
+    def init_phi(self, var_threshold: float = None):
+        y, q = self.y, self.q
+        n, p = self.n, self.p
 
         left_u, singvals, _ = torch.linalg.svd(y.T, full_matrices=False)
 
@@ -60,27 +73,30 @@ class LCGP(nn.Module):
         assert left_u.shape[1] == min(n, p)
         singvals = singvals[:q]
 
-        singvals_abs = singvals.abs()
-        phi = left_u[:, :q] * torch.sqrt(torch.tensor(n,)) / singvals_abs
-
+        # singvals_abs = singvals.abs()
+        phi = left_u[:, :q] * torch.sqrt(torch.tensor(n,)) / singvals
         diag_D = (phi ** 2).sum(0)
-        g = phi.T @ y.T
+
+        sigma2 = diag_D
+        psi = phi * sigma2.sqrt()
+
+        g = psi.T @ y.T
 
         return g, phi, diag_D, q
 
     def init_params(self):
         x = self.x
         d = self.d
-        diag_D = self.diag_D
 
-        llmb = torch.Tensor(0.5 * torch.log(torch.Tensor([d])) +
-                            torch.log(torch.std(x, 0)))
+        llmb = 0.5 * torch.log(torch.Tensor([d])) + torch.log(torch.std(x, 0))
         lLmb = llmb.repeat(self.q, 1)
-        lnugGPs = torch.Tensor(-12 * torch.ones(self.q))
+        lLmb0 = torch.zeros(self.q)
+        lnugGPs = torch.Tensor(-14 * torch.ones(self.q))
 
-        lsigma2_diag = torch.Tensor(torch.log(diag_D))
+        lsigma2_diag = torch.Tensor(torch.log(self.y.var(0)))
 
         self.lLmb = nn.Parameter(lLmb)
+        self.lLmb0 = nn.Parameter(lLmb0)
         self.lnugGPs = nn.Parameter(lnugGPs)
         self.lsigma2s = nn.Parameter(lsigma2_diag)
         return
@@ -101,34 +117,109 @@ class LCGP(nn.Module):
     def init_standard_x(self, x):
         if x.ndim < 2:
             x = x.unsqueeze(1)
-        self.x_orig = x.clone()
+        # self.x_orig = x.clone()
         self.x_max = x.max(0).values
         self.x_min = x.min(0).values
         self.x = (x - self.x_min) / (self.x_max - self.x_min)
         return
 
+    def forward(self, x0):
+        return self.predict(x0)
+
+    @torch.no_grad()
+    def predict(self, x0):
+        x = self.x
+        lLmb = self.lLmb
+        lLmb0 = self.lLmb0
+        lnugGP = self.lnugGP
+
+        lsigma2 = self.lsigma2s
+        phi = self.phi
+
+        psi = (phi.T * lsigma2.exp().sqrt()).T
+
+        CinvM = self.CinvMs
+        Th = self.Ths
+
+        if x0.ndim < 2:
+            x0 = x0.unsqueeze(1)
+        x0 = self.standardize_x(x0)
+        n0 = x0.shape[0]
+
+        ghat = torch.zeros([self.q, n0])
+        gvar = torch.zeros([self.q, n0])
+        for k in range(self.q):
+            c00k = covmat(x0, x0, diag_only=True, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGP[k])
+            c0k = covmat(x0, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGP[k])
+
+            ghat[k] = c0k @ CinvM[k]
+            gvar[k] = c00k - ((c0k @ Th[k]) ** 2).sum(1)
+
+        predmean = (psi @ ghat).T
+        predvar = gvar.T @ (psi ** 2).T
+        return predmean, predvar
+
+    @torch.no_grad()
+    def compute_aux_predictive_quantities(self):
+        x = self.x
+        lLmb = self.lLmb
+        lLmb0 = self.lLmb0
+        lnugGP = self.lnugGP
+        lsigma2 = self.lsigma2s
+
+        D = self.diag_D
+        # B := Y @ Sigma^{-1/2} @ Phi
+        B = (self.y / lsigma2.exp().sqrt()) @ self.phi
+
+        CinvM = torch.zeros([self.q, self.n])
+        Th = torch.zeros([self.q, self.n, self.n])
+
+        for k in range(self.q):
+            Ck = covmat(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGP[k])
+
+            Wk, Uk = torch.linalg.eigh(Ck)
+
+            # (I + D_k * C_k)^{-1}
+            IpdkCkinv = Uk / (1.0 + D[k] * Wk) @ Uk.T
+
+            CkinvMk = IpdkCkinv @ B.T[k]
+            Thk = Uk * ((D[k] * Wk**2) / (Wk**2 + D[k] * Wk**3)).sqrt() @ Uk.T
+
+            CinvM[k] = CkinvMk
+            Th[k] = Thk
+        self.CinvMs = CinvM
+        self.Ths = Th
+
+    def standardize_x(self, x0):
+        return (x0 - self.x_min) / (self.x_max - self.x_min)
+
+    def center_y(self, y):
+        ymean = y.mean(0)
+
+        return y.clone(), ymean, y - ymean
+
 class LCGP_homogeneous_error(LCGP):
-    def __init__(self, y, x, param_clamp):
-        super(LCGP_homogeneous_error, self).__init__(y, x, param_clamp)
+    def __init__(self, y, x):
+        super(LCGP_homogeneous_error, self).__init__(y, x)
 
 
 class LCGP_diagonal_error(LCGP):
-    def __init__(self, y, x, param_clamp):
-        super(LCGP_diagonal_error, self).__init__(y, x, param_clamp)
+    def __init__(self, y, x):
+        super(LCGP_diagonal_error, self).__init__(y, x)
 
 
 class LCGP_block_error(LCGP):
-    def __init__(self, y, x, param_clamp):
-        super(LCGP_block_error, self).__init__(y, x, param_clamp)
+    def __init__(self, y, x):
+        super(LCGP_block_error, self).__init__(y, x)
 
 
 class LCGP_heterogeneous_error(LCGP):
-    def __init__(self, y, x, param_clamp):
-        super(LCGP_heterogeneous_error, self).__init__(y, x, param_clamp)
+    def __init__(self, y, x):
+        super(LCGP_heterogeneous_error, self).__init__(y, x)
 
 
 class LCGP_old(nn.Module):
-    def __init__(self, Y, x,
+    def __init__(self, Y, x, kap, pcthreshold=0.9999,
                  Phi=None,
                  clamping=True):
         super().__init__()
@@ -205,7 +296,7 @@ class LCGP_old(nn.Module):
         n0 = x0.shape[0]
         ghat = torch.zeros(kap, n0)
         for k in range(kap):
-            ck = covmat(x0, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            ck = covmat(x0, x, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k])
 
             Ckinvh = Cinvhs[k]
             Ckinv_Mk = Ckinvh @ Ckinvh.T @ M[k]
@@ -233,7 +324,7 @@ class LCGP_old(nn.Module):
 
         negpost = 0
         for k in range(kap):
-            Ck = covmat(x, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            Ck = covmat(x, x, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k])
 
             Wk_C, Uk_C = torch.linalg.eigh(Ck)
             Ckinvh = Uk_C / Wk_C.sqrt()
@@ -326,7 +417,7 @@ class LCGP_old(nn.Module):
         sigma2 = torch.exp(lsigma2)
         Cinvhs = torch.zeros(self.kap, self.n, self.n)
         for k in range(kap):
-            C_k = covmat(x, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            C_k = covmat(x, x, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k])
 
             W_k, U_k = torch.linalg.eigh(C_k)
 
@@ -401,8 +492,8 @@ class LCGP_old(nn.Module):
         term1 = torch.zeros(kap, n0)
         term2 = torch.zeros(kap, n0)
         for k in range(kap):
-            ck0 = covmat(x0, x0, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], diag_only=True)
-            ck = covmat(x0, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            ck0 = covmat(x0, x0, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k], diag_only=True)
+            ck = covmat(x0, x, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k])
             Ckinvh = Cinvhs[k]
 
             ck_Ckinvh = ck @ Ckinvh

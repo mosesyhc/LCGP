@@ -3,7 +3,7 @@ from matern_covmat import covmat, cov_sp
 
 
 def negloglik_gp(llmb, lnug, ltau2, x, g):
-    C = covmat(x, x, llmb=llmb, lnug=lnug, ltau2=ltau2)
+    C = covmat(x, x, llmb=llmb, llmb0=ltau2, lnug=lnug)
 
     W, V = torch.linalg.eigh(C)
     Vh = V / torch.sqrt(W.abs())
@@ -24,7 +24,7 @@ def negloglik_gp(llmb, lnug, ltau2, x, g):
 
 
 def negloglik_gp_sp(llmb, lnug, ltau2, theta, thetai, g):
-    Delta_inv_diag, _, _, QRinvh, logdet_C, _, _ = cov_sp(theta=theta, thetai=thetai, llmb=llmb, lnug=lnug, ltau2=ltau2)
+    Delta_inv_diag, _, _, QRinvh, logdet_C, _, _ = cov_sp(theta=theta, thetai=thetai, llmb=llmb, llmb0=ltau2, lnug=lnug)
 
     QRinvh_g = (QRinvh.T * g).sum(1)
     quad = (Delta_inv_diag * g ** 2).sum() - (QRinvh_g ** 2).sum()

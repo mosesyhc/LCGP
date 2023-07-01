@@ -96,7 +96,7 @@ class LCGP(Module):
         n0 = x0.shape[0]
         ghat = torch.zeros(kap, n0)
         for k in range(kap):
-            ck = covmat(x0, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            ck = covmat(x0, x, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k])
 
             Ckinvh = Cinvhs[k]
             Ckinv_Mk = Ckinvh @ Ckinvh.T @ M[k]
@@ -124,7 +124,7 @@ class LCGP(Module):
 
         negpost = 0
         for k in range(kap):
-            Ck = covmat(x, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            Ck = covmat(x, x, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k])
 
             Wk_C, Uk_C = torch.linalg.eigh(Ck)
             Ckinvh = Uk_C / Wk_C.sqrt()
@@ -217,7 +217,7 @@ class LCGP(Module):
         sigma2 = torch.exp(lsigma2)
         Cinvhs = torch.zeros(self.kap, self.n, self.n)
         for k in range(kap):
-            C_k = covmat(x, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            C_k = covmat(x, x, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k])
 
             W_k, U_k = torch.linalg.eigh(C_k)
 
@@ -292,8 +292,8 @@ class LCGP(Module):
         term1 = torch.zeros(kap, n0)
         term2 = torch.zeros(kap, n0)
         for k in range(kap):
-            ck0 = covmat(x0, x0, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k], diag_only=True)
-            ck = covmat(x0, x, llmb=lLmb[k], lnug=lnugGPs[k], ltau2=ltau2GPs[k])
+            ck0 = covmat(x0, x0, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k], diag_only=True)
+            ck = covmat(x0, x, llmb=lLmb[k], llmb0=ltau2GPs[k], lnug=lnugGPs[k])
             Ckinvh = Cinvhs[k]
 
             ck_Ckinvh = ck @ Ckinvh

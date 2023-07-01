@@ -1,7 +1,7 @@
 import torch
 
 
-def covmat(x1, x2, llmb, lnug, ltau2, diag_only:bool=False):
+def covmat(x1, x2, llmb, llmb0, lnug, diag_only: bool = False):
     # assumes tensors are supplied
     assert x1.dim() == 2, 'input x1 should be 2-dimensional, (n_param, dim_param)'
     assert x2.dim() == 2, 'input x2 should be 2-dimensional, (n_param, dim_param)'
@@ -10,7 +10,7 @@ def covmat(x1, x2, llmb, lnug, ltau2, diag_only:bool=False):
     if diag_only:
         assert torch.isclose(x1, x2).all(), 'diag_only should only be called when x1 and x2 are identical.'
         c = torch.ones(x1.shape[0])  # / (1 + torch.exp(llmb[-1]))
-        return ltau2.exp() * c
+        return llmb0.exp() * c
 
     else:
         V = torch.zeros((x1.shape[0], x2.shape[0]))
@@ -31,10 +31,10 @@ def covmat(x1, x2, llmb, lnug, ltau2, diag_only:bool=False):
             C = (1 - nug) * C0 + nug * torch.eye(x1.shape[0])
         else:
             C = (1 - nug) * C0
-        return ltau2.exp() * C
+        return llmb0.exp() * C
 
 
-def cov_sp(theta, thetai, llmb, lnug, ltau2):  # assuming x1 = x2 = theta
+def cov_sp(theta, thetai, llmb, llmb0, lnug):  # assuming x1 = x2 = theta
     '''
     Returns the Nystr{\"o}m approximation of a covariance matrix,
     its inverse, and the log of its determinant.
@@ -46,9 +46,9 @@ def cov_sp(theta, thetai, llmb, lnug, ltau2):  # assuming x1 = x2 = theta
     :return:
     '''
 
-    c_full_i = covmat(theta, thetai, llmb=llmb, lnug=lnug, ltau2=ltau2)
-    C_i = covmat(thetai, thetai, llmb=llmb, lnug=lnug, ltau2=ltau2)
-    C_full_diag = covmat(theta, theta, llmb=llmb, lnug=lnug, ltau2=ltau2, diag_only=True)
+    c_full_i = covmat(theta, thetai, llmb=llmb, llmb0=llmb0, lnug=lnug)
+    C_i = covmat(thetai, thetai, llmb=llmb, llmb0=llmb0, lnug=lnug)
+    C_full_diag = covmat(theta, theta, llmb=llmb, llmb0=llmb0, lnug=lnug, diag_only=True)
 
     Wi, Ui = torch.linalg.eigh(C_i)
     Ciinvh = Ui / Wi.sqrt()
