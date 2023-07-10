@@ -57,13 +57,13 @@ from lcgp import LCGP, LCGP_diagonal_error
 # In[5]:
 
 
-model = LCGP(y=f.T, x=x, q=2)
+model = LCGP(y=f.T, x=x, q=3)
 model.compute_aux_predictive_quantities()
 yhat0 = model.predict(x)[0]
 
-fig, ax = plt.subplots(1, 2, figsize=(10, 5), sharey=True)
+fig, ax = plt.subplots(1, 2, figsize=(10, 5)) #, sharey='row')
 for j in range(f.shape[0]):
-    ax[0].scatter(x, yhat0.detach().T[j], marker='.', label=noise, alpha=0.5)
+    ax[0].scatter(x, model.g.detach()[j], marker='.', label=noise, alpha=0.5)
     ax[0].set_ylabel('$f(x)$')
     ax[0].set_xlabel('$x$')
 ax[0].legend(labels=['$f_1$', '$f_2$', '$f_3$'])

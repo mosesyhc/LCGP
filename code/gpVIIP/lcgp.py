@@ -77,11 +77,7 @@ class LCGP(nn.Module):
         phi = left_u[:, :q] * torch.sqrt(torch.tensor(n,)) / singvals
         diag_D = (phi ** 2).sum(0)
 
-        sigma2 = diag_D
-        psi = phi * sigma2.sqrt()
-
-        g = psi.T @ y.T
-
+        g = phi.T @ y.T
         return g, phi, diag_D, q
 
     def init_params(self):
@@ -155,7 +151,7 @@ class LCGP(nn.Module):
             ghat[k] = c0k @ CinvM[k]
             gvar[k] = c00k - ((c0k @ Th[k]) ** 2).sum(1)
 
-        predmean = (psi @ ghat).T
+        predmean = (psi @ ghat).T + self.ymean
         predvar = gvar.T @ (psi ** 2).T
         return predmean, predvar
 
