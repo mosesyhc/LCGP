@@ -33,8 +33,7 @@ from func3d import forrester2008
 ## Say we are given some data (2-dimensional)
 
 # Set my noise level
-noise = 0.25
-
+noise = 1
 
 # In[3]:
 
@@ -46,7 +45,7 @@ x = np.random.uniform(0, 1, n)
 np.random.seed(150)
 torch.manual_seed(1)
 
-f = forrester2008(x, noisy=False, noiseconst=noise)
+f = forrester2008(x, noisy=True, noiseconst=noise)
 
 x = torch.tensor(x).unsqueeze(1)
 f = torch.tensor(f)
