@@ -1,6 +1,5 @@
 import torch
 
-
 LS_FAIL_MAX = 3
 PG_CONV_FLAG = 0
 

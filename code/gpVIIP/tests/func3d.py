@@ -21,7 +21,7 @@ def cps2001(x):
     return y
 
 
-def forrester2008(x, noisy=True, noiseconst=0.1):
+def forrester2008(x, noisy=True, noises=(0.01, 0.1, 0.25)):
     x = np.expand_dims(x, 1) if x.ndim < 2 else x
 
     def base_f(x, a=6, b=12, c=-2, d=-4):
@@ -33,9 +33,9 @@ def forrester2008(x, noisy=True, noiseconst=0.1):
     y2 = forrester1d(y1, x, 0.5, 5, -5)
     y3 = forrester1d(y1, x, -0.8, -5, 4)
     if noisy:
-        e1 = np.random.normal(0, noiseconst * np.sqrt(0.01) * np.std(y1), x.shape)
-        e2 = np.random.normal(0, noiseconst * np.sqrt(0.1) * np.std(y2), x.shape)
-        e3 = np.random.normal(0, noiseconst * np.sqrt(0.25) * np.std(y3), x.shape)
+        e1 = np.random.normal(0, np.sqrt(noises[0]) * np.std(y1), x.shape)
+        e2 = np.random.normal(0, np.sqrt(noises[1]) * np.std(y2), x.shape)
+        e3 = np.random.normal(0, np.sqrt(noises[2]) * np.std(y3), x.shape)
         y1 += e1
         y2 += e2
         y3 += e3

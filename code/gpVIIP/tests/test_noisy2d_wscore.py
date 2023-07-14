@@ -170,7 +170,7 @@ if __name__ == '__main__':
             # res_sp.append(ms)
 
     def print_diagnostics(m):
-        lLmb, lsigma2, lnug, ltau = m.parameter_clamp(m.lLmb, m.lsigma2, m.lnugGPs, m.ltau2GPs)
+        lLmb, lsigma2, lnug, ltau = m.parameter_clamp(m.lLmb, m.ltau2GPs, m.lsigma2, m.lnugGPs)
         testGPvar1, testGPvar2 = m.GPvarterm1.mean().item(), m.GPvarterm2.mean().item()
         _ = m.predictcov(m.x)
         trainGPvar1, trainGPvar2 = m.GPvarterm1.mean().item(), m.GPvarterm2.mean().item()
