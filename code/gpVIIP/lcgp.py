@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from matern_covmat import covmat
-from likelihood import negloglik_gp
 from hyperparameter_tuning import parameter_clamping
 from optim import optim_lbfgs
 torch.set_default_dtype(torch.double)
@@ -36,6 +35,7 @@ class LCGP(nn.Module):
 
         # reset q if none is provided
         self.g, self.phi, self.diag_D, self.q = self.init_phi(var_threshold=var_threshold)
+        # self.ghat = torch.zeros_like(self.g)
 
         self.lLmb, self.lLmb0, \
             self.lnugGPs, self.lsigma2s = (torch.zeros(size=[self.q, self.d], dtype=torch.double),
@@ -80,7 +80,7 @@ class LCGP(nn.Module):
         llmb = 0.5 * torch.log(torch.Tensor([d])) + torch.log(torch.std(x, 0))
         lLmb = llmb.repeat(self.q, 1)
         lLmb0 = torch.zeros(self.q)
-        lnugGPs = torch.Tensor(-14 * torch.ones(self.q))
+        lnugGPs = torch.Tensor(-10 * torch.ones(self.q))
 
         lsigma2_diag = torch.Tensor(torch.log(self.y.var(1)))
 
@@ -132,14 +132,17 @@ class LCGP(nn.Module):
             ghat[k] = c0k @ CinvM[k]
             gvar[k] = c00k - ((c0k @ Th[k]) ** 2).sum(1)
 
+        # self.ghat = ghat / lsigma2s.exp().sqrt()
         psi = (phi.T * lsigma2s.exp().sqrt()).T
         predmean = psi @ ghat
+        confvar = (gvar.T @ (psi ** 2).T)
         predvar = (gvar.T @ (psi ** 2).T) + lsigma2s.exp()
 
         ypred = self.tx_y(predmean)
-        ypredvar = (predvar.T * self.ystd**2).T
+        yconfvar = confvar.T * self.ystd**2
+        ypredvar = predvar.T * self.ystd**2
 
-        return ypred, ypredvar
+        return ypred, ypredvar, yconfvar
 
     @torch.no_grad()
     def compute_aux_predictive_quantities(self):
@@ -226,6 +229,9 @@ class LCGP(nn.Module):
 
             nlp += 1/2 * (1 + D[k] * Wk).log().sum()
             nlp -= 1/2 * (yQk * yPk.T).sum()
+
+        # regularization
+
         return nlp
 
     def get_param(self):
@@ -242,7 +248,7 @@ class LCGP(nn.Module):
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5 + 1/2 * torch.log(d), 2.5)))).T  # + 1/2 * log dimension
         lLmb0 = parameter_clamping(lLmb0, torch.tensor((-4, 4)))
         lsigma2s = parameter_clamping(lsigma2s, torch.tensor((-12, 1)))
-        lnugs = parameter_clamping(lnugs, torch.tensor((-16, -8)))
+        lnugs = parameter_clamping(lnugs, torch.tensor((-16, -6)))
 
         return lLmb, lLmb0, lsigma2s, lnugs
 

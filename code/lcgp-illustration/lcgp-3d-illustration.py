@@ -9,11 +9,11 @@ from func3d import forrester2008
 
 noise = 1
 
-n = 250
+n = 500
 x = np.linspace(0, 1, n)
 xpred = x[1:] - 1/(2*n)
 
-f = forrester2008(x, noisy=True, noises=[0.005, 0.1, 0.3])
+f = forrester2008(x, noisy=True, noises=[0.1**3, 0.1**2, 0.1**1])
 truey = forrester2008(xpred, noisy=False)
 
 x = torch.tensor(x).unsqueeze(1)
@@ -32,7 +32,7 @@ for j in range(model.q):
     ax[0].scatter(x, model.g.detach()[j], marker='.', label=noise, alpha=0.5)
     ax[0].set_ylabel('$g(x)$')
     ax[0].set_xlabel('$x$')
-    ax[0].plot(x, model.ghat.detach()[j],  label=noise, color='C{:d}'.format(j))
+    ax[0].plot(xpred, (model.ghat[j] * model.lsigma2s[j].exp().sqrt()).detach(),  label=noise, color='C{:d}'.format(j))
 ax[0].legend(labels=['$g_1$', '$g_2$', '$g_3$'])
 
 for j in range(model.p):
