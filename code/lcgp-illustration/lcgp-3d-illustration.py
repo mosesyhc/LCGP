@@ -5,7 +5,7 @@ plt.rcParams.update({'font.size': 14,
 import torch
 import numpy as np
 
-from func3d import forrester2008
+from tests.func3d import forrester2008
 
 noise = 1
 

@@ -7,7 +7,7 @@ def rmse(y, ypredmean):
 
 
 def dss(y, ypredmean, ypredcov, use_diag):
-    def __dss_single(f, mu, Sigma):  # Dawid-Sebastani score
+    def __dss_single(f, mu, Sigma):  # Dawid-Sebastani score (1999)
         r = f - mu
         W, U = np.linalg.eigh(Sigma)
         r_Sinvh = r @ U * 1 / np.sqrt(W)
