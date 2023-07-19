@@ -9,12 +9,13 @@ from func3d import forrester2008
 
 noise = 1
 
-n = 250
+n = 100
 x = np.linspace(0, 1, n)
 xpred = x[1:] - 1/(2*n)
 
 f = forrester2008(x, noisy=True, noises=[0.005, 0.1, 0.3])
 truey = forrester2008(xpred, noisy=False)
+newy = forrester2008(xpred, noisy=True, noises=[0.005, 0.1, 0.3])
 
 x = torch.tensor(x).unsqueeze(1)
 xpred = torch.tensor(xpred).unsqueeze(1)
@@ -22,17 +23,22 @@ f = torch.tensor(f)
 
 from lcgp import LCGP
 
-model = LCGP(y=f, x=x, q=3) # , parameter_clamp=False)
+model = LCGP(y=f, x=x, q=2) # , parameter_clamp=False)
 model.compute_aux_predictive_quantities()
 model.fit(verbose=True)
 
-yhat, ypredvar, yconfvar = model.predict(xpred)
+yhat, ypredvar, yconfvar, yfullcov = model.predict(xpred, return_fullcov=True)
+
+import scores
+scores.dss(newy, yhat.numpy(), yfullcov.numpy(), use_diag=False)
+scores.intervalstats(newy, yhat.numpy(), ypredvar.numpy())
+
 fig, ax = plt.subplots(1, 2, figsize=(12, 5)) #, sharey='row')
 for j in range(model.q):
     ax[0].scatter(x, model.g.detach()[j], marker='.', label=noise, alpha=0.5)
     ax[0].set_ylabel('$g(x)$')
     ax[0].set_xlabel('$x$')
-    ax[0].plot(x, model.ghat.detach()[j],  label=noise, color='C{:d}'.format(j))
+    # ax[0].plot(x, model.ghat.detach()[j],  label=noise, color='C{:d}'.format(j))
 ax[0].legend(labels=['$g_1$', '$g_2$', '$g_3$'])
 
 for j in range(model.p):

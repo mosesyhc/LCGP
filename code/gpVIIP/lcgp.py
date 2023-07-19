@@ -12,7 +12,7 @@ class LCGP(nn.Module):
                  x: torch.double,
                  q: int = None,
                  var_threshold: float = None,
-                 parameter_clamp=True):
+                 parameter_clamp=False):
         super().__init__()
         self.method = 'LCGP'
         self.x = x
@@ -29,7 +29,7 @@ class LCGP(nn.Module):
         self.verify_dim(y, x)
 
         # standardize x to unit hypercube
-        self.x, self.x_min, self.x_max, self.x_orig = self.init_standard_x(x)
+        self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = self.init_standard_x(x)
         # standardize y
         self.y, self.ymean, self.ystd, self.y_orig = self.standardize_y(y)
 
@@ -111,7 +111,7 @@ class LCGP(nn.Module):
         return self.predict(x0)
 
     @torch.no_grad()
-    def predict(self, x0):
+    def predict(self, x0, return_fullcov=False):
         x = self.x
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
 
@@ -141,6 +141,15 @@ class LCGP(nn.Module):
         ypred = self.tx_y(predmean)
         yconfvar = confvar.T * self.ystd**2
         ypredvar = predvar.T * self.ystd**2
+
+        if return_fullcov:
+            CH = gvar.sqrt().T[:, :, None] * psi.T[None, :, :]
+            CH.transpose_(1, 2)
+            yfullpredcov = torch.einsum('nij,jkn->nik', CH,
+                                        CH.permute(*torch.arange(CH.ndim - 1, -1, -1))) + lsigma2s.exp().diag()
+            yfullpredcov.transpose_(0, 2)
+            yfullpredcov *= self.ystd**2
+            return ypred, ypredvar, yconfvar, yfullpredcov
 
         return ypred, ypredvar, yconfvar
 
@@ -179,7 +188,12 @@ class LCGP(nn.Module):
         x_max = x.max(0).values
         x_min = x.min(0).values
         xs = (x - x_min) / (x_max - x_min)
-        return xs, x_min, x_max, x.clone()
+
+        xnorm = torch.zeros(x.shape[1])
+        for j in range(x.shape[1]):
+            xdist = (x[:, j].reshape(-1, 1) - x[:, j]).abs()
+            xnorm[j] = (xdist[xdist > 0]).mean()
+        return xs, x_min, x_max, x.clone(), xnorm
 
     def standardize_x(self, x0):
         if x0.ndim < 2:
@@ -205,8 +219,10 @@ class LCGP(nn.Module):
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         x = self.x
         y = self.y
-        ylong = y.reshape(-1)
 
+        xnorm = self.xnorm
+
+        d = self.d
         n = self.n
         q = self.q
         D = self.diag_D
@@ -230,8 +246,8 @@ class LCGP(nn.Module):
             nlp += 1/2 * (1 + D[k] * Wk).log().sum()
             nlp -= 1/2 * (yQk * yPk.T).sum()
 
-        # regularization
-
+        # regularization (joint robust prior)
+        nlp -= (xnorm * lLmb.exp()).sum() ** 0.2 * (-(n ** (-1/d) * (0.2 + d)) * (xnorm * lLmb.exp()).sum()).exp()
         return nlp
 
     def get_param(self):
