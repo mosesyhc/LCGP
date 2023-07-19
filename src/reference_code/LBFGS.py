@@ -158,8 +158,8 @@ class LBFGS(Optimizer):
     """
     Implements the L-BFGS algorithm. Compatible with multi-batch and full-overlap
     L-BFGS implementations and (stochastic) Powell damping. Partly based on the 
-    original L-BFGS implementation in PyTorch, Mark Schmidt's minFunc MATLAB code, 
-    and Michael Overton's weak Wolfe line search MATLAB code.
+    original L-BFGS implementation in PyTorch, Mark Schmidt's minFunc MATLAB src,
+    and Michael Overton's weak Wolfe line search MATLAB src.
 
     Implemented by: Hao-Jun Michael Shi and Dheevatsa Mudigere
     Last edited 10/20/20.

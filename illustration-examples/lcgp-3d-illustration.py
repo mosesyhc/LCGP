@@ -5,11 +5,11 @@ plt.rcParams.update({'font.size': 14,
 import torch
 import numpy as np
 
-from tests.func3d import forrester2008
+from func3d import forrester2008
 
 noise = 1
 
-n = 100
+n = 500
 x = np.linspace(0, 1, n)
 xpred = x[1:] - 1/(2*n)
 
@@ -23,15 +23,15 @@ f = torch.tensor(f)
 
 from lcgp import LCGP
 
-model = LCGP(y=f, x=x, q=2) # , parameter_clamp=False)
+model = LCGP(y=f, x=x, q=3) # , parameter_clamp=False)
 model.compute_aux_predictive_quantities()
-model.fit(verbose=True)
+model.fit(verbose=False)
 
 yhat, ypredvar, yconfvar, yfullcov = model.predict(xpred, return_fullcov=True)
 
-import scores
-scores.dss(newy, yhat.numpy(), yfullcov.numpy(), use_diag=False)
-scores.intervalstats(newy, yhat.numpy(), ypredvar.numpy())
+import emulator_evaluation
+emulator_evaluation.dss(newy, yhat.numpy(), yfullcov.numpy(), use_diag=False)
+emulator_evaluation.intervalstats(newy, yhat.numpy(), ypredvar.numpy())
 
 fig, ax = plt.subplots(1, 2, figsize=(12, 5)) #, sharey='row')
 for j in range(model.q):
