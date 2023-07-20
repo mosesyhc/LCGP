@@ -46,3 +46,9 @@ src/debug/
 src/reference_code/read_results_script/
 
 src/profile_results/
+
+build/
+
+dist/
+
+lcgp.egg-info/
