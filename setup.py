@@ -7,7 +7,7 @@ setuptools.setup(
     author_email='mosesyhc@u.northwestern.edu',
     description='Latent component Gaussian process for emulation of '
                 'general stochastic simulation high-dimensional outputs',
-    packages=['src'],
+    packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
