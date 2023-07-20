@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from matern_covmat import covmat
-from hyperparameter_tuning import parameter_clamping
-from optim import optim_lbfgs
+from .matern_covmat import covmat
+from .hyperparameter_tuning import parameter_clamping
+from .optim import optim_lbfgs
 torch.set_default_dtype(torch.double)
 
 
@@ -80,7 +80,7 @@ class LCGP(nn.Module):
         llmb = 0.5 * torch.log(torch.Tensor([d])) + torch.log(torch.std(x, 0))
         lLmb = llmb.repeat(self.q, 1)
         lLmb0 = torch.zeros(self.q)
-        lnugGPs = torch.Tensor(-10 * torch.ones(self.q))
+        lnugGPs = torch.Tensor(-1 * torch.ones(self.q))
 
         lsigma2_diag = torch.Tensor(torch.log(self.y.var(1)))
 
@@ -132,8 +132,10 @@ class LCGP(nn.Module):
             ghat[k] = c0k @ CinvM[k]
             gvar[k] = c00k - ((c0k @ Th[k]) ** 2).sum(1)
 
-        # self.ghat = ghat / lsigma2s.exp().sqrt()
         psi = (phi.T * lsigma2s.exp().sqrt()).T
+        self.g = psi.T @ self.y
+        self.ghat = (lsigma2s.exp().sqrt() * ghat.T).T
+
         predmean = psi @ ghat
         confvar = (gvar.T @ (psi ** 2).T)
         predvar = (gvar.T @ (psi ** 2).T) + lsigma2s.exp()
@@ -247,7 +249,9 @@ class LCGP(nn.Module):
             nlp -= 1/2 * (yQk * yPk.T).sum()
 
         # regularization (joint robust prior)
-        nlp -= (xnorm * lLmb.exp()).sum() ** 0.2 * (-(n ** (-1/d) * (0.2 + d)) * (xnorm * lLmb.exp()).sum()).exp()
+        # nlp -= (xnorm * lLmb.exp()).sum() ** 0.2 * (-(n ** (-1/d) * (0.2 + d)) * (xnorm * lLmb.exp()).sum()).exp()
+        nlp += 20 * (lLmb ** 2).sum() + 5 * (lLmb0 ** 2).sum()
+        # nlp += 0.1 * ((lnugGPs + 8) ** 2).sum()
         return nlp
 
     def get_param(self):

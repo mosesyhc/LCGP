@@ -6,17 +6,17 @@ venv/
 *.bak
 .Rproj.user
 
-src/gpVIIP/__pycache__/
+lcgp/gpVIIP/__pycache__/
 
 literature/blei-VI.pdf
 
-src/testfunctions/__pycache__/
+lcgp/testfunctions/__pycache__/
 
-src/fig/choice_ip/
+lcgp/fig/choice_ip/
 
-src/test_results/borehole_comparisons/choice_ip/
+lcgp/test_results/borehole_comparisons/choice_ip/
 
-src/test_results/*/
+lcgp/test_results/*/
 
 trace_json/
 *.pyc
@@ -27,25 +27,25 @@ MVIP4.json
 
 *.pclprof
 
-src/gpVIIP/tests/code/test_results/surmise_MVGP_MVIP/2dExample_separate/
+lcgp/gpVIIP/tests/code/test_results/surmise_MVGP_MVIP/2dExample_separate/
 
 *.dat
 
-src/fig/talk-figs/
+lcgp/fig/talk-figs/
 
-src/fig/talk_figs/
+lcgp/fig/talk_figs/
 
-src/gpVIIP/VIGP.ipynb
+lcgp/gpVIIP/VIGP.ipynb
 
-src/gpVIIP/.ipynb_checkpoints/
+lcgp/gpVIIP/.ipynb_checkpoints/
 
-src/archive/
+lcgp/archive/
 
-src/debug/
+lcgp/debug/
 
-src/reference_code/read_results_script/
+lcgp/reference_code/read_results_script/
 
-src/profile_results/
+lcgp/profile_results/
 
 build/
 
