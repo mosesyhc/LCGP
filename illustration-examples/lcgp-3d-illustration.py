@@ -32,27 +32,27 @@ model.fit(verbose=False)
 yhat, ypredvar, yconfvar, yfullcov = model.predict(xpred, return_fullcov=True)
 
 # HetMOGP
-
-from likelihoods.gaussian import Gaussian
-from hetmogp.het_likelihood import HetLikelihood
-from hetmogp.svmogp import SVMOGP
-from hetmogp import util
-from hetmogp.util import vem_algorithm as VEM
-
-likelihood = HetLikelihood([Gaussian(), Gaussian(), Gaussian()])
-
-M = int(0.25 * n)
-Q = 3
-
-ls_q = np.array(([.05]*Q))
-var_q = np.array(([.5]*Q))
-kern_list = util.latent_functions_prior(Q, lenghtscale=ls_q, variance=var_q, input_dim=1)
-
-Z = np.linspace(0, 1, M)
-Z = Z[:, np.newaxis]
-
-model = SVMOGP(X=x.numpy(), Y=ytrain.numpy(), Z=Z, kern_list=kern_list, likelihood=likelihood, Y_metadata=None)
-model = VEM(model)
+#
+# from likelihoods.gaussian import Gaussian
+# from hetmogp.het_likelihood import HetLikelihood
+# from hetmogp.svmogp import SVMOGP
+# from hetmogp import util
+# from hetmogp.util import vem_algorithm as VEM
+#
+# likelihood = HetLikelihood([Gaussian(), Gaussian(), Gaussian()])
+#
+# M = int(0.25 * n)
+# Q = 3
+#
+# ls_q = np.array(([.05]*Q))
+# var_q = np.array(([.5]*Q))
+# kern_list = util.latent_functions_prior(Q, lenghtscale=ls_q, variance=var_q, input_dim=1)
+#
+# Z = np.linspace(0, 1, M)
+# Z = Z[:, np.newaxis]
+#
+# model = SVMOGP(X=x.numpy(), Y=ytrain.numpy(), Z=Z, kern_list=kern_list, likelihood=likelihood, Y_metadata=None)
+# model = VEM(model)
 
 # evaluation
 
