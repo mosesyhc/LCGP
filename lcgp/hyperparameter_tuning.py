@@ -66,4 +66,4 @@ if __name__ == '__main__':
     # ax[1].legend()
 
     plt.tight_layout()
-    # plt.savefig(r'src\fig\clamping.png', dpi=150)
+    # plt.savefig(r'lcgp\fig\clamping.png', dpi=150)

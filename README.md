@@ -1,1 +1,2 @@
-binary-hd-emulator
+# Latent component Gaussian process (LCGP)
+
