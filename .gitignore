@@ -52,3 +52,5 @@ build/
 dist/
 
 lcgp.egg-info/
+
+src/archive/*
