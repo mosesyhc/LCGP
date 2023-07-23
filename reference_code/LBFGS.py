@@ -1,3 +1,7 @@
+'''
+Implementation of LBFGS, FullBatchLBFGS by Hao-Jun Michael Shi (Northwestern University) and
+Dheevatsa Mudigere (Facebook).  Refer to https://github.com/hjmshi/PyTorch-LBFGS.
+'''
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
