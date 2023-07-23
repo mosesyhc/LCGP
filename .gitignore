@@ -19,3 +19,8 @@ docs/_static
 docs/source
 docs/readme.rst
 cover
+lcgp/archive/
+
+lcgp/debug/
+
+lcgp/reference_code/
