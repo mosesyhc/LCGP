@@ -1,12 +1,12 @@
 import setuptools
 
+requirements=[
+    'torch>=2.0.1',
+    'numpy>=1.18.3',
+    'scipy>=1.10.1'
+]
+
 setuptools.setup(
-    name='lcgp',
-    version='0.1',
-    author='Moses Chan',
-    author_email='mosesyhc@u.northwestern.edu',
-    description='Latent component Gaussian process for emulation of '
-                'general stochastic simulation high-dimensional outputs',
     packages=setuptools.find_packages(exclude=['tests']),
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -14,7 +14,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    setup_requires=[
-        'setuptools>=18.0'
-    ]
+    install_requires=requirements,
+    include_package_data=True
 )

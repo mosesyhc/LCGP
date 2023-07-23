@@ -1,56 +1,21 @@
-
 .idea/
 
 venv/
-
-*.bak
-.Rproj.user
-
-lcgp/gpVIIP/__pycache__/
-
-literature/blei-VI.pdf
-
-lcgp/testfunctions/__pycache__/
-
-lcgp/fig/choice_ip/
-
-lcgp/test_results/borehole_comparisons/choice_ip/
-
-lcgp/test_results/*/
-
-trace_json/
 *.pyc
-
-MVGP.json
-
-MVIP4.json
-
 *.pclprof
-
-lcgp/gpVIIP/tests/code/test_results/surmise_MVGP_MVIP/2dExample_separate/
-
 *.dat
-
-lcgp/fig/talk-figs/
-
-lcgp/fig/talk_figs/
-
-lcgp/gpVIIP/VIGP.ipynb
-
-lcgp/gpVIIP/.ipynb_checkpoints/
-
-lcgp/archive/
-
-lcgp/debug/
 
 lcgp/reference_code/read_results_script/
 
-lcgp/profile_results/
-
 build/
-
 dist/
-
 lcgp.egg-info/
 
 src/archive/*
+
+# Documentation and coverage
+docs/_build
+docs/_static
+docs/source
+docs/readme.rst
+cover
