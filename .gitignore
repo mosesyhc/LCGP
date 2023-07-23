@@ -5,11 +5,11 @@ venv/
 *.pclprof
 *.dat
 
-lcgp/reference_code/read_results_script/
-
 build/
 dist/
 lcgp.egg-info/
+
+tests/*
 
 src/archive/*
 
