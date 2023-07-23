@@ -25,16 +25,100 @@ ytrain = torch.tensor(ytrain)
 
 from lcgp import LCGP, emulator_evaluation
 
-model = LCGP(y=ytrain, x=x, q=3, parameter_clamp=False)
-model.compute_aux_predictive_quantities()
-model.fit(verbose=True)
+lcgp = LCGP(y=ytrain, x=x, q=3, parameter_clamp=False)
+lcgp.compute_aux_predictive_quantities()
+lcgp.fit(verbose=True)
 
-yhat, ypredvar, yconfvar = model.predict(xpred, return_fullcov=False)
+yhat, ypredvar, yconfvar = lcgp.predict(xpred, return_fullcov=False)
 
 print(
 emulator_evaluation.rmse(truey, yhat.numpy()),
 emulator_evaluation.intervalstats(newy, yhat.numpy(), ypredvar.numpy())
 )
+
+#################################################
+# svgp
+import gpytorch
+from tqdm import tqdm
+num_latents = 3
+num_output = 3
+
+class MultitaskGPModel(gpytorch.models.ApproximateGP):
+    def __init__(self):
+        # Let's use a different set of inducing points for each latent function
+        inducing_points = torch.linspace(0, 1, int(n/4)).repeat(num_latents, 1).unsqueeze(-1)
+
+        # We have to mark the CholeskyVariationalDistribution as batch
+        # so that we learn a variational distribution for each task
+        variational_distribution = gpytorch.variational.CholeskyVariationalDistribution(
+            inducing_points.size(-2), batch_shape=torch.Size([num_latents])
+        )
+
+        # We have to wrap the VariationalStrategy in a LMCVariationalStrategy
+        # so that the output will be a MultitaskMultivariateNormal rather than a batch output
+        variational_strategy = gpytorch.variational.LMCVariationalStrategy(
+            gpytorch.variational.VariationalStrategy(
+                self, inducing_points, variational_distribution, learn_inducing_locations=True
+            ),
+            num_tasks=num_output,
+            num_latents=num_latents,
+            latent_dim=-1
+        )
+
+        super().__init__(variational_strategy)
+
+        # The mean and covariance modules should be marked as batch
+        # so we learn a different set of hyperparameters
+        self.mean_module = gpytorch.means.ConstantMean(batch_shape=torch.Size([num_latents]))
+        self.covar_module = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel(batch_shape=torch.Size([num_latents])),
+            batch_shape=torch.Size([num_latents])
+        )
+
+    def forward(self, x):
+        # The forward function should be written as if we were dealing with each output
+        # dimension in batch
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+
+
+svgp = MultitaskGPModel()
+likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=num_output,
+                                                              has_task_noise=True,
+                                                              rank=0)
+
+svgp.train()
+likelihood.train()
+
+optimizer = torch.optim.Adam([
+    {'params': svgp.parameters()},
+    {'params': likelihood.parameters()},
+], lr=0.1)
+
+# Our loss object. We're using the VariationalELBO, which essentially just computes the ELBO
+mll = gpytorch.mlls.VariationalELBO(likelihood, svgp, num_data=n)
+
+num_epochs=1000
+epochs_iter = tqdm(range(num_epochs), desc="Epoch")
+for i in epochs_iter:
+    # Within each iteration, we will go over each minibatch of data
+    optimizer.zero_grad()
+    output = svgp(x)
+    loss = -mll(output, ytrain.T)
+    loss.backward()
+    optimizer.step()
+    if i % 100 == 0:
+        print('Loss: {:.6f}'.format(loss))
+
+svgp.eval()
+likelihood.eval()
+
+with torch.no_grad(), gpytorch.settings.fast_pred_var():
+    predictions = likelihood(svgp(xpred))
+    svgpmean = predictions.mean
+    svgplower, svgpupper = predictions.confidence_region()
+
 
 ######################################
 #
@@ -42,6 +126,7 @@ import tensorflow as tf
 from oilmm.tensorflow import OILMM
 from stheno import EQ, GP, Matern32
 
+num_output = 3
 def build_latent_processes(ps):
     # Return models for latent processes, which are noise-contaminated GPs.
     return [
@@ -49,11 +134,11 @@ def build_latent_processes(ps):
             p.variance.positive(1) * GP(Matern32().stretch(p.length_scale.positive(1))),
             p.noise.positive(1e-2),
         )
-        for p, _ in zip(ps, range(3))
+        for p, _ in zip(ps, range(num_output))
     ]
 
-bruinsmaPrior = OILMM(tf.float64, build_latent_processes, num_outputs=3)
-bruinsmaPrior.fit(x.numpy(), ytrain.T.numpy(), trace=False)
+bruinsmaPrior = OILMM(tf.float64, build_latent_processes, num_outputs=num_output, learn_transform=True) #np.array([1e-2]*num_output))
+bruinsmaPrior.fit(x.numpy(), ytrain.T.numpy(), trace=True)
 
 bruinsmaPosterior = bruinsmaPrior.condition(x.numpy(), ytrain.T.numpy())
 bmean, bvar = bruinsmaPosterior.predict(xpred.numpy())
@@ -63,53 +148,29 @@ emulator_evaluation.rmse(truey, bmean.T),
 emulator_evaluation.intervalstats(newy, bmean.T, bvar.T)
 )
 
+bruinsmaPosterior.vs.print()
 
-######################################
-# HetMOGP
-#
-# from likelihoods.gaussian import Gaussian
-# from hetmogp.het_likelihood import HetLikelihood
-# from hetmogp.svmogp import SVMOGP
-# from hetmogp import util
-# from hetmogp.util import vem_algorithm as VEM
-#
-# likelihood = HetLikelihood([Gaussian(), Gaussian(), Gaussian()])
-#
-# M = int(0.25 * n)
-# Q = 3
-#
-# ls_q = np.array(([.05]*Q))
-# var_q = np.array(([.5]*Q))
-# kern_list = util.latent_functions_prior(Q, lenghtscale=ls_q, variance=var_q, input_dim=1)
-#
-# Z = np.linspace(0, 1, M)
-# Z = Z[:, np.newaxis]
-#
-# model = SVMOGP(X=x.numpy(), Y=ytrain.numpy(), Z=Z, kern_list=kern_list, likelihood=likelihood, Y_metadata=None)
-# model = VEM(model)
+###################################################
+fig, ax = plt.subplots(1, 3, figsize=(12, 5), sharey='row')
+# for j in range(lcgp.q):
+#     ax[0].scatter(x, lcgp.g.detach()[j], marker='.', label=noise, alpha=0.5)
+#     ax[0].set_ylabel('$g(x)$')
+#     ax[0].set_xlabel('$x$')
+#     ax[0].plot(xpred, lcgp.ghat.detach()[j], label=noise, color='C{:d}'.format(j))
+# ax[0].legend(labels=['$g_1$', '$g_2$', '$g_3$'])
 
-# evaluation
-
-
-fig, ax = plt.subplots(1, 3, figsize=(12, 5)) #, sharey='row')
-for j in range(model.q):
-    ax[0].scatter(x, model.g.detach()[j], marker='.', label=noise, alpha=0.5)
-    ax[0].set_ylabel('$g(x)$')
-    ax[0].set_xlabel('$x$')
-    ax[0].plot(xpred, model.ghat.detach()[j],  label=noise, color='C{:d}'.format(j))
-ax[0].legend(labels=['$g_1$', '$g_2$', '$g_3$'])
-
-for j in range(model.p):
+for j in range(lcgp.p):
     ax[1].plot(xpred, truey[j], label=noise, color='k', linewidth=2)
     ax[1].set_ylabel('$f(x)$')
     ax[1].set_xlabel('$x$')
 # ax[1].legend(labels=['$f_1$', '$f_2$', '$f_3$'])
     ax[1].scatter(x, ytrain[j], marker='.', alpha=0.2, color='C{:d}'.format(j))
     ax[1].plot(xpred, yhat.detach()[j], label=noise, color='C{:d}'.format(j))
-    ax[1].fill_between(xpred.squeeze(), (yhat - 2*yconfvar.sqrt()).detach()[j], (yhat + 2*yconfvar.sqrt()).detach()[j], alpha=0.5, color='C{:d}'.format(j))
+    # ax[1].fill_between(xpred.squeeze(), (yhat - 2*yconfvar.sqrt()).detach()[j], (yhat + 2*yconfvar.sqrt()).detach()[j], alpha=0.5, color='C{:d}'.format(j))
     ax[1].fill_between(xpred.squeeze(), (yhat - 2*ypredvar.sqrt()).detach()[j], (yhat + 2*ypredvar.sqrt()).detach()[j], alpha=0.15, color='C{:d}'.format(j))
     ax[1].set_ylabel(r'$\hat{f}(x)$')
     ax[1].set_xlabel('$x$')
+    ax[1].set_title('LCGP')
 
 for j in range(truey.shape[0]):
     ax[2].plot(xpred, truey[j], label=noise, color='k', linewidth=2)
@@ -121,5 +182,18 @@ for j in range(truey.shape[0]):
     ax[2].fill_between(xpred.squeeze(), (bmean.T - 2*np.sqrt(bvar.T))[j], (bmean.T + 2*np.sqrt(bvar.T))[j], alpha=0.15, color='C{:d}'.format(j))
     ax[2].set_ylabel(r'$\hat{f}(x)$')
     ax[2].set_xlabel('$x$')
+    ax[2].set_title('OILMM')
+
+for j in range(truey.shape[0]):
+    ax[0].plot(xpred, truey[j], label=noise, color='k', linewidth=2)
+    ax[0].set_ylabel('$f(x)$')
+    ax[0].set_xlabel('$x$')
+# ax[0].legend(labels=['$f_1$', '$f_2$', '$f_3$'])
+    ax[0].scatter(x, ytrain[j], marker='.', alpha=0.2, color='C{:d}'.format(j))
+    ax[0].plot(xpred, svgpmean.T[j], label=noise, color='C{:d}'.format(j))
+    ax[0].fill_between(xpred.squeeze(), svgplower.T[j], svgpupper.T[j], alpha=0.15, color='C{:d}'.format(j))
+    ax[0].set_ylabel(r'$\hat{f}(x)$')
+    ax[0].set_xlabel('$x$')
+    ax[0].set_title('SVGP, VI')
 plt.tight_layout()
 
