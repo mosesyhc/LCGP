@@ -23,7 +23,7 @@ ytrain = torch.tensor(ytrain)
 
 # LCGP
 
-from lcgp import LCGP, emulator_evaluation
+from lcgp import LCGP, evaluation
 
 lcgp = LCGP(y=ytrain, x=x, q=3, parameter_clamp=False)
 lcgp.compute_aux_predictive_quantities()
@@ -32,16 +32,27 @@ lcgp.fit(verbose=True)
 yhat, ypredvar, yconfvar = lcgp.predict(xpred, return_fullcov=False)
 
 print(
-emulator_evaluation.rmse(truey, yhat.numpy()),
-emulator_evaluation.intervalstats(newy, yhat.numpy(), ypredvar.numpy())
+evaluation.rmse(truey, yhat.numpy()),
+evaluation.intervalstats(newy, yhat.numpy(), ypredvar.numpy())
+)
+
+lcgp_r = LCGP(y=ytrain, x=x, q=3, parameter_clamp=False, robust_mean=True)
+lcgp_r.compute_aux_predictive_quantities()
+lcgp_r.fit(verbose=True)
+
+yhat_r, ypredvar_r, yconfvar_r = lcgp_r.predict(xpred, return_fullcov=False)
+
+print(
+evaluation.rmse(truey, yhat_r.numpy()),
+evaluation.intervalstats(newy, yhat_r.numpy(), ypredvar_r.numpy())
 )
 
 #################################################
 # svgp
 import gpytorch
 from tqdm import tqdm
-num_latents = 3
 num_output = 3
+num_latents = num_output
 
 class MultitaskGPModel(gpytorch.models.ApproximateGP):
     def __init__(self):
@@ -123,6 +134,8 @@ with torch.no_grad(), gpytorch.settings.fast_pred_var():
 ######################################
 #
 import tensorflow as tf
+import lab as B
+from matrix import Diagonal
 from oilmm.tensorflow import OILMM
 from stheno import EQ, GP, Matern32
 
@@ -137,18 +150,27 @@ def build_latent_processes(ps):
         for p, _ in zip(ps, range(num_output))
     ]
 
-bruinsmaPrior = OILMM(tf.float64, build_latent_processes, num_outputs=num_output, learn_transform=True) #np.array([1e-2]*num_output))
+bruinsmaPrior = OILMM(tf.float64, build_latent_processes,
+                      num_outputs=num_output, learn_transform=True) #np.array([1e-2]*num_output))
 bruinsmaPrior.fit(x.numpy(), ytrain.T.numpy(), trace=True)
 
 bruinsmaPosterior = bruinsmaPrior.condition(x.numpy(), ytrain.T.numpy())
 bmean, bvar = bruinsmaPosterior.predict(xpred.numpy())
 
 print(
-emulator_evaluation.rmse(truey, bmean.T),
-emulator_evaluation.intervalstats(newy, bmean.T, bvar.T)
+evaluation.rmse(truey, bmean.T),
+evaluation.intervalstats(newy, bmean.T, bvar.T)
 )
 
+
 bruinsmaPosterior.vs.print()
+prior  = bruinsmaPosterior()
+ps_lat = prior.ps.latent_processes.processes
+d = Diagonal(B.stack(*(ps_lat[i].noise() for i in range(3))))
+h = prior.model.mixing_matrix
+noises = B.diag(prior.model.noise_matrix + B.mm(h, d, h, tr_c=True))
+noises *= prior.ps.transform[0].scale()[0] ** 2
+print("Learned observation noises:", noises)
 
 ###################################################
 fig, ax = plt.subplots(1, 3, figsize=(12, 5), sharey='row')
@@ -165,9 +187,10 @@ for j in range(lcgp.p):
     ax[1].set_xlabel('$x$')
 # ax[1].legend(labels=['$f_1$', '$f_2$', '$f_3$'])
     ax[1].scatter(x, ytrain[j], marker='.', alpha=0.2, color='C{:d}'.format(j))
-    ax[1].plot(xpred, yhat.detach()[j], label=noise, color='C{:d}'.format(j))
+    ax[1].plot(xpred, yhat_r.detach()[j], label=noise, color='C{:d}'.format(j))
     # ax[1].fill_between(xpred.squeeze(), (yhat - 2*yconfvar.sqrt()).detach()[j], (yhat + 2*yconfvar.sqrt()).detach()[j], alpha=0.5, color='C{:d}'.format(j))
-    ax[1].fill_between(xpred.squeeze(), (yhat - 2*ypredvar.sqrt()).detach()[j], (yhat + 2*ypredvar.sqrt()).detach()[j], alpha=0.15, color='C{:d}'.format(j))
+    ax[1].fill_between(xpred.squeeze(), (yhat_r - 2*ypredvar_r.sqrt()).detach()[j],
+                       (yhat_r + 2*ypredvar_r.sqrt()).detach()[j], alpha=0.15, color='C{:d}'.format(j))
     ax[1].set_ylabel(r'$\hat{f}(x)$')
     ax[1].set_xlabel('$x$')
     ax[1].set_title('LCGP')
