@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from .matern_covmat import covmat
+from .covmat import Matern32
 from .hyperparameter_tuning import parameter_clamping
 from .optim import optim_lbfgs
 torch.set_default_dtype(torch.double)
@@ -12,7 +12,8 @@ class LCGP(nn.Module):
                  x: torch.double,
                  q: int = None,
                  var_threshold: float = None,
-                 parameter_clamp=False):
+                 parameter_clamp: bool = False,
+                 robust_mean: bool = False):
         super().__init__()
         self.method = 'LCGP'
         self.x = x
@@ -31,7 +32,7 @@ class LCGP(nn.Module):
         # standardize x to unit hypercube
         self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = self.init_standard_x(x)
         # standardize y
-        self.y, self.ymean, self.ystd, self.y_orig = self.standardize_y(y)
+        self.y, self.ymean, self.ystd, self.y_orig = self.standardize_y(y, robust_mean)
 
         # reset q if none is provided
         self.g, self.phi, self.diag_D, self.q = self.init_phi(var_threshold=var_threshold)
@@ -126,8 +127,8 @@ class LCGP(nn.Module):
         ghat = torch.zeros([self.q, n0])
         gvar = torch.zeros([self.q, n0])
         for k in range(self.q):
-            c00k = covmat(x0, x0, diag_only=True, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
-            c0k = covmat(x0, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+            c00k = Matern32(x0, x0, diag_only=True, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+            c0k = Matern32(x0, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
 
             ghat[k] = c0k @ CinvM[k]
             gvar[k] = c00k - ((c0k @ Th[k]) ** 2).sum(1)
@@ -168,7 +169,7 @@ class LCGP(nn.Module):
         Th = torch.zeros([self.q, self.n, self.n])
 
         for k in range(self.q):
-            Ck = covmat(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+            Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
 
             Wk, Uk = torch.linalg.eigh(Ck)
 
@@ -206,13 +207,19 @@ class LCGP(nn.Module):
         return xs * (self.x_max - self.x_min) + self.x_min
 
     @staticmethod
-    def standardize_y(y):
+    def standardize_y(y, robust_mean):
         ymean = y.mean(1).unsqueeze(1)
-        ystd = y.std(1).unsqueeze(1)
 
-        ys = (y - ymean) / ystd
+        if robust_mean:
+            ycenter = y.median(1).values.unsqueeze(1)
+            yspread = (y - ycenter).abs().median(1).values.unsqueeze(1)
+        else:
+            ycenter = ymean
+            yspread = y.std(1).unsqueeze(1)
 
-        return ys, ymean, ystd, y.clone()
+        ys = (y - ycenter) / yspread
+
+        return ys, ycenter, yspread, y.clone()
 
     def tx_y(self, ys):
         return ys * self.ystd + self.ymean
@@ -236,7 +243,7 @@ class LCGP(nn.Module):
         nlp += 1/2 * ((y.T / lsigma2s.exp().sqrt()) ** 2).sum()
 
         for k in range(q):
-            Ck = covmat(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+            Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
             Wk, Uk = torch.linalg.eigh(Ck)
 
             Qk = Uk / (D[k] + 1/Wk) @ Uk.T   # Qk = inv(dk In + Ckinv) = dkInpCkinv_inv
