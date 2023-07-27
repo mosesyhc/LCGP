@@ -5,9 +5,9 @@ PG_CONV_FLAG = 0
 
 
 def optim_lbfgs(model,
-                maxiter=500, lr=1e-1, history_size=4,
+                maxiter=1000, lr=1e-1, history_size=4,
                 max_ls=15, c1=1e-2, c2=0.9,
-                pgtol=1e-5, ftol=2e-10,
+                pgtol=1e-6, ftol=2e-12,
                 verbose=False):
     def closure():
         model.compute_aux_predictive_quantities()
@@ -82,7 +82,7 @@ def optim_lbfgs(model,
                 reset_optim = False
                 ls_fail_count = 0
                 print('reset optimizer')
-        if verbose:
+        if verbose and epoch % 10 == 0:
             print('{:<5d} {:<12.3f} {:<12.3E} {:<12.3f} {:<12.3E} {:<12.3f} {:<12.3f}'.format
                   (epoch, grad.abs().max(), pg.abs().max(), model.lsigma2s.max(), lr, loss, loss_prev - loss))
 
