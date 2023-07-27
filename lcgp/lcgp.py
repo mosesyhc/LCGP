@@ -7,13 +7,17 @@ torch.set_default_dtype(torch.double)
 
 
 class LCGP(nn.Module):
+    '''
+    
+    '''
     def __init__(self,
                  y: torch.double,
                  x: torch.double,
                  q: int = None,
                  var_threshold: float = None,
                  parameter_clamp: bool = False,
-                 robust_mean: bool = False):
+                 robust_mean: bool = False,
+                 penalty_const: dict = None):
         super().__init__()
         self.method = 'LCGP'
         self.x = x
@@ -43,6 +47,8 @@ class LCGP(nn.Module):
                                           torch.zeros(size=[self.q], dtype=torch.double),
                                           torch.zeros(size=[self.q], dtype=torch.double),
                                           torch.zeros(size=[self.p], dtype=torch.double))
+
+        self.penalty_const = penalty_const
 
         self.init_params()
 
@@ -109,7 +115,7 @@ class LCGP(nn.Module):
         return niter, flag
 
     def forward(self, x0):
-        return self.predict(x0)
+        return self.predict(x0)[0]
 
     @torch.no_grad()
     def predict(self, x0, return_fullcov=False):
@@ -229,6 +235,10 @@ class LCGP(nn.Module):
         x = self.x
         y = self.y
 
+        if self.penalty_const is None:
+            pc = {'lLmb': 40, 'lLmb0': 5}
+        else:
+            pc = self.penalty_const
         xnorm = self.xnorm
 
         d = self.d
@@ -256,9 +266,13 @@ class LCGP(nn.Module):
             nlp -= 1/2 * (yQk * yPk.T).sum()
 
         # regularization (joint robust prior)
-        # nlp -= (xnorm * lLmb.exp()).sum() ** 0.2 * (-(n ** (-1/d) * (0.2 + d)) * (xnorm * lLmb.exp()).sum()).exp()
-        nlp += 20 * (lLmb ** 2).sum() + 5 * (lLmb0 ** 2).sum()
+        # nlp += (xnorm * lLmb.exp()).sum() ** 0.2 * (-(n ** (-1/d) * (0.2 + d)) * (xnorm * lLmb.exp()).sum()).exp()
+        # nlp += 0.5 * (lLmb ** 2).sum()
+        # nlp -= lLmb0.sum()
+        nlp += pc['lLmb'] * (lLmb ** 2).sum() + pc['lLmb0'] * (2/n) * (lLmb0 ** 2).sum()
         # nlp += 0.1 * ((lnugGPs + 8) ** 2).sum()
+
+        nlp /= n
         return nlp
 
     def get_param(self):
