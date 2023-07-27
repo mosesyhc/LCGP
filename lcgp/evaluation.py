@@ -6,6 +6,11 @@ def rmse(y, ypredmean):
     return np.mean((y - ypredmean) ** 2)
 
 
+def normalized_rmse(y, ypredmean):
+    rng = (np.max(y, axis=1) - np.min(y, axis=1)).reshape(y.shape[0], 1)
+    return np.mean(((y - ypredmean) / rng)**2)
+
+
 def dss(y, ypredmean, ypredcov, use_diag):
     def __dss_single(f, mu, Sigma):  # Dawid-Sebastani score (1999)
         r = f - mu
