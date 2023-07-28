@@ -38,6 +38,6 @@ todo_include_todos = True
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
-
-html_theme = 'haiku'
-html_static_path = ['_static']
+import sphinx_readable_theme
+html_theme = 'readable'
+html_theme_path = [sphinx_readable_theme.get_html_theme_path()]

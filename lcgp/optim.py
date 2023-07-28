@@ -24,6 +24,9 @@ def optim_lbfgs(model,
         loss = closure()
         loss.backward()
 
+        if torch.isnan(loss):
+            print('go here')
+
         options = {'closure': closure, 'current_loss': loss,
                    'history_size': history_size,
                    'c1': c1, 'c2': c2,

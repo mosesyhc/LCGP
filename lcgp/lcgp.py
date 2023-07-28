@@ -7,22 +7,37 @@ torch.set_default_dtype(torch.double)
 
 
 class LCGP(nn.Module):
-    '''
-    
-    '''
+    """
+    Implementation of latent component Gaussian process.
+    """
     def __init__(self,
                  y: torch.double,
                  x: torch.double,
                  q: int = None,
                  var_threshold: float = None,
-                 parameter_clamp: bool = False,
-                 robust_mean: bool = False,
+                 parameter_clamp_flag: bool = False,
+                 robust_mean: bool = True,
                  penalty_const: dict = None):
+        """
+        Constructor for LCGP class.
+
+        :param y: Simulation outputs, of size (number of input, dimension of output).
+        :param x: Inputs, of size (number of input, dimension of input).
+        :param q: Number of latent components to construct.  Defaults to dimension of output.
+        :param var_threshold: Value between (0, 1).  Minimum portion of variance to be explained through
+            singular value decomposition.  The number of latent components, `q`, is determined by the cumulative
+            sum of the square of singular values first exceeding `var_threshold`.  Defaults to 1.
+        :param parameter_clamp_flag: Set soft boundary for GP hyperparameters if True.  Defaults to False.
+        :param robust_mean: Set output standardization option to median and absolute deviation if True.
+            Defaults to True.
+        :param penalty_const: Dictionary to set regularization constants for log_lengthscale and log_scale, e.g.,
+            {'lLmb': 10, 'lLmb0': 5}.  Defaults to {'lLmb': 40, 'lLmb0': 5}.
+        """
         super().__init__()
         self.method = 'LCGP'
         self.x = x
 
-        self.parameter_clamp_flag = parameter_clamp
+        self.parameter_clamp_flag = parameter_clamp_flag
         if (q is not None) and (var_threshold is not None):
             raise ValueError('Include only q or var_threshold but not both.')
         self.q = q
@@ -56,8 +71,10 @@ class LCGP(nn.Module):
         self.CinvMs = torch.zeros(size=[self.q, self.n])
         self.Ths = torch.zeros(size=[self.q, self.n, self.n])
 
-
     def init_phi(self, var_threshold: float = None):
+        """
+        Initialization of orthogonal basis, computed with singular value decomposition.
+        """
         y, q = self.y, self.q
         n, p = self.n, self.p
 
@@ -81,13 +98,16 @@ class LCGP(nn.Module):
         return g, phi, diag_D, q
 
     def init_params(self):
+        """
+        Initializes parameters for LCGP.
+        """
         x = self.x
         d = self.d
 
         llmb = 0.5 * torch.log(torch.Tensor([d])) + torch.log(torch.std(x, 0))
         lLmb = llmb.repeat(self.q, 1)
         lLmb0 = torch.zeros(self.q)
-        lnugGPs = torch.Tensor(-1 * torch.ones(self.q))
+        lnugGPs = torch.Tensor(-6 * torch.ones(self.q))
 
         lsigma2_diag = torch.Tensor(torch.log(self.y.var(1)))
 
@@ -98,6 +118,10 @@ class LCGP(nn.Module):
         return
 
     def verify_dim(self, y, x):
+        """
+        Verifies if input and output dimensions match.  Sets class variables for dimensions.
+        Throws error if the dimensions do not match.
+        """
         p, ny = y.shape
         nx, d = x.shape
 
@@ -111,14 +135,27 @@ class LCGP(nn.Module):
             return
 
     def fit(self, **kwargs):
+        """
+        Calls optimizer for fitting the LCGP instance.
+        """
         _, niter, flag = optim_lbfgs(self, **kwargs)
         return niter, flag
 
     def forward(self, x0):
+        """
+        Returns predictive mean at new input `x0`.  The output is of size (number of new input, output dimension).
+        """
         return self.predict(x0)[0]
 
     @torch.no_grad()
     def predict(self, x0, return_fullcov=False):
+        """
+        Returns predictive quantities at new input `x0`.  Both outputs are of
+        size (number of new input, output dimension).
+        :param x0: New input of size (number of new input, dimension of input).
+        :param return_fullcov: Returns (predictive mean, predictive variance, variance for the true mean, full
+        predictive covariance) if True.  Otherwise, only return the first three quantities.
+        """
         x = self.x
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
 
@@ -164,6 +201,9 @@ class LCGP(nn.Module):
 
     @torch.no_grad()
     def compute_aux_predictive_quantities(self):
+        """
+        Compute auxiliary quantities for predictions.
+        """
         x = self.x
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
 
@@ -192,6 +232,9 @@ class LCGP(nn.Module):
 
     @staticmethod
     def init_standard_x(x):
+        """
+        Standardizes training inputs and collects summary information.
+        """
         if x.ndim < 2:
             x = x.unsqueeze(1)
         x_max = x.max(0).values
@@ -205,15 +248,25 @@ class LCGP(nn.Module):
         return xs, x_min, x_max, x.clone(), xnorm
 
     def standardize_x(self, x0):
+        """
+        Standardizes new inputs.
+        """
         if x0.ndim < 2:
             x0 = x0.unsqueeze(1)
         return (x0 - self.x_min) / (self.x_max - self.x_min)
 
     def tx_x(self, xs):
+        """
+        Reverts standardization of inputs.
+        """
         return xs * (self.x_max - self.x_min) + self.x_min
 
     @staticmethod
     def standardize_y(y, robust_mean):
+        """
+        Standardizes outputs and collects summary information.  Uses median and absolute deviation if `robust_mean` is
+        True.  Otherwise, use mean and standard deviation.
+        """
         ymean = y.mean(1).unsqueeze(1)
 
         if robust_mean:
@@ -228,9 +281,15 @@ class LCGP(nn.Module):
         return ys, ycenter, yspread, y.clone()
 
     def tx_y(self, ys):
+        """
+        Reverts output standardization.
+        """
         return ys * self.ystd + self.ymean
 
     def neglpost(self):
+        """
+        Computes negative log posterior function.
+        """
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         x = self.x
         y = self.y
@@ -239,9 +298,7 @@ class LCGP(nn.Module):
             pc = {'lLmb': 40, 'lLmb0': 5}
         else:
             pc = self.penalty_const
-        xnorm = self.xnorm
 
-        d = self.d
         n = self.n
         q = self.q
         D = self.diag_D
@@ -270,12 +327,14 @@ class LCGP(nn.Module):
         # nlp += 0.5 * (lLmb ** 2).sum()
         # nlp -= lLmb0.sum()
         nlp += pc['lLmb'] * (lLmb ** 2).sum() + pc['lLmb0'] * (2/n) * (lLmb0 ** 2).sum()
-        # nlp += 0.1 * ((lnugGPs + 8) ** 2).sum()
 
         nlp /= n
         return nlp
 
     def get_param(self):
+        """
+        Returns the parameters for LCGP instance.
+        """
         if self.parameter_clamp_flag:
             lLmb, lLmb0, lsigma2s, lnugGPs = self.parameter_clamp(lLmb=self.lLmb, lLmb0=self.lLmb0,
                                                                   lsigma2s=self.lsigma2s, lnugs=self.lnugGPs)
@@ -285,6 +344,9 @@ class LCGP(nn.Module):
 
     @staticmethod
     def parameter_clamp(lLmb, lLmb0, lsigma2s, lnugs):
+        """
+        Set soft boundary for parameters.
+        """
         d = torch.tensor(lLmb.shape[1],)
         lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5 + 1/2 * torch.log(d), 2.5)))).T  # + 1/2 * log dimension
         lLmb0 = parameter_clamping(lLmb0, torch.tensor((-4, 4)))
@@ -295,6 +357,9 @@ class LCGP(nn.Module):
 
     @torch.no_grad()
     def get_param_grad(self):
+        """
+        Returns parameter gradients.
+        """
         grad = []
         for p in filter(lambda p: p.requires_grad, self.parameters()):
             view = p.grad.data.view(-1)

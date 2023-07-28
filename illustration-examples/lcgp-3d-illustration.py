@@ -6,7 +6,7 @@ import torch
 import numpy as np
 import time
 
-from tests.functions import forrester2008
+from functions import forrester2008
 
 noise = 1
 
@@ -39,7 +39,7 @@ from lcgp import LCGP, evaluation
 start0 = time.monotonic()
 
 lcgp = LCGP(y=ytrain, x=x, q=3,
-            parameter_clamp=False)
+            parameter_clamp_flag=False)
 lcgp.compute_aux_predictive_quantities()
 lcgp.fit(verbose=True)
 
@@ -56,7 +56,7 @@ print(
 start1 = time.monotonic()
 
 lcgp_r = LCGP(y=ytrain, x=x, q=3,
-              parameter_clamp=False, robust_mean=True)
+              parameter_clamp_flag=False, robust_mean=True)
 lcgp_r.compute_aux_predictive_quantities()
 lcgp_r.fit(verbose=True)
 
@@ -286,6 +286,9 @@ times = np.array([start0,
                  end2,
                  start3,
                  end3])
+
+print(np.array2string(times[1:] - times[:-1], formatter={'float':lambda x: "%.4f" % x}))
+
 if False:
     fig, ax = plt.subplots(3, 1, figsize=(4, 8), sharey='all')
     for j in range(lcgp_r.q):

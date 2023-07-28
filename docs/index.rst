@@ -7,10 +7,10 @@ Welcome to lcgp's documentation!
 ================================
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 3
 
-
+   readme
+   modules
 
 Indices and tables
 ==================

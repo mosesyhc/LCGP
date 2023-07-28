@@ -1,29 +1,15 @@
 import torch
 
 
-C_LLMB = 0.4925
-C_LSIGMA2 = 0.224
-
-
-def clam_llmb(x, c=C_LLMB):
-    return 2.5 * torch.tanh(c*(x))
-
-
-def clam_lsigma2(x, c=C_LSIGMA2):
-    return -13/2 + 11/2 * torch.tanh(c*(x + 13/2))
-
-
 def parameter_clamping(t, trng, c:float=1.23):
     """
     Returns clamped hyperparameter between a given range.
     For each dimension, the parameter clamping follows
-        $$  0.5 * (lb_i + ub_i) +
-            0.5 * (ub_i - lb_i) * tanh(c_i * (t_i - 0.5 * (ub_i - lb_i))). $$
+    $$  0.5 * (lb_i + ub_i) + 0.5 * (ub_i - lb_i) * tanh(c_i * (t_i - 0.5 * (ub_i - lb_i))). $$
     Coefficients c should be supplied.
     Examples:
-        llmb (GP lengthscale): in [-2.5, 2.5], optimal c ~= 0.4925, corresponding to an input in [0, 1].
-        lsigma2 (noise variance): in [-12, -1], optimal c ~= 0.224
-
+    llmb (GP lengthscale): in [-2.5, 2.5], optimal c ~= 0.4925, corresponding to an input in [0, 1].
+    lsigma2 (noise variance): in [-12, -1], optimal c ~= 0.224
     :param t: d-dimensional, multiple parameters are stacked in columns.
     :param trng: either (lb, ub), or ((lb_1, ub_1), ..., (lb_d, ub_d))
     :param c: (c_1, c_2, ..., c_d)
