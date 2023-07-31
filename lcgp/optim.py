@@ -17,8 +17,8 @@ def optim_lbfgs(model,
 
     #  precheck learning rate
     while True:
-        optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad, model.parameters()), lr=lr,
-                                           # debug=True,
+        optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad,
+                                                  model.parameters()), lr=lr,
                                            dtype=torch.float64)
         optim.zero_grad(set_to_none=True)
         loss = closure()
@@ -44,7 +44,8 @@ def optim_lbfgs(model,
     ls_fail_count = 0
     reset_optim = False  # True if reset
 
-    header = ['iter', 'grad.absmax()', 'pgrad.absmax()', 'lsigma2', 'lr', 'neglpost', 'diff.']
+    header = ['iter', 'grad.absmax()', 'pgrad.absmax()', 'lsigma2', 'lr',
+              'neglpost', 'diff.']
     if verbose:
         print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
     while True:
@@ -69,8 +70,10 @@ def optim_lbfgs(model,
                 flag = 'PG_CONV'
                 break
             #  if line search fails, this criterion can be triggered
-            if (lr > 1e-8) and ((loss_prev - loss) / torch.max(
-                    torch.tensor((loss_prev.abs(), loss.abs(), torch.tensor(1, ))))) <= ftol:
+            if (lr > 1e-8) and \
+                    ((loss_prev - loss) / torch.max(
+                        torch.tensor((loss_prev.abs(), loss.abs(), torch.tensor(1, )))
+                    )) <= ftol:
                 print('exit after epoch {:d}, FTOL <= {:.3E}'.format(epoch, ftol))
                 flag = 'F_CONV'
                 break
@@ -78,16 +81,20 @@ def optim_lbfgs(model,
         if ls_fail_count >= LS_FAIL_MAX:
             if not reset_optim:
                 flag = 'LS_FAIL_MAX_REACHED'
-                print('exit at epoch {:d}, line searches failed for {:d} iterations'.format(epoch, LS_FAIL_MAX))
+                print('exit at epoch {:d}, line searches failed for '
+                      '{:d} iterations'.format(epoch, LS_FAIL_MAX))
                 break
             else:
-                optim.__init__(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+                optim.__init__(filter(lambda p: p.requires_grad, model.parameters()),
+                               lr=lr)
                 reset_optim = False
                 ls_fail_count = 0
                 print('reset optimizer')
         if verbose and epoch % 10 == 0:
-            print('{:<5d} {:<12.3f} {:<12.3E} {:<12.3f} {:<12.3E} {:<12.3f} {:<12.3f}'.format
-                  (epoch, grad.abs().max(), pg.abs().max(), model.lsigma2s.max(), lr, loss, loss_prev - loss))
+            print('{:<5d} {:<12.3f} {:<12.3E} {:<12.3f} '
+                  '{:<12.3E} {:<12.3f} {:<12.3f}'.format
+                  (epoch, grad.abs().max(), pg.abs().max(), model.lsigma2s.max(),
+                   lr, loss, loss_prev - loss))
 
         with torch.no_grad():
             loss_prev = loss.clone()

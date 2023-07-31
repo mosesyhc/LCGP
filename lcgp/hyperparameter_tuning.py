@@ -5,7 +5,8 @@ def parameter_clamping(t, trng, c:float=1.23):
     """
     Returns clamped hyperparameter between a given range.
     For each dimension, the parameter clamping follows
-    $$  0.5 * (lb_i + ub_i) + 0.5 * (ub_i - lb_i) * tanh(c_i * (t_i - 0.5 * (ub_i - lb_i))). $$
+    $$  0.5 * (lb_i + ub_i) + 0.5 * (ub_i - lb_i) *
+    tanh(2 * c_i / (ub_i - lb_i) * (t_i - 0.5 * (ub_i - lb_i))). $$
     Coefficients c should be supplied.
     Examples:
     llmb (GP lengthscale): in [-2.5, 2.5].
@@ -17,10 +18,11 @@ def parameter_clamping(t, trng, c:float=1.23):
     """
 
     if trng.ndim < 2:
-        l = trng[0]
-        u = trng[1]
+        lb = trng[0]
+        ub = trng[1]
     else:
-        l = trng[:, 0]
-        u = trng[:, 1]
+        lb = trng[:, 0]
+        ub = trng[:, 1]
 
-    return 0.5 * (u + l) + 0.5 * (u - l) * torch.tanh((2 * c / (u - l)) * (t - 0.5 * (u + l)))
+    return 0.5 * (ub + lb) + 0.5 * (ub - lb) \
+        * torch.tanh((2 * c / (ub - lb)) * (t - 0.5 * (ub + lb)))

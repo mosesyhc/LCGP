@@ -8,16 +8,17 @@ def Matern32(x1, x2, llmb, llmb0, lnug, diag_only: bool = False):
     d = x1.shape[1]
 
     if diag_only:
-        assert torch.isclose(x1, x2).all(), 'diag_only should only be called when x1 and x2 are identical.'
+        assert torch.isclose(x1, x2).all(), 'diag_only should only be called ' \
+                                            'when x1 and x2 are identical.'
         c = torch.ones(x1.shape[0])  # / (1 + torch.exp(llmb[-1]))
         return llmb0.exp() * c
 
     else:
         V = torch.zeros((x1.shape[0], x2.shape[0]))
-        C0 = torch.ones((x1.shape[0], x2.shape[0])) #/ (1 + torch.exp(llmb[-1]))
+        C0 = torch.ones((x1.shape[0], x2.shape[0]))  # / (1 + torch.exp(llmb[-1]))
 
-        x1scal = x1 / torch.exp(llmb)#[:-1])
-        x2scal = x2 / torch.exp(llmb)#[:-1])
+        x1scal = x1 / torch.exp(llmb)  # [:-1])
+        x2scal = x2 / torch.exp(llmb)  # [:-1])
         for j in range(d):
             S = torch.abs(x1scal[:, j].reshape(-1, 1) - x2scal[:, j])  # outer diff
             C0 *= (1 + S)
@@ -66,5 +67,6 @@ def Matern32_sp(x, xi, llmb, llmb0, lnug):  # assuming x1 = x2 = theta
     Q = (Delta_inv_diag * c_full_i.T).T
     Q_Rinvh = Q @ Rinvh
 
-    logdet_C_sp = torch.log(WR.abs()).sum() - torch.log(Wi).sum() + torch.log(diag).sum()
+    logdet_C_sp = torch.log(WR.abs()).sum() - torch.log(Wi).sum() \
+                  + torch.log(diag).sum()
     return Delta_inv_diag, Q, Rinvh, Q_Rinvh, logdet_C_sp, c_full_i, C_i

@@ -1,12 +1,21 @@
 import matplotlib.pyplot as plt
-plt.style.use(['science', 'no-latex', 'grid'])
-plt.rcParams.update({'font.size': 14,
-                     'lines.markersize': 12})
 import torch
 import numpy as np
 import time
-
+import gpytorch
+from tqdm import tqdm
 from functions import forrester2008
+import tensorflow as tf
+import lab as B
+from matrix import Diagonal
+from oilmm.tensorflow import OILMM
+from stheno import EQ, GP, Matern32
+
+from lcgp import LCGP, evaluation
+
+plt.style.use(['science', 'no-latex', 'grid'])
+plt.rcParams.update({'font.size': 14,
+                     'lines.markersize': 12})
 
 noise = 1
 
@@ -28,7 +37,6 @@ ytrain = torch.tensor(ytrain)
 
 # LCGP
 
-from lcgp import LCGP, evaluation
 
 # save = {}
 # for lLmb in [0, 10, 20, 40]:
@@ -82,8 +90,6 @@ print(
 # print(save)
 #################################################
 # svgp
-import gpytorch
-from tqdm import tqdm
 num_output = 3
 num_latents = num_output
 
@@ -179,12 +185,6 @@ print(
 ######################################
 #
 # # if False:
-import tensorflow as tf
-import lab as B
-from matrix import Diagonal
-from oilmm.tensorflow import OILMM
-from stheno import EQ, GP, Matern32
-
 start3 = time.monotonic()
 num_output = 3
 def build_latent_processes(ps):

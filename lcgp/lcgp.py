@@ -23,15 +23,20 @@ class LCGP(nn.Module):
 
         :param y: Simulation outputs, of size (number of input, dimension of output).
         :param x: Inputs, of size (number of input, dimension of input).
-        :param q: Number of latent components to construct.  Defaults to dimension of output.
-        :param var_threshold: Value between (0, 1).  Minimum portion of variance to be explained through
-            singular value decomposition.  The number of latent components, `q`, is determined by the cumulative
-            sum of the square of singular values first exceeding `var_threshold`.  Defaults to 1.
-        :param parameter_clamp_flag: Set soft boundary for GP hyperparameters if True.  Defaults to False.
-        :param robust_mean: Set output standardization option to median and absolute deviation if True.
+        :param q: Number of latent components to construct.
+        Defaults to dimension of output.
+        :param var_threshold: Value between (0, 1).  Minimum portion of variance
+        to be explained through singular value decomposition.  The number of latent
+        components, `q`, is determined by the cumulative sum of the square of singular
+        values first exceeding `var_threshold`.  Defaults to 1.
+        :param parameter_clamp_flag: Set soft boundary for GP hyperparameters if True.
+        Defaults to False.
+        :param robust_mean: Set output standardization option to median and absolute
+        deviation if True.
             Defaults to True.
-        :param penalty_const: Dictionary to set regularization constants for log_lengthscale and log_scale, e.g.,
-            {'lLmb': 10, 'lLmb0': 5}.  Defaults to {'lLmb': 40, 'lLmb0': 5}.
+        :param penalty_const: Dictionary to set regularization constants for
+        log_lengthscale and log_scale, e.g.,
+        {'lLmb': 10, 'lLmb0': 5}.  Defaults to {'lLmb': 40, 'lLmb0': 5}.
         """
         super().__init__()
         self.method = 'LCGP'
@@ -44,7 +49,8 @@ class LCGP(nn.Module):
         self.var_threshold = var_threshold
 
         # standardize x to unit hypercube
-        self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = self.init_standard_x(x)
+        self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = \
+            self.init_standard_x(x)
         # standardize y
         self.y, self.ymean, self.ystd, self.y_orig = self.standardize_y(y, robust_mean)
 
@@ -54,14 +60,15 @@ class LCGP(nn.Module):
         self.verify_dim(self.y, self.x)
 
         # reset q if none is provided
-        self.g, self.phi, self.diag_D, self.q = self.init_phi(var_threshold=var_threshold)
+        self.g, self.phi, self.diag_D, self.q = \
+            self.init_phi(var_threshold=var_threshold)
         # self.ghat = torch.zeros_like(self.g)
 
-        self.lLmb, self.lLmb0, \
-            self.lnugGPs, self.lsigma2s = (torch.zeros(size=[self.q, self.d], dtype=torch.double),
-                                          torch.zeros(size=[self.q], dtype=torch.double),
-                                          torch.zeros(size=[self.q], dtype=torch.double),
-                                          torch.zeros(size=[self.p], dtype=torch.double))
+        self.lLmb, self.lLmb0, self.lnugGPs, self.lsigma2s = \
+            (torch.zeros(size=[self.q, self.d], dtype=torch.double),
+             torch.zeros(size=[self.q], dtype=torch.double),
+             torch.zeros(size=[self.q], dtype=torch.double),
+             torch.zeros(size=[self.p], dtype=torch.double))
 
         if penalty_const is None:
             pc = {'lLmb': 40, 'lLmb0': 5}
@@ -125,8 +132,8 @@ class LCGP(nn.Module):
 
     def verify_dim(self, y, x):
         """
-        Verifies if input and output dimensions match.  Sets class variables for dimensions.
-        Throws error if the dimensions do not match.
+        Verifies if input and output dimensions match.  Sets class variables for
+        dimensions. Throws error if the dimensions do not match.
         """
         p, ny = y.shape
         nx, d = x.shape
@@ -148,7 +155,8 @@ class LCGP(nn.Module):
 
     def forward(self, x0):
         """
-        Returns predictive mean at new input `x0`.  The output is of size (number of new input, output dimension).
+        Returns predictive mean at new input `x0`.  The output is of size
+        (number of new input, output dimension).
         """
         return self.predict(x0)[0]
 
@@ -158,8 +166,9 @@ class LCGP(nn.Module):
         Returns predictive quantities at new input `x0`.  Both outputs are of
         size (number of new input, output dimension).
         :param x0: New input of size (number of new input, dimension of input).
-        :param return_fullcov: Returns (predictive mean, predictive variance, variance for the true mean, full
-        predictive covariance) if True.  Otherwise, only return the first three quantities.
+        :param return_fullcov: Returns (predictive mean, predictive variance,
+        variance for the true mean, full predictive covariance) if True.  Otherwise,
+        only return the first three quantities.
         """
         x = self.x
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
@@ -175,7 +184,8 @@ class LCGP(nn.Module):
         ghat = torch.zeros([self.q, n0])
         gvar = torch.zeros([self.q, n0])
         for k in range(self.q):
-            c00k = Matern32(x0, x0, diag_only=True, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+            c00k = Matern32(x0, x0, diag_only=True, llmb=lLmb[k], llmb0=lLmb0[k],
+                            lnug=lnugGPs[k])
             c0k = Matern32(x0, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
 
             ghat[k] = c0k @ CinvM[k]
@@ -197,7 +207,8 @@ class LCGP(nn.Module):
             CH = gvar.sqrt().T[:, :, None] * psi.T[None, :, :]
             CH.transpose_(1, 2)
             yfullpredcov = torch.einsum('nij,jkn->nik', CH,
-                                        CH.permute(*torch.arange(CH.ndim - 1, -1, -1))) + lsigma2s.exp().diag()
+                                        CH.permute(*torch.arange(CH.ndim - 1, -1, -1)))\
+                           + lsigma2s.exp().diag()
             yfullpredcov.transpose_(0, 2)
             yfullpredcov *= self.ystd**2
             return ypred, ypredvar, yconfvar, yfullpredcov
@@ -269,8 +280,8 @@ class LCGP(nn.Module):
     @staticmethod
     def standardize_y(y, robust_mean):
         """
-        Standardizes outputs and collects summary information.  Uses median and absolute deviation if `robust_mean` is
-        True.  Otherwise, use mean and standard deviation.
+        Standardizes outputs and collects summary information.  Uses median and absolute
+        deviation if `robust_mean` is True.  Otherwise, use mean and standard deviation.
         """
         if y.ndim < 2:
             y = y.unsqueeze(0)
@@ -327,10 +338,7 @@ class LCGP(nn.Module):
             nlp += 1/2 * (1 + D[k] * Wk).log().sum()
             nlp -= 1/2 * (yQk * yPk.T).sum()
 
-        # regularization (joint robust prior)
-        # nlp += (xnorm * lLmb.exp()).sum() ** 0.2 * (-(n ** (-1/d) * (0.2 + d)) * (xnorm * lLmb.exp()).sum()).exp()
-        # nlp += 0.5 * (lLmb ** 2).sum()
-        # nlp -= lLmb0.sum()
+        # regularization
         nlp += pc['lLmb'] * (lLmb ** 2).sum() + pc['lLmb0'] * (2/n) * (lLmb0 ** 2).sum()
 
         nlp /= n
@@ -341,10 +349,12 @@ class LCGP(nn.Module):
         Returns the parameters for LCGP instance.
         """
         if self.parameter_clamp_flag:
-            lLmb, lLmb0, lsigma2s, lnugGPs = self.parameter_clamp(lLmb=self.lLmb, lLmb0=self.lLmb0,
-                                                                  lsigma2s=self.lsigma2s, lnugs=self.lnugGPs)
+            lLmb, lLmb0, lsigma2s, lnugGPs = \
+                self.parameter_clamp(lLmb=self.lLmb, lLmb0=self.lLmb0,
+                                     lsigma2s=self.lsigma2s, lnugs=self.lnugGPs)
         else:
-            lLmb, lLmb0, lsigma2s, lnugGPs = self.lLmb, self.lLmb0, self.lsigma2s, self.lnugGPs
+            lLmb, lLmb0, lsigma2s, lnugGPs = \
+                self.lLmb, self.lLmb0, self.lsigma2s, self.lnugGPs
         return lLmb, lLmb0, lsigma2s, lnugGPs
 
     @staticmethod
@@ -353,7 +363,8 @@ class LCGP(nn.Module):
         Set soft boundary for parameters.
         """
         d = torch.tensor(lLmb.shape[1],)
-        lLmb = (parameter_clamping(lLmb.T, torch.tensor((-2.5 + 1/2 * torch.log(d), 2.5)))).T  # + 1/2 * log dimension
+        lLmb = (parameter_clamping(lLmb.T,
+                                   torch.tensor((-2.5 + 1/2 * torch.log(d), 2.5)))).T
         lLmb0 = parameter_clamping(lLmb0, torch.tensor((-4, 4)))
         lsigma2s = parameter_clamping(lsigma2s, torch.tensor((-12, 1)))
         lnugs = parameter_clamping(lnugs, torch.tensor((-16, -6)))
