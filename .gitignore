@@ -9,9 +9,10 @@ build/
 dist/
 lcgp.egg-info/
 
-tests/*
-
 src/archive/*
+
+tests/data/*
+tests/testfunctions/*
 
 # Documentation and coverage
 docs/_build
