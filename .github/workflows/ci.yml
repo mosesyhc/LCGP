@@ -30,9 +30,9 @@ jobs:
       - name: Lint with ruff
         run: |
           # stop the build if there are Python syntax errors or undefined names
-          ruff --format=github --select=E9,F63,F7,F82 --exclude=illustration-examples .
+          ruff --format=github --select=E9,F63,F7,F82 --exclude=illustration-examples,reference_code .
           # default set of ruff rules with GitHub Annotations
-          ruff --format=github --exclude=illustration-examples .
+          ruff --format=github --exclude=illustration-examples,reference_code .
       - name: Test with pytest
         run: |
           pytest
