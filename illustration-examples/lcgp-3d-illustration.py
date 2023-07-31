@@ -40,7 +40,7 @@ start0 = time.monotonic()
 
 lcgp = LCGP(y=ytrain, x=x, q=3,
             parameter_clamp_flag=False)
-lcgp.compute_aux_predictive_quantities()
+# lcgp.compute_aux_predictive_quantities()
 lcgp.fit(verbose=True)
 
 end0 = time.monotonic()

@@ -43,15 +43,15 @@ class LCGP(nn.Module):
         self.q = q
         self.var_threshold = var_threshold
 
-        # placeholders for variables
-        self.n, self.d, self.p = 0, 0, 0
-        # verify that input and output dimensions match
-        self.verify_dim(y, x)
-
         # standardize x to unit hypercube
         self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = self.init_standard_x(x)
         # standardize y
         self.y, self.ymean, self.ystd, self.y_orig = self.standardize_y(y, robust_mean)
+
+        # placeholders for variables
+        self.n, self.d, self.p = 0, 0, 0
+        # verify that input and output dimensions match
+        self.verify_dim(self.y, self.x)
 
         # reset q if none is provided
         self.g, self.phi, self.diag_D, self.q = self.init_phi(var_threshold=var_threshold)
@@ -63,7 +63,13 @@ class LCGP(nn.Module):
                                           torch.zeros(size=[self.q], dtype=torch.double),
                                           torch.zeros(size=[self.p], dtype=torch.double))
 
-        self.penalty_const = penalty_const
+        if penalty_const is None:
+            pc = {'lLmb': 40, 'lLmb0': 5}
+        else:
+            pc = penalty_const
+            for k, v in pc.items():
+                assert v >= 0, 'penalty constant should be nonnegative.'
+        self.penalty_const = pc
 
         self.init_params()
 
@@ -125,14 +131,13 @@ class LCGP(nn.Module):
         p, ny = y.shape
         nx, d = x.shape
 
-        if ny != nx:
-            raise ValueError('Number of inputs (x) differs from number of outputs (y), '
-                             'y.shape[0] != x.shape[0]')
-        else:
-            self.n = nx
-            self.d = d
-            self.p = p
-            return
+        assert ny == nx, 'Number of inputs (x) differs from number of outputs (y), ' \
+                         'y.shape[0] != x.shape[0]'
+
+        self.n = nx
+        self.d = d
+        self.p = p
+        return
 
     def fit(self, **kwargs):
         """
@@ -267,6 +272,9 @@ class LCGP(nn.Module):
         Standardizes outputs and collects summary information.  Uses median and absolute deviation if `robust_mean` is
         True.  Otherwise, use mean and standard deviation.
         """
+        if y.ndim < 2:
+            y = y.unsqueeze(0)
+
         ymean = y.mean(1).unsqueeze(1)
 
         if robust_mean:
@@ -294,10 +302,7 @@ class LCGP(nn.Module):
         x = self.x
         y = self.y
 
-        if self.penalty_const is None:
-            pc = {'lLmb': 40, 'lLmb0': 5}
-        else:
-            pc = self.penalty_const
+        pc = self.penalty_const
 
         n = self.n
         q = self.q

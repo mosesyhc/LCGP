@@ -7,7 +7,7 @@ PG_CONV_FLAG = 0
 def optim_lbfgs(model,
                 maxiter=1000, lr=1e-1, history_size=4,
                 max_ls=15, c1=1e-2, c2=0.9,
-                pgtol=1e-6, ftol=2e-12,
+                pgtol=1e-5, ftol=2e-9,
                 verbose=False):
     def closure():
         model.compute_aux_predictive_quantities()

@@ -11,8 +11,8 @@ def normalized_rmse(y, ypredmean):
     return np.mean(((y - ypredmean) / rng)**2)
 
 
-def dss(y, ypredmean, ypredcov, use_diag):
-    def __dss_single(f, mu, Sigma):  # Dawid-Sebastani score (1999)
+def dss(y, ypredmean, ypredcov, use_diag):  # Dawid-Sebastani score (1999)
+    def __dss_single(f, mu, Sigma):
         r = f - mu
         W, U = np.linalg.eigh(Sigma)
         r_Sinvh = r @ U * 1 / np.sqrt(W)
@@ -28,14 +28,13 @@ def dss(y, ypredmean, ypredcov, use_diag):
         return score_single
 
     p, n = y.shape
-    if use_diag:
-        score_single = __dss_single_diag
-    else:
-        score_single = __dss_single
-
     score = 0
-    for i in range(n):
-        score += score_single(y[:, i], ypredmean[:, i], ypredcov[:, :, i])
+    if use_diag:
+        for i in range(n):
+            score += __dss_single_diag(y[:, i], ypredmean[:, i], ypredcov[:, i])
+    else:
+        for i in range(n):
+            score += __dss_single(y[:, i], ypredmean[:, i], ypredcov[:, :, i])
     score /= n
 
     return score

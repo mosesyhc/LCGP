@@ -34,21 +34,21 @@ def Matern32(x1, x2, llmb, llmb0, lnug, diag_only: bool = False):
         return llmb0.exp() * C
 
 
-def Matern32_sp(theta, thetai, llmb, llmb0, lnug):  # assuming x1 = x2 = theta
+def Matern32_sp(x, xi, llmb, llmb0, lnug):  # assuming x1 = x2 = theta
     '''
     Returns the Nystr{\"o}m approximation of a covariance matrix,
     its inverse, and the log of its determinant.
 
     :param lnug:
-    :param theta:
-    :param thetai:
+    :param x:
+    :param xi:
     :param llmb:
     :return:
     '''
 
-    c_full_i = Matern32(theta, thetai, llmb=llmb, llmb0=llmb0, lnug=lnug)
-    C_i = Matern32(thetai, thetai, llmb=llmb, llmb0=llmb0, lnug=lnug)
-    C_full_diag = Matern32(theta, theta, llmb=llmb, llmb0=llmb0, lnug=lnug, diag_only=True)
+    c_full_i = Matern32(x, xi, llmb=llmb, llmb0=llmb0, lnug=lnug)
+    C_i = Matern32(xi, xi, llmb=llmb, llmb0=llmb0, lnug=lnug)
+    C_full_diag = Matern32(x, x, llmb=llmb, llmb0=llmb0, lnug=lnug, diag_only=True)
 
     Wi, Ui = torch.linalg.eigh(C_i)
     Ciinvh = Ui / Wi.sqrt()
