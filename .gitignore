@@ -1,3 +1,4 @@
+# local virtual environment and pycharm files
 .idea/
 
 venv/
@@ -5,30 +6,37 @@ venv/
 *.pclprof
 *.dat
 
+# build
 build/
 dist/
 lcgp.egg-info/
 
+# archive
 src/archive/*
+lcgp/archive/
+lcgp/debug/
+lcgp/reference_code/
+lcgp/plot_code/
 
+# data files
 tests/data/*
 tests/testfunctions/*
 
-# Documentation and coverage
+# documentation and coverage
 docs/_build
 docs/_static
 docs/source
 docs/readme.rst
 cover
-lcgp/archive/
 
-lcgp/debug/
-
-lcgp/reference_code/
-lcgp/plot_code/
-
+# illustrations
+# figures
 illustration-examples/output_fig/
+# notebooks
+illustration-examples/notebooks/
 
+# other codes
 reference_code/GPPCA/
 
+# ignore version
 lcgp/_version.py
