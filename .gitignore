@@ -31,9 +31,9 @@ cover
 
 # illustrations
 # figures
-illustration-examples/output_fig/
+illustration-examples/output_fig/*
 # notebooks
-illustration-examples/notebooks/
+illustration-examples/notebooks/*
 
 # other codes
 reference_code/GPPCA/
