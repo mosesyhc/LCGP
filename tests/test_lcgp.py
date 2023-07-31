@@ -43,7 +43,8 @@ class TestInit:
         with pytest.raises(AssertionError):
             LCGP(y=y, x=x, penalty_const=penalty_constant)
 
-    @pytest.mark.parametrize('x, y', [(torch.linspace(0, 1, 100), torch.randn((3, 50)))])
+    @pytest.mark.parametrize('x, y', [(torch.linspace(0, 1, 100),
+                                       torch.randn((3, 50)))])
     def test_mismatch_dimension(self, x, y):
         with pytest.raises(AssertionError):
             LCGP(y=y, x=x)
@@ -87,7 +88,8 @@ class TestCov1D:
         with pytest.raises(AssertionError):
             Matern32_sp(x=x, xi=xi, llmb=llmb, llmb0=llmb0, lnug=lnug)
 
-@pytest.mark.parametrize('llmb, llmb0, lnug', [(tensor([0., 0.]), tensor(0.), tensor(-12.))])
+@pytest.mark.parametrize('llmb, llmb0, lnug', [(tensor([0., 0.]), tensor(0.),
+                                                tensor(-12.))])
 class TestCovHD:
     @pytest.mark.parametrize('X1, X2', [(torch.randn((100, 2)),
                                          torch.randn((100, 2)))])
