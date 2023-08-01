@@ -1,8 +1,20 @@
 import torch
+import importlib
+import inspect
 
 LS_FAIL_MAX = 3
 PG_CONV_FLAG = 0
 
+
+def which_lbfgs():
+    optim_list = [name for name, _ in inspect.getmembers(importlib.import_module('torch.optim'), inspect.isclass)]
+    if 'FullBatchLBFGS' in optim_list:
+        lbfgs = torch.optim.FullBatchLBFGS
+    elif 'LBFGS' in optim_list:
+        lbfgs = torch.optim.LBFGS
+    else:
+        return ImportError('No LBFGS implementation found.')
+    return lbfgs
 
 def optim_lbfgs(model,
                 maxiter=1000, lr=1e-1, history_size=4,
@@ -15,11 +27,12 @@ def optim_lbfgs(model,
         nlp = model.neglpost()
         return nlp
 
+    lbfgs = which_lbfgs()
+
     #  precheck learning rate
     while True:
-        optim = torch.optim.FullBatchLBFGS(filter(lambda p: p.requires_grad,
-                                                  model.parameters()), lr=lr,
-                                           dtype=torch.float64)
+        optim = lbfgs(filter(lambda p: p.requires_grad, model.parameters()), lr=lr,
+                      dtype=torch.float64)
         optim.zero_grad(set_to_none=True)
         loss = closure()
         loss.backward()

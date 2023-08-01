@@ -40,3 +40,5 @@ reference_code/GPPCA/
 
 # ignore version
 lcgp/_version.py
+
+.coverage
