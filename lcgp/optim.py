@@ -7,7 +7,9 @@ PG_CONV_FLAG = 0
 
 
 def which_lbfgs():
-    optim_list = [name for name, _ in inspect.getmembers(importlib.import_module('torch.optim'), inspect.isclass)]
+    optim_list = \
+        [name for name, _ in inspect.getmembers(importlib.import_module('torch.optim'),
+                                                inspect.isclass)]
     if 'FullBatchLBFGS' in optim_list:
         lbfgs = torch.optim.FullBatchLBFGS
     elif 'LBFGS' in optim_list:
