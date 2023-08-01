@@ -33,8 +33,8 @@ def optim_lbfgs(model,
 
     #  precheck learning rate
     while True:
-        optim = lbfgs(filter(lambda p: p.requires_grad, model.parameters()), lr=lr,
-                      dtype=torch.float64)
+        optim = lbfgs(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+                      #, dtype=torch.float64)
         optim.zero_grad(set_to_none=True)
         loss = closure()
         loss.backward()
