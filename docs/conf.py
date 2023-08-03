@@ -19,7 +19,8 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.coverage',
               'sphinx.ext.mathjax',
               'sphinx.ext.viewcode',
-              'sphinx.ext.napoleon']
+              'sphinx.ext.napoleon',
+              'myst_parser']
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']

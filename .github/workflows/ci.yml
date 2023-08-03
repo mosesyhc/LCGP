@@ -35,21 +35,21 @@ jobs:
           ruff --format=github --exclude=illustration-examples,reference_code,tests .
       - name: Test with pytest
         run: pytest
-      - name: Upload coverage data
-        run: |
-          coveralls --service=github
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
-          COVERALLS_PARALLEL: true
+#      - name: Upload coverage data
+#        run: |
+#          coveralls --service=github
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
+#          COVERALLS_PARALLEL: true
 
-  finish:
-    name: Finish Coveralls
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Coveralls GitHub Action
-        uses: coverallsapp/github-action@v2
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          parallel-finished: true
+#  finish:
+#    name: Finish Coveralls
+#    needs: test
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Coveralls GitHub Action
+#        uses: coverallsapp/github-action@v2
+#        with:
+#          github-token: ${{ secrets.GITHUB_TOKEN }}
+#          parallel-finished: true
