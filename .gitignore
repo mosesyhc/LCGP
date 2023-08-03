@@ -26,7 +26,6 @@ tests/testfunctions/*
 docs/_build
 docs/_static
 docs/source
-docs/readme.rst
 cover
 
 # illustrations
