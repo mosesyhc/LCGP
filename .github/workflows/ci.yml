@@ -48,9 +48,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-    - name: Finish coveralls
-      run: |
-        pip3 install --upgrade coveralls
-        coveralls --service=github --finish
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Coveralls GitHub Action
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          parallel-finished: true
