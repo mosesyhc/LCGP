@@ -378,7 +378,9 @@ class LCGP(nn.Module):
         """
         grad = []
         for p in filter(lambda p: p.requires_grad, self.parameters()):
-            view = p.grad.data.view(-1)
-            grad.append(view)
-        grad = torch.cat(grad, 0)
+            if p.grad is not None:
+                view = p.grad.data.view(-1)
+                grad.append(view)
+        if len(grad) > 0:
+            grad = torch.cat(grad, 0)
         return grad
