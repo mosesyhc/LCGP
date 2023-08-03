@@ -34,10 +34,10 @@ jobs:
           # default set of ruff rules with GitHub Annotations
           ruff --format=github --exclude=illustration-examples,reference_code,tests .
       - name: Test with pytest
+        run: pytest
+      - name: Upload coverage data
         run: |
-          pytest
           coveralls --service=github
-
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
@@ -48,8 +48,9 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-    - name: Finish Coveralls
-      uses: coverallsapp/github-action@v1
-      with:
-        github-token: ${{ secrets.github_token }}
-        parallel-finished: true
+    - name: Finish coveralls
+      run: |
+        pip3 install --upgrade coveralls
+        coveralls --service=github --finish
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
