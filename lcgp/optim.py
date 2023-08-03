@@ -12,11 +12,35 @@ def which_lbfgs():
                                                 inspect.isclass)]
     if 'FullBatchLBFGS' in optim_list:
         lbfgs = torch.optim.FullBatchLBFGS
+        fblbfgs = True
     elif 'LBFGS' in optim_list:
         lbfgs = torch.optim.LBFGS
+        fblbfgs = False
     else:
         return ImportError('No LBFGS implementation found.')
-    return lbfgs
+    return lbfgs, fblbfgs
+
+
+def custom_step(optim, fullbatch_flag, closure, loss,
+                **kwargs):
+    if fullbatch_flag:
+        options = {'closure': closure, 'current_loss': loss,
+                   'history_size': kwargs.get('history_size'),
+                   'c1': kwargs.get('c1'), 'c2': kwargs.get('c2'),
+                   'max_ls': kwargs.get('max_ls'), 'damping': False,
+                   # 'ls_debug': True
+                   }
+        loss, grad, lr, _, _, _, _, _ = optim.step(options)
+        d = optim.state['global_state'].get('d')
+    else:
+        loss = optim.step(closure)
+        grad = optim._gather_flat_grad()
+        lr = optim.state_dict()['param_groups'][0]['lr']
+        d = optim.state_dict()['state'].get('d')
+        if d is None:
+            d = -grad
+    return loss, grad, lr, d
+
 
 def optim_lbfgs(model,
                 maxiter=1000, lr=1e-1, history_size=4,
@@ -29,26 +53,25 @@ def optim_lbfgs(model,
         nlp = model.neglpost()
         return nlp
 
-    lbfgs = which_lbfgs()
+    lbfgs, fullbatch_flag = which_lbfgs()
 
     #  precheck learning rate
     while True:
-        optim = lbfgs(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
-                      #, dtype=torch.float64)
+        if not fullbatch_flag:
+            optim = lbfgs(filter(lambda p: p.requires_grad, model.parameters()), lr=lr,
+                          max_iter=maxiter, history_size=history_size,
+                          line_search_fn='strong_wolfe')
+        else:
+            optim = lbfgs(filter(lambda p: p.requires_grad, model.parameters()), lr=lr,
+                          dtype=torch.float64)
         optim.zero_grad(set_to_none=True)
         loss = closure()
         loss.backward()
 
-        if torch.isnan(loss):
-            print('go here')
+        loss, grad, lr, d = custom_step(optim, fullbatch_flag, closure, loss,
+                                        history_size=history_size, c1=c1, c2=c2,
+                                        max_ls=max_ls)
 
-        options = {'closure': closure, 'current_loss': loss,
-                   'history_size': history_size,
-                   'c1': c1, 'c2': c2,
-                   'max_ls': max_ls, 'damping': False,
-                   # 'ls_debug': True
-                   }
-        loss, grad, lr, _, _, _, _, _ = optim.step(options)
         if torch.isfinite(loss) and torch.isfinite(grad).all():
             break
 
@@ -62,14 +85,12 @@ def optim_lbfgs(model,
     header = ['iter', 'grad.absmax()', 'pgrad.absmax()', 'lsigma2', 'lr',
               'neglpost', 'diff.']
     if verbose:
-        print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s} {:<12s}'.format(*header))
+        print('{:<5s} {:<12s} {:<12s} {:<12s} {:<12s} '
+              '{:<12s} {:<12s}'.format(*header))
     while True:
-        options = {'closure': closure, 'current_loss': loss,
-                   'history_size': history_size,
-                   'c1': c1, 'c2': c2,
-                   'max_ls': max_ls, 'damping': True}
-        loss, grad, lr, _, _, _, _, _ = optim.step(options)
-        d = optim.state['global_state'].get('d')
+        loss, grad, lr, d = custom_step(optim, fullbatch_flag, closure, loss,
+                                        history_size=history_size, c1=c1, c2=c2,
+                                        max_ls=max_ls)
         pg = d.dot(grad) / grad.norm() ** 2 * grad
         ls_fail_count += (lr < 1e-16)
 
@@ -84,7 +105,6 @@ def optim_lbfgs(model,
                 print('exit after epoch {:d}, PGTOL <= {:.3E}'.format(epoch, pgtol))
                 flag = 'PG_CONV'
                 break
-            #  if line search fails, this criterion can be triggered
             if (lr > 1e-8) and \
                     ((loss_prev - loss) / torch.max(
                         torch.tensor((loss_prev.abs(), loss.abs(), torch.tensor(1, )))
