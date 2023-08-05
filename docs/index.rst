@@ -3,11 +3,9 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to lcgp's documentation!
-================================
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
 
    readme
    modules
