@@ -45,3 +45,5 @@ lcgp/_version.py
 illustration-examples/data/
 
 illustration-examples/output/
+
+illustration-examples/lcgp_debug.py
