@@ -5,3 +5,18 @@
 [![Documentation Status](https://readthedocs.org/projects/lcgp/badge/?version=latest)](https://lcgp.readthedocs.io/en/latest/?badge=latest)
 
 Implementation of latent component Gaussian process (LCGP).
+
+___
+
+List of Contents:
+
+- [Installation](#installation)
+- [Basic Usage](#usage)
+
+## Installation 
+The package can be installed through
+
+```bash
+pip install lcgp
+```
+

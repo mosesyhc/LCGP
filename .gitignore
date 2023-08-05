@@ -41,3 +41,7 @@ reference_code/GPPCA/
 lcgp/_version.py
 
 .coverage
+
+illustration-examples/data/
+
+illustration-examples/output/
