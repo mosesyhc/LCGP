@@ -45,7 +45,7 @@ def custom_step(optim, fullbatch_flag, closure, loss,
 def optim_lbfgs(model,
                 maxiter=1000, lr=1e-1, history_size=4,
                 max_ls=15, c1=1e-2, c2=0.9,
-                pgtol=1e-5, ftol=2e-9,
+                pgtol=1e-5, ftol=2e-12,
                 verbose=False):
     def closure():
         model.compute_aux_predictive_quantities()
@@ -63,7 +63,7 @@ def optim_lbfgs(model,
                           line_search_fn='strong_wolfe')
         else:
             optim = lbfgs(filter(lambda p: p.requires_grad, model.parameters()), lr=lr,
-                          dtype=torch.float64)
+                          dtype=torch.float64, debug=True)
         optim.zero_grad(set_to_none=True)
         loss = closure()
         loss.backward()
@@ -91,13 +91,19 @@ def optim_lbfgs(model,
         loss, grad, lr, d = custom_step(optim, fullbatch_flag, closure, loss,
                                         history_size=history_size, c1=c1, c2=c2,
                                         max_ls=max_ls)
+
+        if grad.isnan().any():
+            flag = 'GRAD_NAN'
+            print('exit after epoch {:d}, invalid gradient'.format(epoch)) 
+            break
+
         pg = d.dot(grad) / grad.norm() ** 2 * grad
         ls_fail_count += (lr < 1e-16)
 
         epoch += 1
         if epoch > maxiter:
             flag = 'MAX_ITER'
-            print('exit after maximum epoch {:d}'.format(epoch))
+            print('exit after maximum epoch {:d}'.format(epoch)) 
             break
         if epoch >= 10:
             if pg.abs().max() <= pgtol:
@@ -117,7 +123,7 @@ def optim_lbfgs(model,
             if not reset_optim:
                 flag = 'LS_FAIL_MAX_REACHED'
                 print('exit at epoch {:d}, line searches failed for '
-                      '{:d} iterations'.format(epoch, LS_FAIL_MAX))
+                      '{:d} iterations'.format(epoch, LS_FAIL_MAX)) 
                 break
             else:
                 optim.__init__(filter(lambda p: p.requires_grad, model.parameters()),
@@ -125,7 +131,7 @@ def optim_lbfgs(model,
                 reset_optim = False
                 ls_fail_count = 0
                 print('reset optimizer')
-        if verbose and epoch % 10 == 0:
+        if verbose and epoch % 1 == 0:
             print('{:<5d} {:<12.3f} {:<12.3E} {:<12.3f} '
                   '{:<12.3E} {:<12.3f} {:<12.3f}'.format
                   (epoch, grad.abs().max(), pg.abs().max(), model.lsigma2s.max(),
