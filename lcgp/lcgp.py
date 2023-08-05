@@ -340,6 +340,7 @@ class LCGP(nn.Module):
 
         # regularization
         nlp += pc['lLmb'] * (lLmb ** 2).sum() + pc['lLmb0'] * (2/n) * (lLmb0 ** 2).sum()
+        nlp += -(lnugGPs + 100).log().sum()
 
         nlp /= n
         return nlp
