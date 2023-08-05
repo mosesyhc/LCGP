@@ -25,14 +25,15 @@ def forrester2008(x, noisy=True, noises=(0.01, 0.1, 0.25)):
     x = np.expand_dims(x, 1) if x.ndim < 2 else x
 
     y1 = (6*x - 2)**2 * np.sin(12*x - 4)
-    def forrester1d(y, x, a, b, c):
-        return a*y + b*(x - 0.5) - c
+
+    def forrester1d(y0, x0, a, b, c):
+        return a*y0 + b*(x0 - 0.5) - c
     y2 = forrester1d(y1, x, 0.5, 5, -5)
     y3 = forrester1d(y1, x, -0.8, -5, 4)
     if noisy:
-        e1 = np.random.normal(0, np.sqrt(noises[0]) * np.std(y1), x.shape)
-        e2 = np.random.normal(0, np.sqrt(noises[1]) * np.std(y2), x.shape)
-        e3 = np.random.normal(0, np.sqrt(noises[2]) * np.std(y3), x.shape)
+        e1 = np.random.normal(0, np.sqrt(noises[0]), x.shape)
+        e2 = np.random.normal(0, np.sqrt(noises[1]), x.shape)
+        e3 = np.random.normal(0, np.sqrt(noises[2]), x.shape)
         y1 += e1
         y2 += e2
         y3 += e3
