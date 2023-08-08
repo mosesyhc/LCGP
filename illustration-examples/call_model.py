@@ -6,11 +6,12 @@ from lcgp import LCGP
 import tensorflow as tf
 from oilmm.tensorflow import OILMM
 from stheno import GP, Matern32
-import pathlib, shutil
+import pathlib
 import subprocess
 
+
 class SuperRun:
-    def __init__(self, runno : str, data, verbose=False, **kwargs):
+    def __init__(self, runno: str, data, verbose=False, **kwargs):
         self.data = data
         self.xtrain = data['xtrain']
         self.ytrain = data['ytrain']
@@ -110,7 +111,8 @@ class MultitaskGPModel(gpytorch.models.ApproximateGP):
         )
 
         # We have to wrap the VariationalStrategy in a LMCVariationalStrategy
-        # so that the output will be a MultitaskMultivariateNormal rather than a batch output
+        # so that the output will be a MultitaskMultivariateNormal
+        # rather than a batch output
         variational_strategy = gpytorch.variational.LMCVariationalStrategy(
             gpytorch.variational.VariationalStrategy(
                 self, inducing_points, variational_distribution,
@@ -125,7 +127,8 @@ class MultitaskGPModel(gpytorch.models.ApproximateGP):
 
         # The mean and covariance modules should be marked as batch
         # so we learn a different set of hyperparameters
-        self.mean_module = gpytorch.means.ConstantMean(batch_shape=torch.Size([num_latent]))
+        self.mean_module = gpytorch.means.ConstantMean(
+            batch_shape=torch.Size([num_latent]))
         self.covar_module = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(batch_shape=torch.Size([num_latent])),
             batch_shape=torch.Size([num_latent])
@@ -211,7 +214,6 @@ class GPPCARun(SuperRun):
 
         for k, v in self.data.items():
             np.savetxt(data_dir + '{:s}.txt'.format(k), v)
-
 
     def train(self):
         script = r'C:\Program Files\R\R-4.3.1\bin\Rscript.exe'

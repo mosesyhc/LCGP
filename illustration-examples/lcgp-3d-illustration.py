@@ -5,14 +5,13 @@ from call_model import LCGPRun, SVGPRun, OILMMRun, GPPCARun
 from lcgp import evaluation
 import pandas as pd
 
-
 outputdir = 'illustration-examples/output/'
 ns = [50, 100, 250, 500]
 ntest = 800
 
 for n in ns:
     xtrain = np.linspace(0, 1, n)
-    xtest = np.linspace(1/ntest, 1, ntest)
+    xtest = np.linspace(1 / ntest, 1, ntest)
 
     ytrue = forrester2008(xtest, noisy=False)
     generating_noises_var = np.array([0.005, 0.1, 0.3]) * ytrue.var(1)
@@ -55,5 +54,5 @@ for n in ns:
             }
 
             df = pd.DataFrame.from_dict(result, orient='index').reset_index()
-            df.to_csv(outputdir + '{:s}_{:s}.csv'.format(modelrun.modelname, modelrun.runno))
-
+            df.to_csv(
+                outputdir + '{:s}_{:s}.csv'.format(modelrun.modelname, modelrun.runno))
