@@ -28,7 +28,8 @@ for function in funcs:
         locations = sps.uniform.rvs(0, 1, (outputdim, locationdim))
         ytrue = func_meta['nofailmodel'](locations, xtest)
         for ntrain in ns:
-            generating_noises_var = 0.05 ** ((np.arange(outputdim) + 1)/2) * np.var(ytrue, 1)
+            generating_noises_var = 0.05 ** ((np.arange(outputdim) + 1) / 2) * np.var(
+                ytrue, 1)
 
             for i in range(rep_n):
                 xtrain = lhs(xdim, ntrain)
@@ -54,10 +55,11 @@ for function in funcs:
                 }
 
                 robust = [True, False, None, None, None]
-                for k, model in enumerate([LCGPRun, LCGPRun, SVGPRun, OILMMRun]):  # , GPPCARun, LCGPRun, LCGPRun, SVGPRun, OILMMRun
+                for k, model in enumerate([LCGPRun, LCGPRun, SVGPRun,
+                                           OILMMRun]):  # , GPPCARun, LCGPRun, LCGPRun, SVGPRun, OILMMRun
                     modelrun = model(runno='n{:d}_runno{:d}'.format(ntrain, i),
                                      data=data,
-                                     num_latent=int(outputdim * 3/4),
+                                     num_latent=int(outputdim * 3 / 4),
                                      robust=robust[k])
 
                     if model == GPPCARun:
@@ -78,7 +80,8 @@ for function in funcs:
                         'modelname': modelrun.modelname,
                         'runno': modelrun.runno,
                         'function': function,
-                        'modelrun': modelrun.runno + '_{:s}_{:d}'.format(function, outputdim),
+                        'modelrun': modelrun.runno + '_{:s}_{:d}'.format(function,
+                                                                         outputdim),
                         'n': modelrun.n,
                         'traintime': traintime1 - traintime0,
                         'rmse': rmse,
@@ -90,5 +93,5 @@ for function in funcs:
 
                     df = pd.DataFrame.from_dict(result, orient='index').reset_index()
                     df.to_csv(outputdir +
-                              '{:s}_{:s}.csv'.format(result['modelname'], result['modelrun']))
-
+                              '{:s}_{:s}.csv'.format(result['modelname'],
+                                                     result['modelrun']))

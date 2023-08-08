@@ -31,12 +31,14 @@ class TestFuncCaller(object):
             # failmodel_MAR = TestingfunctionPiston.Piston_failmodel_MAR
             nofailmodel = TestingfunctionPiston.Piston_model
         else:
-            raise ValueError('Choose between (\'borehole\', \'otlcircuit\', \'wingweight\', \'piston\')')
+            raise ValueError(
+                'Choose between (\'borehole\', \'otlcircuit\', '
+                '\'wingweight\', \'piston\')')
 
-        self.info = {'function':         meta['function'],
-                     'xdim':             meta['xdim'],
-                     'thetadim':         meta['thetadim'],
-                     'nofailmodel':      nofailmodel,
+        self.info = {'function': meta['function'],
+                     'xdim': meta['xdim'],
+                     'thetadim': meta['thetadim'],
+                     'nofailmodel': nofailmodel,
                      # 'failmodel':        failmodel,
                      # 'failmodel_random': failmodel_random,
                      # 'failmodel_MAR':    failmodel_MAR
