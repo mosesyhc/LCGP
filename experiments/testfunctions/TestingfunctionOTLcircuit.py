@@ -3,13 +3,14 @@ import numpy as np
 
 _dict = {
     'function': 'OTLcircuit',
-    'xdim':     4,
+    'xdim': 4,
     'thetadim': 2
 }
 
 
 def query_func_meta():
     return _dict
+
 
 #
 # def OTLcircuit_failmodel(x, theta, p):
@@ -22,7 +23,8 @@ def query_func_meta():
 
 def OTLcircuit_failmodel_random(x, theta, p):
     f = OTLcircuit_model(x, theta)
-    wheretoobig = np.where(np.random.choice([0, 1], f.shape, replace=True, p=[1-p, p]))
+    wheretoobig = np.where(
+        np.random.choice([0, 1], f.shape, replace=True, p=[1 - p, p]))
     f[wheretoobig[0], wheretoobig[1]] = np.nan
     return f
 
@@ -73,22 +75,22 @@ def OTLcircuit_vec(x, theta):
 
     """
 
-    (Rb1,Rb2,Rc1,Rc2) = np.split(x, x.shape[1], axis=1)
-    (Rf,beta) = np.split(theta, theta.shape[1], axis=1)
+    (Rb1, Rb2, Rc1, Rc2) = np.split(x, x.shape[1], axis=1)
+    (Rf, beta) = np.split(theta, theta.shape[1], axis=1)
 
     const1 = 0.74
 
-    Vb1 = 12*Rb2 / (Rb1+Rb2)
-    term1a = (Vb1+const1) * beta * (Rc2+9)
-    term1b = beta*(Rc2+9) + Rf
+    Vb1 = 12 * Rb2 / (Rb1 + Rb2)
+    term1a = (Vb1 + const1) * beta * (Rc2 + 9)
+    term1b = beta * (Rc2 + 9) + Rf
     term1 = term1a / term1b
 
     term2a = 11.35 * Rf
-    term2b = beta*(Rc2+9) + Rf
+    term2b = beta * (Rc2 + 9) + Rf
     term2 = term2a / term2b
 
-    term3a = const1 * Rf * beta * (Rc2+9)
-    term3b = (beta*(Rc2+9)+Rf) * Rc1
+    term3a = const1 * Rf * beta * (Rc2 + 9)
+    term3b = (beta * (Rc2 + 9) + Rf) * Rc1
     term3 = term3a / term3b
 
     Vm = (term1 + term2 + term3).reshape(-1)
@@ -111,7 +113,7 @@ def tstd2theta(tstd):
 
 def xstd2x(xstd):
     if xstd.ndim < 1.5:
-        xstd = xstd[:,None].T
+        xstd = xstd[:, None].T
     (Rb1s, Rb2s, Rc1s, Rc2s) = np.split(xstd, xstd.shape[1], axis=1)
 
     Rb1 = 50 + Rb1s * (150 - 50)
