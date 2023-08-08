@@ -8,6 +8,6 @@ jobs:
       - uses: chartboost/ruff-action@v1
 
         with:
-          src: ["./lcgp", "./experiments", "./tests"]
+          src: "./lcgp", "./experiments", "./tests"
           version: 0.0.280
           args: --fix --exit-non-zero-on-fix
