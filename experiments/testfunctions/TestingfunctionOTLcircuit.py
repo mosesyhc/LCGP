@@ -62,7 +62,8 @@ def OTLcircuit_true(x):
 
 def OTLcircuit_vec(x, theta):
     """
-    The OTL Circuit function models an output transformerless push-pull circuit. The response Vm is midpoint voltage.
+    The OTL Circuit function models an output transformerless push-pull circuit. 
+    The response Vm is midpoint voltage.
     OTL_circuit(x) evaluates the function for n-by-6 input matrix x, and
     returns its function value.
 

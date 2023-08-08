@@ -56,7 +56,8 @@ for function in funcs:
 
                 robust = [True, False, None, None, None]
                 for k, model in enumerate([LCGPRun, LCGPRun, SVGPRun,
-                                           OILMMRun]):  # , GPPCARun, LCGPRun, LCGPRun, SVGPRun, OILMMRun
+                                           OILMMRun]):  
+                    # , GPPCARun, LCGPRun, LCGPRun, SVGPRun, OILMMRun
                     modelrun = model(runno='n{:d}_runno{:d}'.format(ntrain, i),
                                      data=data,
                                      num_latent=int(outputdim * 3 / 4),

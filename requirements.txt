@@ -1,5 +1,6 @@
 # Requirements for development, testing, and documentation.
 -e .
+pre-commit
 sphinx
 sphinx-readable-theme
 pytest
