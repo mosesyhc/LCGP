@@ -47,3 +47,21 @@ illustration-examples/data/
 illustration-examples/output/
 
 illustration-examples/lcgp_debug.py
+
+experiments/output/
+
+experiments/data/
+
+illustration-examples/figures/
+
+experiments/figures/
+
+illustration-examples/lcgp-3d-illustration-addon.py
+
+illustration-examples/lcgp-3d-illustration-mean-var-plot.py
+
+illustration-examples/lcgp-3d-illustration-plot.py
+
+illustration-examples/lcgp-3d-mean-var.py
+
+experiments/experiment-plot.py

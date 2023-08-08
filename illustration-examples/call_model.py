@@ -62,10 +62,13 @@ class LCGPRun(SuperRun):
 
 
 class OILMMRun(SuperRun):
-    def __init__(self, **kwargs):
+    def __init__(self, learn_transform=True, **kwargs):
         super().__init__(**kwargs)
         self.num_latent = kwargs['num_latent']
         self.modelname = 'OILMM'
+        self.learn_transform = learn_transform
+        if not learn_transform:
+            self.modelname += '_no_tx'
 
     def build_latent_processes(self, ps):
         # Return models for latent processes, which are noise-contaminated GPs.
@@ -78,11 +81,11 @@ class OILMMRun(SuperRun):
             for p, _ in zip(ps, range(self.num_latent))
         ]
 
-    def define_model(self, learn_transform=True):
+    def define_model(self):
         self.model = OILMM(tf.float64,
                            self.build_latent_processes,
                            num_outputs=self.num_output,
-                           learn_transform=learn_transform)
+                           learn_transform=self.learn_transform)
 
     def train(self):
         prior = self.model
@@ -97,13 +100,13 @@ class OILMMRun(SuperRun):
 
 
 class MultitaskGPModel(gpytorch.models.ApproximateGP):
-    def __init__(self, num_latent, num_output, n):
-        inducing_points = torch.linspace(0, 1, n).repeat(num_latent, 1).unsqueeze(-1)
+    def __init__(self, num_latent, num_output, xtrain):
+        inducing_points = xtrain
 
         # We have to mark the CholeskyVariationalDistribution as batch
         # so that we learn a variational distribution for each task
         variational_distribution = gpytorch.variational.CholeskyVariationalDistribution(
-            inducing_points.size(-2), batch_shape=torch.Size([num_latent])
+            num_inducing_points=xtrain.shape[0], batch_shape=torch.Size([num_latent])
         )
 
         # We have to wrap the VariationalStrategy in a LMCVariationalStrategy
@@ -146,7 +149,7 @@ class SVGPRun(SuperRun):
     def define_model(self):
         svgp = MultitaskGPModel(num_latent=self.num_latent,
                                 num_output=self.num_output,
-                                n=self.n)
+                                xtrain=tensor(self.xtrain))
 
         likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(
             num_tasks=self.num_output,
@@ -201,9 +204,9 @@ class GPPCARun(SuperRun):
         self.num_latent = kwargs['num_latent']
         self.data_dir = pathlib.WindowsPath
 
-    def define_model(self):
-        data_dir = r'illustration-examples/data' + '/{:s}'.format(self.runno) + r'/'
-        pathlib.Path(data_dir).mkdir(exist_ok=True)
+    def define_model(self, directory=''):
+        data_dir = r'{:s}/data'.format(directory) + '/{:s}'.format(self.runno) + r'/'
+        pathlib.Path(data_dir).mkdir(exist_ok=True, parents=True)
         self.data_dir = pathlib.Path(data_dir).absolute()
 
         for k, v in self.data.items():
@@ -212,12 +215,16 @@ class GPPCARun(SuperRun):
 
     def train(self):
         script = r'C:\Program Files\R\R-4.3.1\bin\Rscript.exe'
+        dim_input = 'hd_input' if self.xtrain.ndim > 1 else '1d_input'
+        which_script = r'reference_code\GPPCA\gppca_{:s}.R'.format(dim_input)
+        print(which_script)
         subprocess.call([script,
-                         r'reference_code\GPPCA\gppca.R',
+                         which_script,
                          str(self.data_dir),
                          str(self.data_dir.joinpath('xtrain.txt')),
                          str(self.data_dir.joinpath('ytrain.txt')),
-                         str(self.data_dir.joinpath('xtest.txt'))
+                         str(self.data_dir.joinpath('xtest.txt')),
+                         str(self.num_latent)
                          ])
 
     def predict(self):

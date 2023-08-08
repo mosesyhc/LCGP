@@ -45,10 +45,10 @@ def custom_step(optim, fullbatch_flag, closure, loss,
 def optim_lbfgs(model,
                 maxiter=1000, lr=1e-1, history_size=4,
                 max_ls=15, c1=1e-2, c2=0.9,
-                pgtol=1e-5, ftol=2e-12,
+                pgtol=1e-5, ftol=2e-10,
                 verbose=False):
     def closure():
-        model.compute_aux_predictive_quantities()
+        # model.compute_aux_predictive_quantities()
         optim.zero_grad(set_to_none=True)
         nlp = model.neglpost()
         return nlp

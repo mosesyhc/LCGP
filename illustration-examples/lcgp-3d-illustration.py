@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import time
 from functions import forrester2008
@@ -6,10 +5,6 @@ from call_model import LCGPRun, SVGPRun, OILMMRun, GPPCARun
 from lcgp import evaluation
 import pandas as pd
 
-
-plt.style.use(['science', 'no-latex', 'grid'])
-plt.rcParams.update({'font.size': 14,
-                     'lines.markersize': 12})
 
 outputdir = 'illustration-examples/output/'
 ns = [50, 100, 250, 500]
