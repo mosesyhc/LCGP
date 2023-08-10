@@ -35,7 +35,7 @@ for n in ns:
 
         for k, model in enumerate([LCGPRun, LCGPRun, LCGPRun]):
             modelrun = model(runno='n{:d}_runno{:d}'.format(n, i), data=data,
-                             num_latent=2, submethod=submethods[k], verbose=False)
+                             num_latent=3, submethod=submethods[k], verbose=False)
             modelrun.define_model()
             traintime0 = time.time()
             modelrun.train()

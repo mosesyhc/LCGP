@@ -458,8 +458,10 @@ class LCGP(nn.Module):
 
         # regularization
         negelbo += pc['lLmb'] * (lLmb ** 2).sum() + \
-                   pc['lLmb0'] * 2 * (lLmb0 ** 2).sum()
+                   pc['lLmb0'] * (2 / n) * (lLmb0 ** 2).sum()
         negelbo += -(lnugGPs + 100).log().sum()
+
+        negelbo /= n
 
         return negelbo
 
@@ -583,8 +585,10 @@ class LCGP(nn.Module):
         negproflik += n / 2 * lsigma2s.sum()
 
         negproflik += pc['lLmb'] * (lLmb ** 2).sum() + \
-                      pc['lLmb0'] * 10 * (lLmb0 ** 2).sum()
+                      pc['lLmb0'] * (2 / n) * (lLmb0 ** 2).sum()
         negproflik += -(lnugGPs + 100).log().sum()
+
+        negproflik /= n
         return negproflik
 
     @torch.no_grad()
