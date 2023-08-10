@@ -3,6 +3,7 @@ import torch.nn as nn
 from .covmat import Matern32
 from .hyperparameter_tuning import parameter_clamping
 from .optim import optim_lbfgs
+
 torch.set_default_dtype(torch.double)
 
 
@@ -10,6 +11,7 @@ class LCGP(nn.Module):
     """
     Implementation of latent component Gaussian process.
     """
+
     def __init__(self,
                  y: torch.double,
                  x: torch.double,
@@ -17,7 +19,8 @@ class LCGP(nn.Module):
                  var_threshold: float = None,
                  parameter_clamp_flag: bool = False,
                  robust_mean: bool = True,
-                 penalty_const: dict = None):
+                 penalty_const: dict = None,
+                 lcgp_submethod: str = 'full'):
         """
         Constructor for LCGP class.
 
@@ -40,9 +43,19 @@ class LCGP(nn.Module):
         """
         super().__init__()
         self.method = 'LCGP'
+        self.submethod = lcgp_submethod
+        self.submethod_loss_map = {'full': self.neglpost,
+                                   'elbo': self.negelbo,
+                                   'proflik': self.negproflik}
+        self.submethod_predict_map = {'full': self.predict_full,
+                                      'elbo': self.predict_elbo,
+                                      'proflik': self.predict_proflik}
         self.x = x
 
         self.parameter_clamp_flag = parameter_clamp_flag
+        if self.submethod != 'full':
+            self.parameter_clamp_flag = True
+
         if (q is not None) and (var_threshold is not None):
             raise ValueError('Include only q or var_threshold but not both.')
         self.q = q
@@ -62,7 +75,6 @@ class LCGP(nn.Module):
         # reset q if none is provided
         self.g, self.phi, self.diag_D, self.q = \
             self.init_phi(var_threshold=var_threshold)
-        # self.ghat = torch.zeros_like(self.g)
 
         self.lLmb, self.lLmb0, self.lnugGPs, self.lsigma2s = \
             (torch.zeros(size=[self.q, self.d], dtype=torch.double),
@@ -81,8 +93,10 @@ class LCGP(nn.Module):
         self.init_params()
 
         # placeholders for predictive quantities
-        self.CinvMs = torch.zeros(size=[self.q, self.n])
-        self.Ths = torch.zeros(size=[self.q, self.n, self.n])
+        self.CinvMs = torch.full(size=[self.q, self.n], fill_value=torch.nan)
+        self.Ths = torch.full(size=[self.q, self.n, self.n], fill_value=torch.nan)
+        self.Th_hats = torch.full(size=[self.q, self.n, self.n], fill_value=torch.nan)
+        self.Cinvs = torch.full(size=[self.q, self.n, self.n], fill_value=torch.nan)
 
     def init_phi(self, var_threshold: float = None):
         """
@@ -104,7 +118,7 @@ class LCGP(nn.Module):
         singvals = singvals[:q]
 
         # singvals_abs = singvals.abs()
-        phi = left_u[:, :q] * torch.sqrt(torch.tensor(n,)) / singvals
+        phi = left_u[:, :q] * torch.sqrt(torch.tensor(n, )) / singvals
         diag_D = (phi ** 2).sum(0)
 
         g = phi.T @ y
@@ -160,8 +174,20 @@ class LCGP(nn.Module):
         """
         return self.predict(x0)[0]
 
+    def loss(self):
+        submethod = self.submethod
+        loss_map = self.submethod_loss_map
+        return loss_map.get(submethod, lambda: 'Invalid choice of submethod.')()
+
     @torch.no_grad()
     def predict(self, x0, return_fullcov=False):
+        submethod = self.submethod
+        predict_map = self.submethod_predict_map
+        return predict_map.get(submethod, lambda: 'Invalid choice of submethod.')(
+            x0=x0, return_fullcov=return_fullcov)
+
+    @torch.no_grad()
+    def predict_full(self, x0, return_fullcov=False):
         """
         Returns predictive quantities at new input `x0`.  Both outputs are of
         size (number of new input, output dimension).
@@ -170,6 +196,9 @@ class LCGP(nn.Module):
         variance for the true mean, full predictive covariance) if True.  Otherwise,
         only return the first three quantities.
         """
+        if self.CinvMs.isnan().any() or self.Ths.isnan().any():
+            self.compute_aux_predictive_quantities()
+
         x = self.x
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
 
@@ -192,16 +221,14 @@ class LCGP(nn.Module):
             gvar[k] = c00k - ((c0k @ Th[k]) ** 2).sum(1)
 
         psi = (phi.T * lsigma2s.exp().sqrt()).T
-        self.g = psi.T @ self.y
-        self.ghat = (lsigma2s.exp().sqrt() * ghat.T).T
 
         predmean = psi @ ghat
         confvar = (gvar.T @ (psi ** 2).T)
         predvar = (gvar.T @ (psi ** 2).T) + lsigma2s.exp()
 
         ypred = self.tx_y(predmean)
-        yconfvar = confvar.T * self.ystd**2
-        ypredvar = predvar.T * self.ystd**2
+        yconfvar = confvar.T * self.ystd ** 2
+        ypredvar = predvar.T * self.ystd ** 2
 
         if return_fullcov:
             CH = gvar.sqrt().T[:, :, None] * psi.T[None, :, :]
@@ -210,7 +237,7 @@ class LCGP(nn.Module):
                                         CH.permute(*torch.arange(CH.ndim - 1, -1, -1)))\
                            + lsigma2s.exp().diag()
             yfullpredcov.transpose_(0, 2)
-            yfullpredcov *= self.ystd**2
+            yfullpredcov *= self.ystd ** 2
             return ypred, ypredvar, yconfvar, yfullpredcov
 
         return ypred, ypredvar, yconfvar
@@ -239,7 +266,7 @@ class LCGP(nn.Module):
             IpdkCkinv = Uk / (1.0 + D[k] * Wk) @ Uk.T
 
             CkinvMk = IpdkCkinv @ B.T[k]
-            Thk = Uk * ((D[k] * Wk**2) / (Wk**2 + D[k] * Wk**3)).sqrt() @ Uk.T
+            Thk = Uk * ((D[k] * Wk ** 2) / (Wk ** 2 + D[k] * Wk ** 3)).sqrt() @ Uk.T
 
             CinvM[k] = CkinvMk
             Th[k] = Thk
@@ -319,27 +346,29 @@ class LCGP(nn.Module):
         q = self.q
         D = self.diag_D
         phi = self.phi
-        psi = (phi.T / lsigma2s.exp().sqrt()).T
+        psi_c = (phi.T / lsigma2s.exp().sqrt()).T
 
         nlp = 0
-        nlp += n/2 * lsigma2s.sum()
-        nlp += 1/2 * ((y.T / lsigma2s.exp().sqrt()) ** 2).sum()
 
         for k in range(q):
             Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
             Wk, Uk = torch.linalg.eigh(Ck)
 
-            Qk = Uk / (D[k] + 1/Wk) @ Uk.T   # Qk = inv(dk In + Ckinv) = dkInpCkinv_inv
-            Pk = psi.T[k].outer(psi.T[k])
+            Qk = Uk / (D[k] + 1 / Wk) @ Uk.T  # Qk = inv(dk In + Ckinv) = dkInpCkinv_inv
+            Pk = psi_c.T[k].outer(psi_c.T[k])
 
             yQk = y @ Qk
             yPk = y.T @ Pk.T
 
-            nlp += 1/2 * (1 + D[k] * Wk).log().sum()
-            nlp -= 1/2 * (yQk * yPk.T).sum()
+            nlp += 1 / 2 * (1 + D[k] * Wk).log().sum()
+            nlp -= 1 / 2 * (yQk * yPk.T).sum()
+
+        nlp += n / 2 * lsigma2s.sum()
+        nlp += 1 / 2 * ((y.T / lsigma2s.exp().sqrt()) ** 2).sum()
 
         # regularization
-        nlp += pc['lLmb'] * (lLmb ** 2).sum() + pc['lLmb0'] * (2/n) * (lLmb0 ** 2).sum()
+        nlp += pc['lLmb'] * (lLmb ** 2).sum() + pc['lLmb0'] * (2 / n) * (
+                lLmb0 ** 2).sum()
         nlp += -(lnugGPs + 100).log().sum()
 
         nlp /= n
@@ -363,9 +392,9 @@ class LCGP(nn.Module):
         """
         Set soft boundary for parameters.
         """
-        d = torch.tensor(lLmb.shape[1],)
+        d = torch.tensor(lLmb.shape[1], )
         lLmb = (parameter_clamping(lLmb.T,
-                                   torch.tensor((-2.5 + 1/2 * torch.log(d), 2.5)))).T
+                                   torch.tensor((-2.5 + 1 / 2 * torch.log(d), 2.5)))).T
         lLmb0 = parameter_clamping(lLmb0, torch.tensor((-4, 4)))
         lsigma2s = parameter_clamping(lsigma2s, torch.tensor((-12, 1)))
         lnugs = parameter_clamping(lnugs, torch.tensor((-16, -6)))
@@ -385,3 +414,250 @@ class LCGP(nn.Module):
         if len(grad) > 0:
             grad = torch.cat(grad, 0)
         return grad
+
+    def negelbo(self):
+        n = self.n
+        x = self.x
+        y = self.y
+        pc = self.penalty_const
+
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+        B = (self.y.T / lsigma2s.exp().sqrt()) @ self.phi
+        D = self.diag_D
+        phi = self.phi
+
+        psi = (phi.T * lsigma2s.exp().sqrt()).T
+
+        M = torch.zeros([self.q, n])
+
+        negelbo = 0
+        for k in range(self.q):
+            Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+
+            Wk, Uk = torch.linalg.eigh(Ck)
+            dkInpCkinv = Uk / Wk @ Uk.T + D[k] * torch.eye(n)
+
+            # (dk * In + Ckinv)^{-1}
+            dkInpCkinv_inv = Uk / (D[k] + 1 / Wk) @ Uk.T
+            Mk = dkInpCkinv_inv @ B.T[k]
+            Vk = 1 / dkInpCkinv.diag()
+
+            CkinvhMk = (Uk / Wk.sqrt() @ Uk.T) @ Mk
+
+            M[k] = Mk
+
+            negelbo += 1 / 2 * Wk.log().sum()
+            negelbo += 1 / 2 * (CkinvhMk ** 2).sum()
+            negelbo -= 1 / 2 * Vk.log().sum()
+            negelbo += 1 / 2 * (Vk * D[k] * (Uk / Wk @ Uk.T).diag()).sum()
+
+        resid = (y.T - M.T @ psi.T) / lsigma2s.exp().sqrt()
+
+        negelbo += 1 / 2 * (resid ** 2).sum()
+        negelbo += n / 2 * lsigma2s.sum()
+
+        # regularization
+        negelbo += pc['lLmb'] * (lLmb ** 2).sum() + \
+                   pc['lLmb0'] * 2 * (lLmb0 ** 2).sum()
+        negelbo += -(lnugGPs + 100).log().sum()
+
+        return negelbo
+
+    @torch.no_grad()
+    def compute_elbo_predictive_quantities(self):
+        x = self.x
+        n = self.n
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+
+        D = self.diag_D
+        # B := Y @ Sigma^{-1/2} @ Phi
+        B = (self.y.T / lsigma2s.exp().sqrt()) @ self.phi
+
+        CinvM = torch.zeros([self.q, self.n])
+        Th_hats = torch.zeros([self.q, self.n, self.n])
+
+        for k in range(self.q):
+            Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+
+            Wk, Uk = torch.linalg.eigh(Ck)
+
+            # (I + D_k * C_k)^{-1}
+            IpdkCkinv = Uk / (1.0 + D[k] * Wk) @ Uk.T
+            dkInpCkinv = Uk / Wk @ Uk.T + D[k] * torch.eye(n)
+
+            Vk = 1 / dkInpCkinv.diag()
+
+            CkinvMk = IpdkCkinv @ B.T[k]
+            CinvM[k] = CkinvMk
+
+            Th_hats[k] = Uk @ (torch.diag(1 / Wk) -
+                               (Uk / Wk).T @ Vk.diag() @ (Uk / Wk)) @ Uk.T
+
+        self.CinvMs = CinvM
+        self.Th_hats = Th_hats
+
+    @torch.no_grad()
+    def predict_elbo(self, x0, return_fullcov=False):
+        if self.CinvMs.isnan().any() or self.diagSs.isnan().any():
+            self.compute_elbo_predictive_quantities()
+
+        x = self.x
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+
+        phi = self.phi
+
+        CinvM = self.CinvMs
+        Th_hats = self.Th_hats
+
+        x0 = self.standardize_x(x0)
+        n0 = x0.shape[0]
+
+        ghat = torch.zeros([self.q, n0])
+        gvar = torch.zeros([self.q, n0])
+        for k in range(self.q):
+            c00k = Matern32(x0, x0, diag_only=True, llmb=lLmb[k], llmb0=lLmb0[k],
+                            lnug=lnugGPs[k])
+            c0k = Matern32(x0, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+
+            ghat[k] = c0k @ CinvM[k]
+            gvar[k] = c00k - ((c0k @ Th_hats[k]) ** 2).sum(1)
+
+        psi = (phi.T * lsigma2s.exp().sqrt()).T
+
+        predmean = psi @ ghat
+        confvar = (gvar.T @ (psi ** 2).T)
+        predvar = (gvar.T @ (psi ** 2).T) + lsigma2s.exp()
+
+        ypred = self.tx_y(predmean)
+        yconfvar = confvar.T * self.ystd ** 2
+        ypredvar = predvar.T * self.ystd ** 2
+
+        if return_fullcov:
+            CH = gvar.sqrt().T[:, :, None] * psi.T[None, :, :]
+            CH.transpose_(1, 2)
+            yfullpredcov = \
+                torch.einsum('nij,jkn->nik', CH,
+                             CH.permute(*torch.arange(CH.ndim - 1, -1, -1))) \
+                + lsigma2s.exp().diag()
+            yfullpredcov.transpose_(0, 2)
+            yfullpredcov *= self.ystd ** 2
+            return ypred, ypredvar, yconfvar, yfullpredcov
+
+        return ypred, ypredvar, yconfvar
+
+    def negproflik(self):
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+        x = self.x
+        y = self.y
+
+        pc = self.penalty_const
+
+        n = self.n
+        q = self.q
+        D = self.diag_D
+        phi = self.phi
+        psi = (phi.T * lsigma2s.exp().sqrt()).T
+
+        B = (self.y.T / lsigma2s.exp().sqrt()) @ self.phi
+        G = torch.zeros([self.q, n])
+
+        negproflik = 0
+
+        for k in range(q):
+            Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+            Wk, Uk = torch.linalg.eigh(Ck)
+
+            dkInpCkinv_inv = Uk / (D[k] + 1 / Wk) @ Uk.T
+            Gk = dkInpCkinv_inv @ B.T[k]
+
+            CkinvhGk = (Uk / Wk.sqrt() @ Uk.T) @ Gk
+
+            G[k] = Gk
+
+            negproflik += 1 / 2 * Wk.log().sum()
+            negproflik += 1 / 2 * (CkinvhGk ** 2).sum()
+
+        resid = (y.T - G.T @ psi.T) / lsigma2s.exp().sqrt()
+
+        negproflik += 1 / 2 * (resid ** 2).sum()
+        negproflik += n / 2 * lsigma2s.sum()
+
+        negproflik += pc['lLmb'] * (lLmb ** 2).sum() + \
+                      pc['lLmb0'] * 10 * (lLmb0 ** 2).sum()
+        negproflik += -(lnugGPs + 100).log().sum()
+        return negproflik
+
+    @torch.no_grad()
+    def compute_proflik_predictive_quantities(self):
+        x = self.x
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+
+        D = self.diag_D
+        B = (self.y.T / lsigma2s.exp().sqrt()) @ self.phi
+
+        Cinvs = torch.zeros(size=[self.q, self.n, self.n])
+        CinvMs = torch.zeros(size=[self.q, self.n])
+        for k in range(self.q):
+            Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+            Wk, Uk = torch.linalg.eigh(Ck)
+
+            dkInpCkinv_inv = Uk / (D[k] + 1 / Wk) @ Uk.T
+            Gk = dkInpCkinv_inv @ B.T[k]
+
+            CkinvGk = (Uk / Wk @ Uk.T) @ Gk
+
+            CinvMs[k] = CkinvGk
+            Cinvs[k] = Uk / Wk @ Uk.T
+
+        self.CinvMs = CinvMs
+        self.Cinvs = Cinvs
+        return
+
+    @torch.no_grad()
+    def predict_proflik(self, x0, return_fullcov=False):
+        if self.CinvMs.isnan().any() or self.Cinvs.isnan().any():
+            self.compute_proflik_predictive_quantities()
+
+        x = self.x
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+
+        phi = self.phi
+
+        CinvM = self.CinvMs
+        Cinvs = self.Cinvs
+
+        x0 = self.standardize_x(x0)
+        n0 = x0.shape[0]
+
+        ghat = torch.zeros([self.q, n0])
+        gvar = torch.zeros([self.q, n0])
+        for k in range(self.q):
+            c00k = Matern32(x0, x0, diag_only=True, llmb=lLmb[k], llmb0=lLmb0[k],
+                            lnug=lnugGPs[k])
+            c0k = Matern32(x0, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+
+            ghat[k] = c0k @ CinvM[k]
+            gvar[k] = c00k - ((c0k @ Cinvs[k]) ** 2).sum(1)
+
+        psi = (phi.T * lsigma2s.exp().sqrt()).T
+
+        predmean = psi @ ghat
+        confvar = (gvar.T @ (psi ** 2).T)
+        predvar = (gvar.T @ (psi ** 2).T) + lsigma2s.exp()
+
+        ypred = self.tx_y(predmean)
+        yconfvar = confvar.T * self.ystd ** 2
+        ypredvar = predvar.T * self.ystd ** 2
+
+        if return_fullcov:
+            CH = gvar.sqrt().T[:, :, None] * psi.T[None, :, :]
+            CH.transpose_(1, 2)
+            yfullpredcov = \
+                torch.einsum('nij,jkn->nik', CH,
+                             CH.permute(*torch.arange(CH.ndim - 1, -1, -1))) \
+                + lsigma2s.exp().diag()
+            yfullpredcov.transpose_(0, 2)
+            yfullpredcov *= self.ystd ** 2
+            return ypred, ypredvar, yconfvar, yfullpredcov
+
+        return ypred, ypredvar, yconfvar
