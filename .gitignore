@@ -70,6 +70,6 @@ submethod-illustration/figures/
 
 submethod-illustration/output/
 
-submethod-illustration/lcgp-submethod-illustration-mean-var-plot.py
-
 submethod-illustration/illustrate-submethod-loss.py
+
+submethod-illustration/lcgp-submethod-illustration-mean-var-plot.py
