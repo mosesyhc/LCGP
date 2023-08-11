@@ -73,3 +73,7 @@ submethod-illustration/output/
 submethod-illustration/illustrate-submethod-loss.py
 
 submethod-illustration/lcgp-submethod-illustration-mean-var-plot.py
+
+real-data-example/data/
+
+real-data-example/output/

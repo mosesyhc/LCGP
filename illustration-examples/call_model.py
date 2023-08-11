@@ -17,7 +17,8 @@ class SuperRun:
         self.ytrain = data['ytrain']
         self.xtest = data['xtest']
         self.ytest = data['ytest']
-        self.ytrue = data['ytrue']
+        if 'ytrue' in data.keys():
+            self.ytrue = data['ytrue']
         self.runno = runno
         self.model = None
         self.modelname = ''

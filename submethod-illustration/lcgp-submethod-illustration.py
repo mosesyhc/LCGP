@@ -78,3 +78,15 @@ for n in ns:
                                                                 modelrun.runno),
                 predvar
             )
+            np.savetxt(
+                outputdir + '{:s}_{:s}_{:s}_gmean.csv'.format(modelrun.modelname,
+                                                                 modelrun.submethod,
+                                                                 modelrun.runno),
+                modelrun.model.ghat.detach().numpy()
+            )
+            np.savetxt(
+                outputdir + '{:s}_{:s}_{:s}_gvar.csv'.format(modelrun.modelname,
+                                                                modelrun.submethod,
+                                                                modelrun.runno),
+                modelrun.model.gvar.detach().numpy()
+            )
