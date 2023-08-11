@@ -96,7 +96,7 @@ class LCGP(nn.Module):
         self.CinvMs = torch.full(size=[self.q, self.n], fill_value=torch.nan)
         self.Ths = torch.full(size=[self.q, self.n, self.n], fill_value=torch.nan)
         self.Th_hats = torch.full(size=[self.q, self.n, self.n], fill_value=torch.nan)
-        self.Cinvs = torch.full(size=[self.q, self.n, self.n], fill_value=torch.nan)
+        self.Cinvhs = torch.full(size=[self.q, self.n, self.n], fill_value=torch.nan)
 
     def init_phi(self, var_threshold: float = None):
         """
@@ -219,6 +219,9 @@ class LCGP(nn.Module):
 
             ghat[k] = c0k @ CinvM[k]
             gvar[k] = c00k - ((c0k @ Th[k]) ** 2).sum(1)
+
+        self.ghat = ghat
+        self.gvar = gvar
 
         psi = (phi.T * lsigma2s.exp().sqrt()).T
 
@@ -367,8 +370,8 @@ class LCGP(nn.Module):
         nlp += 1 / 2 * ((y.T / lsigma2s.exp().sqrt()) ** 2).sum()
 
         # regularization
-        nlp += pc['lLmb'] * (lLmb ** 2).sum() + pc['lLmb0'] * (2 / n) * (
-                lLmb0 ** 2).sum()
+        nlp += pc['lLmb'] * (lLmb ** 2).sum() + \
+               pc['lLmb0'] * (2 / n) * (lLmb0 ** 2).sum()
         nlp += -(lnugGPs + 100).log().sum()
 
         nlp /= n
@@ -395,7 +398,7 @@ class LCGP(nn.Module):
         d = torch.tensor(lLmb.shape[1], )
         lLmb = (parameter_clamping(lLmb.T,
                                    torch.tensor((-2.5 + 1 / 2 * torch.log(d), 2.5)))).T
-        lLmb0 = parameter_clamping(lLmb0, torch.tensor((-4, 4)))
+        lLmb0 = parameter_clamping(lLmb0, torch.tensor((-4, 2)))
         lsigma2s = parameter_clamping(lsigma2s, torch.tensor((-12, 1)))
         lnugs = parameter_clamping(lnugs, torch.tensor((-16, -6)))
 
@@ -522,7 +525,11 @@ class LCGP(nn.Module):
             c0k = Matern32(x0, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
 
             ghat[k] = c0k @ CinvM[k]
-            gvar[k] = c00k - ((c0k @ Th_hats[k]) ** 2).sum(1)
+            gvar[k] = c00k - (c0k @ Th_hats[k] @ c0k.T).diag()
+            #  ((c0k @ Th_hats[k]) ** 2).sum(1)
+
+        self.ghat = ghat
+        self.gvar = gvar
 
         psi = (phi.T * lsigma2s.exp().sqrt()).T
 
@@ -599,7 +606,7 @@ class LCGP(nn.Module):
         D = self.diag_D
         B = (self.y.T / lsigma2s.exp().sqrt()) @ self.phi
 
-        Cinvs = torch.zeros(size=[self.q, self.n, self.n])
+        Cinvhs = torch.zeros(size=[self.q, self.n, self.n])
         CinvMs = torch.zeros(size=[self.q, self.n])
         for k in range(self.q):
             Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
@@ -611,15 +618,15 @@ class LCGP(nn.Module):
             CkinvGk = (Uk / Wk @ Uk.T) @ Gk
 
             CinvMs[k] = CkinvGk
-            Cinvs[k] = Uk / Wk @ Uk.T
+            Cinvhs[k] = Uk / Wk.sqrt() @ Uk.T
 
         self.CinvMs = CinvMs
-        self.Cinvs = Cinvs
+        self.Cinvhs = Cinvhs
         return
 
     @torch.no_grad()
     def predict_proflik(self, x0, return_fullcov=False):
-        if self.CinvMs.isnan().any() or self.Cinvs.isnan().any():
+        if self.CinvMs.isnan().any() or self.Cinvhs.isnan().any():
             self.compute_proflik_predictive_quantities()
 
         x = self.x
@@ -628,7 +635,7 @@ class LCGP(nn.Module):
         phi = self.phi
 
         CinvM = self.CinvMs
-        Cinvs = self.Cinvs
+        Cinvhs = self.Cinvhs
 
         x0 = self.standardize_x(x0)
         n0 = x0.shape[0]
@@ -641,7 +648,10 @@ class LCGP(nn.Module):
             c0k = Matern32(x0, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
 
             ghat[k] = c0k @ CinvM[k]
-            gvar[k] = c00k - ((c0k @ Cinvs[k]) ** 2).sum(1)
+            gvar[k] = c00k - ((c0k @ Cinvhs[k]) ** 2).sum(1)
+
+        self.ghat = ghat
+        self.gvar = gvar
 
         psi = (phi.T * lsigma2s.exp().sqrt()).T
 
