@@ -2,6 +2,7 @@ import numpy as np
 import time
 from call_model import LCGPRun, SVGPRun, OILMMRun
 from lcgp import evaluation
+from sklearn.model_selection import KFold
 import pandas as pd
 import pathlib
 
@@ -30,47 +31,56 @@ for item in xlabel:
 
 err_struct = list(xlabel_group_counts.values())
 
-xtrain = np.loadtxt(datadir + '/xtrain.txt')
-ytrain = np.loadtxt(datadir + '/ytrain.txt')
-xtest = np.loadtxt(datadir + '/xtest.txt')
-ytest = np.loadtxt(datadir + '/ytest.txt')
+xfull = np.loadtxt(datadir + '/xfull.txt')
+yfull = np.loadtxt(datadir + '/yfull.txt')
 
-data = {
-    'xtrain': xtrain,
-    'xtest': xtest,
-    'ytrain': ytrain,
-    'ytest': ytest
-}
+num_cv = 5
+kfold = KFold(n_splits=num_cv, shuffle=True, random_state=42)
+# xtrain = np.loadtxt(datadir + '/xtrain.txt')
+# ytrain = np.loadtxt(datadir + '/ytrain.txt')
+# xtest = np.loadtxt(datadir + '/xtest.txt')
+# ytest = np.loadtxt(datadir + '/ytest.txt')
 
-robusts = [False, None, None]
-for model in [LCGPRun, SVGPRun, OILMMRun]:
-    modelrun = model(runno='', data=data,
-                     num_latent=30, robust=robusts[0], err_struct=err_struct)
-    modelrun.define_model()
-    traintime0 = time.time()
-    modelrun.train()
-    traintime1 = time.time()
-    predmean, predvar = modelrun.predict()
-
-    rmse = evaluation.rmse(ytest, predmean)
-    nrmse = evaluation.normalized_rmse(ytest, predmean)
-    pcover, pwidth = evaluation.intervalstats(ytest, predmean, predvar)
-    dss = evaluation.dss(ytest, predmean, predvar, use_diag=True)
-
-    result = {
-        'modelname': modelrun.modelname,
-        'modelrun': modelrun.runno,
-        'function': 'VAH',
-        'n': modelrun.n,
-        'traintime': traintime1 - traintime0,
-        'rmse': rmse,
-        'nrmse': nrmse,
-        'pcover': pcover,
-        'pwidth': pwidth,
-        'dss': dss
+for run, (train_index, test_index) in enumerate(kfold.split(xfull)):
+    data = {
+        'xtrain': xfull[train_index],
+        'xtest': xfull[test_index],
+        'ytrain': yfull[:, train_index],
+        'ytest': yfull[:, test_index]
     }
 
-    df = pd.DataFrame.from_dict(result, orient='index').reset_index()
-    df.to_csv(
-        outputdir + '{:s}_{:s}.csv'.format(modelrun.modelname, result['function']))
-    break
+    robusts = [True, None, None]
+    for model in [LCGPRun, SVGPRun, OILMMRun]:
+        modelrun = model(runno=str(run), data=data,
+                         num_latent=15, robust=robusts[0], err_struct=err_struct)
+        modelrun.define_model()
+        traintime0 = time.time()
+        modelrun.train()
+        traintime1 = time.time()
+        predmean, predvar = modelrun.predict()
+
+        rmse = evaluation.rmse(data['ytest'], predmean)
+        nrmse = evaluation.normalized_rmse(data['ytest'], predmean)
+        pcover, pwidth = evaluation.intervalstats(data['ytest'], predmean, predvar)
+        dss = evaluation.dss(data['ytest'], predmean, predvar, use_diag=True)
+
+        result = {
+            'modelname': modelrun.modelname,
+            'modelrun': modelrun.runno,
+            'function': 'VAH',
+            'n': modelrun.n,
+            'traintime': traintime1 - traintime0,
+            'rmse': rmse,
+            'nrmse': nrmse,
+            'pcover': pcover,
+            'pwidth': pwidth,
+            'dss': dss
+        }
+
+        df = pd.DataFrame.from_dict(result, orient='index').reset_index()
+        df.to_csv(
+            outputdir + '{:s}_{:s}_cv{:s}_lat{:d}.csv'.format(modelrun.modelname,
+                                                              result['function'],
+                                                              modelrun.runno,
+                                                              modelrun.num_latent))
+        del modelrun
