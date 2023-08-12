@@ -15,6 +15,7 @@ class LCGP(nn.Module):
                  x: torch.double,
                  q: int = None,
                  var_threshold: float = None,
+                 diag_error_structure: list = None,
                  parameter_clamp_flag: bool = False,
                  robust_mean: bool = True,
                  penalty_const: dict = None):
@@ -32,13 +33,14 @@ class LCGP(nn.Module):
         :param parameter_clamp_flag: Set soft boundary for GP hyperparameters if True.
         Defaults to False.
         :param robust_mean: Set output standardization option to median and absolute
-        deviation if True.
-            Defaults to True.
+        deviation if True. Defaults to True.
         :param penalty_const: Dictionary to set regularization constants for
         log_lengthscale and log_scale, e.g.,
         {'lLmb': 10, 'lLmb0': 5}.  Defaults to {'lLmb': 40, 'lLmb0': 5}.
         """
         super().__init__()
+        x, y = self.verify_data_types(x, y)
+
         self.method = 'LCGP'
         self.x = x
 
@@ -57,18 +59,25 @@ class LCGP(nn.Module):
         # placeholders for variables
         self.n, self.d, self.p = 0, 0, 0
         # verify that input and output dimensions match
+        # sets n, d, and p
         self.verify_dim(self.y, self.x)
 
         # reset q if none is provided
         self.g, self.phi, self.diag_D, self.q = \
             self.init_phi(var_threshold=var_threshold)
-        # self.ghat = torch.zeros_like(self.g)
+
+        if diag_error_structure is None:
+            self.diag_error_structure = [1] * self.p
+        else:
+            self.diag_error_structure = diag_error_structure
+
+        self.verify_error_structure(self.diag_error_structure, self.y)
 
         self.lLmb, self.lLmb0, self.lnugGPs, self.lsigma2s = \
             (torch.zeros(size=[self.q, self.d], dtype=torch.double),
              torch.zeros(size=[self.q], dtype=torch.double),
              torch.zeros(size=[self.q], dtype=torch.double),
-             torch.zeros(size=[self.p], dtype=torch.double))
+             torch.zeros(size=[len(self.diag_error_structure)], dtype=torch.double))
 
         if penalty_const is None:
             pc = {'lLmb': 40, 'lLmb0': 5}
@@ -122,7 +131,13 @@ class LCGP(nn.Module):
         lLmb0 = torch.zeros(self.q)
         lnugGPs = torch.Tensor(-6 * torch.ones(self.q))
 
-        lsigma2_diag = torch.Tensor(torch.log(self.y.var(1)))
+        err_struct = self.diag_error_structure
+        lsigma2_diag = torch.zeros(len(err_struct))
+        col = 0
+        for k in range(len(err_struct)):
+            lsigma2_diag[k] = torch.log(self.y[col:(col+err_struct[k])].var())
+            col += err_struct[k]
+        # lsigma2_diag = torch.Tensor(torch.log(self.y.var(1)))
 
         self.lLmb = nn.Parameter(lLmb)
         self.lLmb0 = nn.Parameter(lLmb0)
@@ -356,7 +371,15 @@ class LCGP(nn.Module):
         else:
             lLmb, lLmb0, lsigma2s, lnugGPs = \
                 self.lLmb, self.lLmb0, self.lsigma2s, self.lnugGPs
-        return lLmb, lLmb0, lsigma2s, lnugGPs
+
+        built_lsigma2s = torch.zeros(self.p)
+        err_struct = self.diag_error_structure
+        col = 0
+        for k in range(len(err_struct)):
+            built_lsigma2s[col:(col+err_struct[k])] = lsigma2s[k]
+            col += err_struct[k]
+
+        return lLmb, lLmb0, built_lsigma2s, lnugGPs
 
     @staticmethod
     def parameter_clamp(lLmb, lLmb0, lsigma2s, lnugs):
@@ -385,3 +408,16 @@ class LCGP(nn.Module):
         if len(grad) > 0:
             grad = torch.cat(grad, 0)
         return grad
+
+    @staticmethod
+    def verify_data_types(x, y):
+        if not torch.is_tensor(x):
+            x = torch.tensor(x)
+        if not torch.is_tensor(y):
+            y = torch.tensor(y)
+        return x, y
+
+    @staticmethod
+    def verify_error_structure(diag_error_structure, y):
+        assert sum(diag_error_structure) == y.shape[0], 'Sum of error_structure should'\
+                                                        ' equal the output dimension.'
