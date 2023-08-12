@@ -39,12 +39,13 @@ class SuperRun:
 
 
 class LCGPRun(SuperRun):
-    def __init__(self, submethod='full', robust=True, **kwargs):
+    def __init__(self, submethod='full', robust=True, err_struct=None, **kwargs):
         super().__init__(**kwargs)
         self.modelname = 'LCGP'
         self.num_latent = kwargs['num_latent']
         self.submethod = submethod
         self.robust = robust
+        self.err_struct = err_struct
         if self.robust:
             self.modelname += '_robust'
 
@@ -53,6 +54,7 @@ class LCGPRun(SuperRun):
                           x=tensor(self.xtrain),
                           parameter_clamp_flag=False,
                           q=self.num_latent,
+                          diag_error_structure=self.err_struct,
                           robust_mean=self.robust,
                           submethod=self.submethod)
 
