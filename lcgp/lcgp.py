@@ -20,7 +20,7 @@ class LCGP(nn.Module):
                  parameter_clamp_flag: bool = False,
                  robust_mean: bool = True,
                  penalty_const: dict = None,
-                 lcgp_submethod: str = 'full'):
+                 submethod: str = 'full'):
         """
         Constructor for LCGP class.
 
@@ -35,15 +35,17 @@ class LCGP(nn.Module):
         :param parameter_clamp_flag: Set soft boundary for GP hyperparameters if True.
         Defaults to False.
         :param robust_mean: Set output standardization option to median and absolute
-        deviation if True.
-            Defaults to True.
+        deviation if True.  Defaults to True.
         :param penalty_const: Dictionary to set regularization constants for
         log_lengthscale and log_scale, e.g.,
         {'lLmb': 10, 'lLmb0': 5}.  Defaults to {'lLmb': 40, 'lLmb0': 5}.
+        :param submethod: Optimization objective for estimating error covariance and
+        hyperparameters.  Options are 'full' (Full posterior), 'elbo' (Evidence lower
+        bound), and 'proflik' (Profile likelihood).
         """
         super().__init__()
         self.method = 'LCGP'
-        self.submethod = lcgp_submethod
+        self.submethod = submethod
         self.submethod_loss_map = {'full': self.neglpost,
                                    'elbo': self.negelbo,
                                    'proflik': self.negproflik}

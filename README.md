@@ -14,9 +14,11 @@ List of Contents:
 - [Basic Usage](#usage)
 
 ## Installation 
-The package can be installed through
+The implementation of LCGP can be installed through
 
 ```bash
 pip install lcgp
 ```
+
+## Usage
 

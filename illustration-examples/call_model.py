@@ -54,7 +54,7 @@ class LCGPRun(SuperRun):
                           parameter_clamp_flag=False,
                           q=self.num_latent,
                           robust_mean=self.robust,
-                          lcgp_submethod=self.submethod)
+                          submethod=self.submethod)
 
     def train(self):
         self.model.fit(verbose=self.verbose)
