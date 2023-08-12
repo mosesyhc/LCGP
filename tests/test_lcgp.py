@@ -10,6 +10,29 @@ from lcgp.hyperparameter_tuning import parameter_clamping
 
 
 class TestInit:
+    def test_simplest_1D(self):
+        x = torch.linspace(0, 1, 100)
+        y = x.clone()
+        LCGP(y=y, x=x)
+
+    def test_simplest_HD(self):
+        x = torch.randn(100, 5)
+        y = torch.randn(3, 100)
+        LCGP(y=y, x=x)
+
+    @pytest.mark.parametrize('err_struct', [[2, 1], [1, 1, 1], None, [1, 2]])
+    def test_err_struct(self, err_struct):
+        x = torch.randn(100, 5)
+        y = torch.randn(3, 100)
+        LCGP(y=y, x=x, diag_error_structure=err_struct)
+
+    @pytest.mark.parametrize('err_struct', [[1, 1], [0, 1, 1], [2, 2]])
+    def test_invalid_err_struct(self, err_struct):
+        x = torch.randn(100, 5)
+        y = torch.randn(3, 100)
+        with pytest.raises(AssertionError):
+            LCGP(y=y, x=x, diag_error_structure=err_struct)
+
     @pytest.mark.parametrize('robust_mean', [True, False])
     def test_robust(self, robust_mean):
         x = torch.linspace(0, 1, 100)
