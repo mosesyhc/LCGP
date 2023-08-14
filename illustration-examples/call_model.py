@@ -8,6 +8,7 @@ from oilmm.tensorflow import OILMM
 from stheno import GP, Matern32
 import pathlib
 import subprocess
+from surmise.emulation import emulator
 
 
 class SuperRun:
@@ -19,6 +20,8 @@ class SuperRun:
         self.ytest = data['ytest']
         if 'ytrue' in data.keys():
             self.ytrue = data['ytrue']
+        if 'ystd' in data.keys():
+            self.ystd = data['ystd']
         self.runno = runno
         self.model = None
         self.modelname = ''
@@ -207,14 +210,16 @@ class SVGPRun(SuperRun):
 
 
 class GPPCARun(SuperRun):
-    def __init__(self, **kwargs):
+    def __init__(self, directory=None, **kwargs):
         super().__init__(**kwargs)
         self.modelname = 'GPPCA'
         self.num_latent = kwargs['num_latent']
         self.data_dir = pathlib.WindowsPath
+        self.directory = directory
 
-    def define_model(self, directory=''):
-        data_dir = r'{:s}/data'.format(directory) + '/{:s}'.format(self.runno) + r'/'
+    def define_model(self):
+        data_dir = r'{:s}/data'.format(self.directory) + '/{:s}'.format(
+            self.runno) + r'/'
         pathlib.Path(data_dir).mkdir(exist_ok=True, parents=True)
         self.data_dir = pathlib.Path(data_dir).absolute()
 
@@ -239,3 +244,34 @@ class GPPCARun(SuperRun):
         ypredmean = np.loadtxt(self.data_dir.joinpath('ypredmean.txt'))
         ypredvar = np.loadtxt(self.data_dir.joinpath('ypredvar.txt'))
         return ypredmean, ypredvar
+
+
+class PCSKRun(SuperRun):
+    def __init__(self, sim_std=None, **kwargs):
+        super().__init__(**kwargs)
+        self.modelname = 'PCSK'
+        self.num_latent = kwargs['num_latent']
+        self.sim_std = sim_std
+
+    def define_model(self):
+        pass
+
+    def train(self):
+        p = self.ytrain.shape[0]
+        locations = np.arange(p).reshape((p, 1))
+        self.locations = locations
+        pcsk = emulator(x=locations, theta=self.xtrain,
+                        f=self.ytrain, method='PCSK',
+                        args={'numpcs': self.num_latent,
+                              'simsd': self.ystd}
+                        )
+        self.model = pcsk
+
+    def predict(self):
+        locations = self.locations
+        pcsk = self.model
+        predclass = pcsk.predict(x=locations, theta=self.xtest)
+        pcskmean = predclass.mean()
+        pcskvar = predclass.var()
+
+        return pcskmean, pcskvar

@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from call_model import LCGPRun, SVGPRun, OILMMRun
+from call_model import PCSKRun
 from lcgp import evaluation
 from sklearn.model_selection import KFold
 import pandas as pd
@@ -33,6 +33,7 @@ err_struct = list(xlabel_group_counts.values())
 
 xfull = np.loadtxt(datadir + '/xfull.txt')
 yfull = np.loadtxt(datadir + '/yfull.txt')
+yfullstd = np.loadtxt(datadir + '/yfullstd.txt').T
 
 num_cv = 5
 kfold = KFold(n_splits=num_cv, shuffle=True, random_state=42)
@@ -46,13 +47,15 @@ for run, (train_index, test_index) in enumerate(kfold.split(xfull)):
         'xtrain': xfull[train_index],
         'xtest': xfull[test_index],
         'ytrain': yfull[:, train_index],
-        'ytest': yfull[:, test_index]
+        'ytest': yfull[:, test_index],
+        'ystd': yfullstd[:, train_index]
     }
 
     robusts = [True, None, None]
-    for model in [LCGPRun, SVGPRun, OILMMRun]:
+    for model in [PCSKRun]:
         modelrun = model(runno=str(run), data=data,
-                         num_latent=15, robust=robusts[0], err_struct=err_struct)
+                         num_latent=15, robust=robusts[0],
+                         err_struct=err_struct)
         modelrun.define_model()
         traintime0 = time.time()
         modelrun.train()
