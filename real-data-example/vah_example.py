@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from call_model import PCSKRun
+from call_model import LCGPRun, PCSKRun, OILMMRun, SVGPRun
 from lcgp import evaluation
 from sklearn.model_selection import KFold
 import pandas as pd
@@ -51,10 +51,10 @@ for run, (train_index, test_index) in enumerate(kfold.split(xfull)):
         'ystd': yfullstd[:, train_index]
     }
 
-    robusts = [True, None, None]
-    for model in [PCSKRun]:
+    robusts = [True, False, None, None, None]
+    for k, model in enumerate([LCGPRun, LCGPRun, PCSKRun, OILMMRun, SVGPRun]):
         modelrun = model(runno=str(run), data=data,
-                         num_latent=15, robust=robusts[0],
+                         num_latent=12, robust=robusts[k],
                          err_struct=err_struct)
         modelrun.define_model()
         traintime0 = time.time()
