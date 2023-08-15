@@ -16,12 +16,11 @@ plt.rcParams.update({'font.size': 20,
 CNcolors = mpl.rcParams['axes.prop_cycle']
 
 outputdir = 'real-data-example/output/'
-figuredir = 'real-data-example/figures/'
+figuredir = 'real-data-example/figures/_lat12/'
 pathlib.Path(figuredir).mkdir(exist_ok=True)
 
-
 # Get a list of all csv files in the directory
-txt_files = glob.glob(outputdir + '*.csv')
+txt_files = glob.glob(outputdir + '*_lat12.csv')
 
 # Initialize an empty DataFrame
 dflist = []
@@ -41,10 +40,11 @@ df = df.astype(dtype_dict)
 
 # Get unique values from 'Color' column
 unique_models = df['modelname'].unique()
+[unique_models[0], unique_models[1]] = [unique_models[1], unique_models[0]]
 # Create a dictionary mapping unique colors to the 'tab10' colormap
 color_mapping = dict(zip(unique_models,
-                         itertools.cycle(['C3', 'C4', 'C7', 'C5'])))
-marker_mapping = dict(zip(unique_models, itertools.cycle(['s', 'v', 'X', 'P'])))
+                         itertools.cycle(['C2', 'C3', 'C4', 'C7', 'C5'])))
+marker_mapping = dict(zip(unique_models, itertools.cycle([ 's', '^', 'v', 'X', 'P'])))
 
 # color_mapping['LCGP'] = color_mapping['LCGP_robust']
 # marker_mapping['LCGP'] = marker_mapping['LCGP_robust']
@@ -62,7 +62,7 @@ df['styles'] = styles
 groupby_df = df.groupby(by='modelname').median(numeric_only=True)
 
 plot_ylist = {
-    # 'rmse': 'RMSE',
+              'rmse': 'RMSE',
               'logrmse': 'Log RMSE',
               'lognrmse': 'Log Normalized RMSE',
               'logdss': ' Log DS Score'}
@@ -105,7 +105,9 @@ boxplot_ylist = {'pcover': '95% Coverage',
 for y, yname in boxplot_ylist.items():
     plt.figure(figsize=(10, 10))
     sns.boxplot(y=y, x='modelname',
-                data=subdf, palette=color_mapping, width=0.5)
+                data=subdf, palette=color_mapping,
+                order=unique_models,
+                width=0.5)
     if y == 'pcover':
         plt.axhline(y=0.95, color='black', linestyle='--', linewidth=2)
     plt.xlabel('')
