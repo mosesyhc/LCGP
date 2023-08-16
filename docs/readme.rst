@@ -15,11 +15,14 @@ List of Contents:
 Installation
 ------------
 
-The package can be installed through
+The implementation of LCGP can be installed through
 
 .. code:: bash
 
    pip install lcgp
+
+Usage
+-----
 
 .. |CI| image:: https://github.com/mosesyhc/lcgp/actions/workflows/ci.yml/badge.svg?branch=main
    :target: https://github.com/mosesyhc/LCGP/actions/workflows/ci.yml
