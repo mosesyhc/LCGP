@@ -12,9 +12,9 @@ outputdir = r'experiments/output/'
 pathlib.Path(outputdir).mkdir(exist_ok=True)
 
 rep_n = 2
-output_dims = [8]
+output_dims = [4, 8]
 ns = [50, 100, 250, 500]
-funcs = ['borehole']
+funcs = ['wingweight', 'otlcircuit']
 ntest = 800
 
 for function in funcs:

@@ -65,3 +65,17 @@ illustration-examples/lcgp-3d-illustration-plot.py
 illustration-examples/lcgp-3d-mean-var.py
 
 experiments/experiment-plot.py
+
+submethod-illustration/figures/
+
+submethod-illustration/output/
+
+submethod-illustration/illustrate-submethod-loss.py
+
+submethod-illustration/lcgp-submethod-illustration-mean-var-plot.py
+
+real-data-example/data/
+
+real-data-example/output/
+
+real-data-example/figures/

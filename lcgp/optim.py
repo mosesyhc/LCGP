@@ -48,10 +48,9 @@ def optim_lbfgs(model,
                 pgtol=1e-5, ftol=2e-10,
                 verbose=False):
     def closure():
-        # model.compute_aux_predictive_quantities()
         optim.zero_grad(set_to_none=True)
-        nlp = model.neglpost()
-        return nlp
+        loss = model.loss()
+        return loss
 
     lbfgs, fullbatch_flag = which_lbfgs()
 
@@ -63,7 +62,7 @@ def optim_lbfgs(model,
                           line_search_fn='strong_wolfe')
         else:
             optim = lbfgs(filter(lambda p: p.requires_grad, model.parameters()), lr=lr,
-                          dtype=torch.float64, debug=True)
+                          dtype=torch.float64, debug=False)
         optim.zero_grad(set_to_none=True)
         loss = closure()
         loss.backward()
@@ -91,7 +90,6 @@ def optim_lbfgs(model,
         loss, grad, lr, d = custom_step(optim, fullbatch_flag, closure, loss,
                                         history_size=history_size, c1=c1, c2=c2,
                                         max_ls=max_ls)
-
         if grad.isnan().any():
             flag = 'GRAD_NAN'
             print('exit after epoch {:d}, invalid gradient'.format(epoch)) 
