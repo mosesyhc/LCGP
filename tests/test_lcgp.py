@@ -20,6 +20,12 @@ class TestInit:
         y = torch.randn(3, 40)
         LCGP(y=y, x=x)
 
+    def test_print_model(self):
+        x = torch.randn(40, 5)
+        y = torch.randn(3, 40)
+        model = LCGP(y=y, x=x)
+        print(model)
+
     @pytest.mark.parametrize('err_struct', [[2, 1], [1, 1, 1], None, [1, 2]])
     def test_err_struct(self, err_struct):
         x = torch.randn(40, 5)
@@ -154,10 +160,10 @@ class TestEvaluation:
 
 
 class TestTraining:
+    @pytest.mark.parametrize('x', [np.linspace(0, 1, 40), torch.linspace(0, 1, 40)])
     @pytest.mark.parametrize('submethod', ['full', 'elbo', 'proflik'])
-    def test_fit(self, submethod):
-        x = torch.linspace(0, 1, 40)
-        y = x.clone()
+    def test_fit(self, x, submethod):
+        y = x
         model = LCGP(y=y, x=x, submethod=submethod)
         model.fit(maxiter=15)
         model.predict(x0=x)

@@ -3,6 +3,7 @@ import torch.nn as nn
 from .covmat import Matern32
 from .hyperparameter_tuning import parameter_clamping
 from .optim import optim_lbfgs
+from pprint import pformat
 
 torch.set_default_dtype(torch.double)
 
@@ -21,7 +22,8 @@ class LCGP(nn.Module):
                  parameter_clamp_flag: bool = False,
                  robust_mean: bool = True,
                  penalty_const: dict = None,
-                 submethod: str = 'full'):
+                 submethod: str = 'full',
+                 verbose: bool = False):
         """
         Constructor for LCGP class.
 
@@ -50,9 +52,13 @@ class LCGP(nn.Module):
         :param submethod: Optimization objective for estimating error covariance and
         hyperparameters.  Options are 'full' (Full posterior), 'elbo' (Evidence lower
         bound), and 'proflik' (Profile likelihood).
+        :param verbose: Prints training progress if True.  Defaults to False.
         """
         super().__init__()
-        x, y = self.verify_data_types(x, y)
+        self.verbose = verbose
+        self.robust_mean = robust_mean
+        x = self.verify_data_types(x)
+        y = self.verify_data_types(y)
 
         self.method = 'LCGP'
         self.submethod = submethod
@@ -77,7 +83,7 @@ class LCGP(nn.Module):
         self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = \
             self.init_standard_x(x)
         # standardize y
-        self.y, self.ymean, self.ystd, self.y_orig = self.standardize_y(y, robust_mean)
+        self.y, self.ymean, self.ystd, self.y_orig = self.standardize_y(y)
 
         # placeholders for variables
         self.n, self.d, self.p = 0, 0, 0
@@ -117,6 +123,27 @@ class LCGP(nn.Module):
         self.Ths = torch.full(size=[self.q, self.n, self.n], fill_value=torch.nan)
         self.Th_hats = torch.full(size=[self.q, self.n, self.n], fill_value=torch.nan)
         self.Cinvhs = torch.full(size=[self.q, self.n, self.n], fill_value=torch.nan)
+
+    def __repr__(self):
+        param_string = pformat(list(self.state_dict().items()))
+        param_string = param_string.replace('lLmb0', 'Latent GP log-scale')
+        param_string = param_string.replace('lLmb', 'Latent GP log-lengthscale')
+        param_string = param_string.replace('lnugGPs', 'Latent GP nugget scale')
+        param_string = param_string.replace('lsigma2s', 'Diagonal error log-variance')
+        desc = 'LCGP(\n' \
+               '\tsubmethod:\t{:s}\n' \
+               '\toutput dimension:\t{:d}\n' \
+               '\tnumber of latent components:\t{:d}\n' \
+               '\tparameter_clamping:\t{:s}\n' \
+               '\trobust_standardization:\t{:s}\n' \
+               '\tdiagonal_error structure:\t{:s}\n' \
+               '\tparameters:\t\n{:s}\n)'.format(self.submethod, self.p,
+                                                 self.q, str(self.parameter_clamp_flag),
+                                                 str(self.robust_mean),
+                                                 str(self.diag_error_structure),
+                                                 param_string
+                                                 )
+        return desc
 
     def init_phi(self, var_threshold: float = None):
         """
@@ -160,7 +187,7 @@ class LCGP(nn.Module):
         lsigma2_diag = torch.zeros(len(err_struct))
         col = 0
         for k in range(len(err_struct)):
-            lsigma2_diag[k] = torch.log(self.y[col:(col+err_struct[k])].var())
+            lsigma2_diag[k] = torch.log(self.y[col:(col + err_struct[k])].var())
             col += err_struct[k]
         # lsigma2_diag = torch.Tensor(torch.log(self.y.var(1)))
 
@@ -186,18 +213,22 @@ class LCGP(nn.Module):
         self.p = p
         return
 
-    def fit(self, **kwargs):
+    def fit(self, verbose=False, **kwargs):
         """
         Calls optimizer for fitting the LCGP instance.
         """
-        _, niter, flag = optim_lbfgs(self, **kwargs)
-        return niter, flag
+        _, niter, flag = optim_lbfgs(self, verbose=verbose, **kwargs)
+        if verbose:
+            return niter, flag
+        else:
+            return
 
     def forward(self, x0):
         """
         Returns predictive mean at new input `x0`.  The output is of size
         (number of new input, output dimension).
         """
+        x0 = self.verify_data_types(x0)
         return self.predict(x0)[0]
 
     def loss(self):
@@ -356,6 +387,7 @@ class LCGP(nn.Module):
         variance for the true mean, full predictive covariance) if True.  Otherwise,
         only return the first three quantities.
         """
+        x0 = self.verify_data_types(x0)
         submethod = self.submethod
         predict_map = self.submethod_predict_map
         try:
@@ -657,12 +689,12 @@ class LCGP(nn.Module):
         """
         return xs * (self.x_max - self.x_min) + self.x_min
 
-    @staticmethod
-    def standardize_y(y, robust_mean):
+    def standardize_y(self, y):
         """
         Standardizes outputs and collects summary information.  Uses median and absolute
         deviation if `robust_mean` is True.  Otherwise, use mean and standard deviation.
         """
+        robust_mean = self.robust_mean
         if y.ndim < 2:
             y = y.unsqueeze(0)
 
@@ -701,7 +733,7 @@ class LCGP(nn.Module):
         err_struct = self.diag_error_structure
         col = 0
         for k in range(len(err_struct)):
-            built_lsigma2s[col:(col+err_struct[k])] = lsigma2s[k]
+            built_lsigma2s[col:(col + err_struct[k])] = lsigma2s[k]
             col += err_struct[k]
 
         return lLmb, lLmb0, built_lsigma2s, lnugGPs
@@ -735,20 +767,19 @@ class LCGP(nn.Module):
         return grad
 
     @staticmethod
-    def verify_data_types(x, y):
+    def verify_data_types(t):
         """
         Verify if inputs are PyTorch tensors, if not, cast into tensors.
         """
-        if not torch.is_tensor(x):
-            x = torch.tensor(x)
-        if not torch.is_tensor(y):
-            y = torch.tensor(y)
-        return x, y
+        if not torch.is_tensor(t):
+            t = torch.tensor(t)
+        return t
 
     @staticmethod
     def verify_error_structure(diag_error_structure, y):
         """
         Verifies if diagonal error structure input, if any, is valid.
         """
-        assert sum(diag_error_structure) == y.shape[0], 'Sum of error_structure should'\
-                                                        ' equal the output dimension.'
+        assert sum(diag_error_structure) == y.shape[0], \
+            'Sum of error_structure should' \
+            ' equal the output dimension.'

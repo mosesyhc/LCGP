@@ -20,5 +20,30 @@ The implementation of LCGP can be installed through
 pip install lcgp
 ```
 
-## Usage
+## Basic usage
+```python
+import numpy as np
+from lcgp import LCGP
+from lcgp import evaluation  # optional evaluation module
+
+# Generate fifty 2-dimensional input and 4-dimensional output
+x = np.random.randn(50, 2)
+y = np.random.randn(4, 50)
+
+# Define LCGP model
+model = LCGP(y=y, x=x)
+
+# Estimate error covariance and hyperparameters
+model.fit()
+
+# Prediction
+p = model.predict(x0=x)  # mean and variance
+rmse = evaluation.rmse(y, p[0].numpy())
+dss = evaluation.dss(y, p[0].numpy(), p[1].numpy(), use_diag=True)
+print('Root mean squared error: {:.3E}'.format(rmse))
+print('Dawid-Sebastiani score: {:.3f}'.format(dss))
+
+# Access parameters
+print(model)
+```
 
