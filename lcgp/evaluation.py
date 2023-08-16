@@ -3,15 +3,25 @@ import scipy.stats as sps
 
 
 def rmse(y, ypredmean):
-    return np.mean((y - ypredmean) ** 2)
+    """
+    Returns root mean squared error.
+    """
+    return np.sqrt(np.mean((y - ypredmean) ** 2))
 
 
 def normalized_rmse(y, ypredmean):
+    """
+    Returns normalized root mean squared error, error normalized by range for each
+    output dimension.
+    """
     rng = (np.max(y, axis=1) - np.min(y, axis=1)).reshape(y.shape[0], 1)
-    return np.mean(((y - ypredmean) / rng)**2)
+    return np.sqrt(np.mean(((y - ypredmean) / rng)**2))
 
 
-def dss(y, ypredmean, ypredcov, use_diag):  # Dawid-Sebastani score (1999)
+def dss(y, ypredmean, ypredcov, use_diag):
+    """
+    Returns Dawid-Sebastiani score from Gneiting et al. (2007) Eq. 25.
+    """
     def __dss_single(f, mu, Sigma):
         r = f - mu
         W, U = np.linalg.eigh(Sigma)
@@ -41,6 +51,10 @@ def dss(y, ypredmean, ypredcov, use_diag):  # Dawid-Sebastani score (1999)
 
 
 def intervalstats(y, ypredmean, ypredvar):
+    """
+    Returns empirical coverage and length of interval given true/observed $y$,
+    predictive means and variances.
+    """
     ylower = ypredmean + np.sqrt(ypredvar) * sps.norm.ppf(0.025)
     yupper = ypredmean + np.sqrt(ypredvar) * sps.norm.ppf(0.975)
 

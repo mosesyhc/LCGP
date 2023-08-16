@@ -7,6 +7,10 @@ PG_CONV_FLAG = 0
 
 
 def which_lbfgs():
+    """
+    Determines the implementation of LBFGS.  FullBatchLBFGS implementation at
+    github.com/hjmshi/PyTorch-LBFGS is recommended.
+    """
     optim_list = \
         [name for name, _ in inspect.getmembers(importlib.import_module('torch.optim'),
                                                 inspect.isclass)]
@@ -23,6 +27,9 @@ def which_lbfgs():
 
 def custom_step(optim, fullbatch_flag, closure, loss,
                 **kwargs):
+    """
+    Takes LBFGS step given implementation.
+    """
     if fullbatch_flag:
         options = {'closure': closure, 'current_loss': loss,
                    'history_size': kwargs.get('history_size'),
@@ -47,6 +54,21 @@ def optim_lbfgs(model,
                 max_ls=15, c1=1e-2, c2=0.9,
                 pgtol=1e-5, ftol=2e-10,
                 verbose=False):
+    """
+    Main optimization runner for LCGP model.
+
+    :param model: LCGP class.
+    :param maxiter: Maximum iteration of optimization steps to take.  Defaults to 1000.
+    :param lr: Initial step size.  Defaults to 0.1.
+    :param history_size:  History buffer kept for Hessian estimation.  Defaults to 4.
+    :param max_ls: Maximum number of weak Wolfe line searches.  Defaults to 15.
+    :param c1:  Constant for Armijo condition.  Defaults to 1e-2.
+    :param c2:  Constant for weak Wolfe condition.  Defaults to 0.9.
+    :param pgtol:  Projected gradient tolerance.  Defaults to 1e-5.
+    :param ftol:  Absolute function difference tolerance.  Defaults to 2e-10.
+    :param verbose:  Print progress if True.
+    :return: LCGP class, number of iterations taken, and convergence flag.
+    """
     def closure():
         optim.zero_grad(set_to_none=True)
         loss = model.loss()

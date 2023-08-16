@@ -2,6 +2,17 @@ import torch
 
 
 def Matern32(x1, x2, llmb, llmb0, lnug, diag_only: bool = False):
+    """
+    Returns the Matern 3/2 covariance matrix.
+
+    :param x1: input 1 of size (number of inputs in x1, dimension of input)
+    :param x2: input 2 of size (number of inputs in x2, dimension of input)
+    :param llmb: log-lengthscale hyperparameter for each dimension
+    :param llmb0: log-scale hyperparameter
+    :param lnug: parameter to tune the nugget, nugget = exp(lnug) / (1 + exp(lnug))
+    :param diag_only: returns diagonal of covariance matrix if True. Default to False.
+    :return: covariance matrix of size (n1, n2)
+    """
     # assumes tensors are supplied
     assert x1.dim() == 2, 'input x1 should be 2-dimensional, (n_param, dim_param)'
     assert x2.dim() == 2, 'input x2 should be 2-dimensional, (n_param, dim_param)'
@@ -40,11 +51,12 @@ def Matern32_sp(x, xi, llmb, llmb0, lnug):  # assuming x1 = x2 = theta
     Returns the Nystr{\"o}m approximation of a covariance matrix,
     its inverse, and the log of its determinant.
 
-    :param lnug:
-    :param x:
-    :param xi:
-    :param llmb:
-    :return:
+    :param x: input of size (number of inputs, dimension of input)
+    :param xi: inducing inputs of size (number of inducing inputs, dimension of input)
+    :param llmb: log-lengthscale hyperparameter for each dimension
+    :param llmb0: log-scale hyperparameter
+    :param lnug: parameter to tune the nugget, nugget = exp(lnug) / (1 + exp(lnug))
+    :return: a covariance matrix of size (n, n)
     '''
 
     c_full_i = Matern32(x, xi, llmb=llmb, llmb0=llmb0, lnug=lnug)

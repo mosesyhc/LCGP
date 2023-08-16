@@ -1,7 +1,7 @@
 import torch
 
 
-def parameter_clamping(t, trng, c:float=1.23):
+def parameter_clamping(t, trng, c: float = 1.23):
     """
     Returns clamped hyperparameter between a given range.
     For each dimension, the parameter clamping follows
