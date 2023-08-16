@@ -11,69 +11,69 @@ from lcgp.hyperparameter_tuning import parameter_clamping
 
 class TestInit:
     def test_simplest_1D(self):
-        x = torch.linspace(0, 1, 100)
+        x = torch.linspace(0, 1, 40)
         y = x.clone()
         LCGP(y=y, x=x)
 
     def test_simplest_HD(self):
-        x = torch.randn(100, 5)
-        y = torch.randn(3, 100)
+        x = torch.randn(40, 5)
+        y = torch.randn(3, 40)
         LCGP(y=y, x=x)
 
     @pytest.mark.parametrize('err_struct', [[2, 1], [1, 1, 1], None, [1, 2]])
     def test_err_struct(self, err_struct):
-        x = torch.randn(100, 5)
-        y = torch.randn(3, 100)
+        x = torch.randn(40, 5)
+        y = torch.randn(3, 40)
         LCGP(y=y, x=x, diag_error_structure=err_struct)
 
     @pytest.mark.parametrize('err_struct', [[1, 1], [0, 1, 1], [2, 2]])
     def test_invalid_err_struct(self, err_struct):
-        x = torch.randn(100, 5)
-        y = torch.randn(3, 100)
+        x = torch.randn(40, 5)
+        y = torch.randn(3, 40)
         with pytest.raises(AssertionError):
             LCGP(y=y, x=x, diag_error_structure=err_struct)
 
     @pytest.mark.parametrize('robust_mean', [True, False])
     def test_robust(self, robust_mean):
-        x = torch.linspace(0, 1, 100)
+        x = torch.linspace(0, 1, 40)
         y = x.clone()
         LCGP(y=y, x=x, robust_mean=robust_mean)
 
     def test_invalid_q_varthreshold(self):
-        x = torch.linspace(0, 1, 100)
-        y = torch.randn((3, 100))
+        x = torch.linspace(0, 1, 40)
+        y = torch.randn((3, 40))
         with pytest.raises(ValueError):
             LCGP(y=y, x=x, q=2, var_threshold=0.9)
 
     def test_varthreshold(self):
-        x = torch.linspace(0, 1, 100)
-        y = torch.randn((3, 100))
-        LCGP(y=y, x=x, var_threshold=0.9)
+        x = torch.linspace(0, 1, 40)
+        y = torch.randn((3, 40))
+        LCGP(y=y, x=x, q=None, var_threshold=0.9)
 
     @pytest.mark.parametrize('penalty_constant', [None,
                                                   {'lLmb': 0, 'lLmb0': 0},
                                                   {'lLmb': 40, 'lLmb0': 5}])
     def test_penalty(self, penalty_constant):
-        x = torch.linspace(0, 1, 100)
+        x = torch.linspace(0, 1, 40)
         y = x.clone()
         LCGP(y=y, x=x, penalty_const=penalty_constant)
 
     @pytest.mark.parametrize('penalty_constant', [{'lLmb': -5, 'lLmb0': 10},
                                                   {'lLmb': 5, 'lLmb0': -10}])
     def test_invalid_penalty(self, penalty_constant):
-        x = torch.linspace(0, 1, 100)
+        x = torch.linspace(0, 1, 40)
         y = x.clone()
         with pytest.raises(AssertionError):
             LCGP(y=y, x=x, penalty_const=penalty_constant)
 
-    @pytest.mark.parametrize('x, y', [(torch.linspace(0, 1, 100),
-                                       torch.randn((3, 50)))])
+    @pytest.mark.parametrize('x, y', [(torch.linspace(0, 1, 40),
+                                       torch.randn((3, 25)))])
     def test_mismatch_dimension(self, x, y):
         with pytest.raises(AssertionError):
             LCGP(y=y, x=x)
 
     def test_tx_xy(self):
-        x = torch.linspace(0, 1, 100)
+        x = torch.linspace(0, 1, 40)
         y = x.clone()
         model = LCGP(y=y, x=x)
         model.tx_x(model.x)
@@ -81,32 +81,32 @@ class TestInit:
 
 @pytest.mark.parametrize('llmb, llmb0, lnug', [(tensor(0.), tensor(0.), tensor(-12.))])
 class TestCov1D:
-    @pytest.mark.parametrize('x1', [torch.linspace(0, 1, 100).unsqueeze(1)])
-    @pytest.mark.parametrize('x2', [torch.linspace(0, 1, 100).unsqueeze(1),
-                                    torch.linspace(0, 1, 50).unsqueeze(1)])
+    @pytest.mark.parametrize('x1', [torch.linspace(0, 1, 40).unsqueeze(1)])
+    @pytest.mark.parametrize('x2', [torch.linspace(0, 1, 40).unsqueeze(1),
+                                    torch.linspace(0, 1, 25).unsqueeze(1)])
     def test_Matern1D(self, x1, x2, llmb, llmb0, lnug):
         Matern32(x1=x1, x2=x2, llmb=llmb, llmb0 = llmb0, lnug=lnug)
 
-    @pytest.mark.parametrize('x1', [torch.linspace(0, 1, 100).unsqueeze(1)])
+    @pytest.mark.parametrize('x1', [torch.linspace(0, 1, 40).unsqueeze(1)])
     def test_Matern1D_diag(self, x1, llmb, llmb0, lnug):
         Matern32(x1, x1, llmb=llmb, llmb0=llmb0, lnug=lnug, diag_only=True)
 
-    @pytest.mark.parametrize('x1', [torch.linspace(0, 1, 100)])
-    @pytest.mark.parametrize('x2', [torch.linspace(0, 1, 100),
-                                    torch.linspace(0, 1, 50)])
+    @pytest.mark.parametrize('x1', [torch.linspace(0, 1, 40)])
+    @pytest.mark.parametrize('x2', [torch.linspace(0, 1, 40),
+                                    torch.linspace(0, 1, 25)])
     def test_invalid_Matern1D(self, x1, x2, llmb, llmb0, lnug):
         with pytest.raises(AssertionError):
             Matern32(x1=x1, x2=x2, llmb=llmb, llmb0=llmb0, lnug=lnug)
 
-    @pytest.mark.parametrize('x', [torch.linspace(0, 1, 100).unsqueeze(1)])
-    @pytest.mark.parametrize('xi', [torch.linspace(0, 1, 100).unsqueeze(1),
-                                    torch.linspace(0, 1, 50).unsqueeze(1)])
+    @pytest.mark.parametrize('x', [torch.linspace(0, 1, 40).unsqueeze(1)])
+    @pytest.mark.parametrize('xi', [torch.linspace(0, 1, 40).unsqueeze(1),
+                                    torch.linspace(0, 1, 25).unsqueeze(1)])
     def test_Matern1D_sp(self, x, xi, llmb, llmb0, lnug):
         Matern32_sp(x=x, xi=xi, llmb=llmb, llmb0 = llmb0, lnug=lnug)
 
-    @pytest.mark.parametrize('x', [torch.linspace(0, 1, 100)])
-    @pytest.mark.parametrize('xi', [torch.linspace(0, 1, 100),
-                                    torch.linspace(0, 1, 50)])
+    @pytest.mark.parametrize('x', [torch.linspace(0, 1, 40)])
+    @pytest.mark.parametrize('xi', [torch.linspace(0, 1, 40),
+                                    torch.linspace(0, 1, 25)])
     def test_invalid_Matern1D_sp(self, x, xi, llmb, llmb0, lnug):
         with pytest.raises(AssertionError):
             Matern32_sp(x=x, xi=xi, llmb=llmb, llmb0=llmb0, lnug=lnug)
@@ -114,17 +114,17 @@ class TestCov1D:
 @pytest.mark.parametrize('llmb, llmb0, lnug', [(tensor([0., 0.]), tensor(0.),
                                                 tensor(-12.))])
 class TestCovHD:
-    @pytest.mark.parametrize('X1, X2', [(torch.randn((100, 2)),
-                                         torch.randn((100, 2)))])
+    @pytest.mark.parametrize('X1, X2', [(torch.randn((40, 2)),
+                                         torch.randn((40, 2)))])
     def test_Matern2D(self, X1, X2, llmb, llmb0, lnug):
         Matern32(x1=X1, x2=X2, llmb=llmb, llmb0=llmb0, lnug=lnug)
 
-    @pytest.mark.parametrize('X1', [torch.randn((100, 2))])
+    @pytest.mark.parametrize('X1', [torch.randn((40, 2))])
     def test_Matern2D_diag(self, X1, llmb, llmb0, lnug):
         Matern32(x1=X1, x2=X1, llmb=llmb, llmb0=llmb0, lnug=lnug, diag_only=True)
 
 
-@pytest.mark.parametrize('y1', [np.random.normal(0, 1, (3, 100))])
+@pytest.mark.parametrize('y1', [np.random.normal(0, 1, (3, 40))])
 class TestEvaluation:
     def test_rmse(self, y1):
         y2 = y1 + 1e-16 * np.random.randn(*y1.shape)
@@ -154,10 +154,11 @@ class TestEvaluation:
 
 
 class TestTraining:
-    def test_fit(self):
-        x = torch.linspace(0, 1, 100)
+    @pytest.mark.parametrize('submethod', ['full', 'elbo', 'proflik'])
+    def test_fit(self, submethod):
+        x = torch.linspace(0, 1, 40)
         y = x.clone()
-        model = LCGP(y=y, x=x)
+        model = LCGP(y=y, x=x, submethod=submethod)
         model.fit(maxiter=15)
         model.predict(x0=x)
         model.predict(x0=x, return_fullcov=True)
@@ -166,28 +167,36 @@ class TestTraining:
         model.get_param_grad()
 
     def test_optim_edge_lr(self):
-        x = torch.linspace(0, 1, 100)
+        x = torch.linspace(0, 1, 40)
         y = x.clone()
         model = LCGP(y=y, x=x)
         model.fit(maxiter=15, lr=20, verbose=True)
 
     def test_optim_edge_ftol(self):
-        x = torch.linspace(0, 1, 100)
+        x = torch.linspace(0, 1, 40)
         y = x.clone()
         model = LCGP(y=y, x=x)
         model.fit(maxiter=15, ftol=1, verbose=True)
 
     def test_optim_edge_pgtol(self):
-        x = torch.linspace(0, 1, 100)
+        x = torch.linspace(0, 1, 40)
         y = x.clone()
         model = LCGP(y=y, x=x)
         model.fit(maxiter=15, pgtol=1, verbose=True)
+
+    def test_invalid_submethod(self):
+        x = torch.linspace(0, 1, 40)
+        y = x.clone()
+        model = LCGP(y=y, x=x, submethod='null')
+        with pytest.raises(UnboundLocalError):
+            model.fit(maxiter=15)
+            model.predict(x0=x)
 
 
 class TestParameterClamping:
     @pytest.mark.parametrize('clamping', [True, False])
     def test_parameter_clamping_1d(self, clamping):
-        x = torch.linspace(0, 1, 100)
+        x = torch.linspace(0, 1, 40)
         y = x.clone()
 
         model = LCGP(y=y, x=x, parameter_clamp_flag=clamping)
