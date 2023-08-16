@@ -27,12 +27,25 @@ docs/_build
 docs/_static
 docs/source
 cover
+.coverage
 
 # illustrations
+submethod-illustration/illustrate-submethod-loss.py
+illustration-examples/lcgp-3d-illustration-addon.py
+illustration-examples/lcgp-3d-mean-var.py
 # figures
 illustration-examples/output_fig/*
 # notebooks
 illustration-examples/notebooks/*
+
+# output and plot files
+*/data/
+*/output/
+*/figures/
+*plot.py
+
+# debug files
+illustration-examples/lcgp_debug.py
 
 # other codes
 reference_code/GPPCA/
@@ -40,42 +53,5 @@ reference_code/GPPCA/
 # ignore version
 lcgp/_version.py
 
-.coverage
-
-illustration-examples/data/
-
-illustration-examples/output/
-
-illustration-examples/lcgp_debug.py
-
-experiments/output/
-
-experiments/data/
-
-illustration-examples/figures/
-
-experiments/figures/
-
-illustration-examples/lcgp-3d-illustration-addon.py
-
-illustration-examples/lcgp-3d-illustration-mean-var-plot.py
-
-illustration-examples/lcgp-3d-illustration-plot.py
-
-illustration-examples/lcgp-3d-mean-var.py
-
-experiments/experiment-plot.py
-
-submethod-illustration/figures/
-
-submethod-illustration/output/
-
-submethod-illustration/illustrate-submethod-loss.py
-
-submethod-illustration/lcgp-submethod-illustration-mean-var-plot.py
-
-real-data-example/data/
-
-real-data-example/output/
-
-real-data-example/figures/
+# pdfs
+literature/
