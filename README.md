@@ -38,12 +38,12 @@ model.fit()
 
 # Prediction
 p = model.predict(x0=x)  # mean and variance
-rmse = evaluation.rmse(y, p[0])
-dss = evaluation.dss(y, *p, use_diag=True)
+rmse = evaluation.rmse(y, p[0].numpy())
+dss = evaluation.dss(y, p[0].numpy(), p[1].numpy(), use_diag=True)
 print('Root mean squared error: {:.3E}'.format(rmse))
 print('Dawid-Sebastiani score: {:.3f}'.format(dss))
 
 # Access parameters
-model.get_param()
+print(model)
 ```
 
