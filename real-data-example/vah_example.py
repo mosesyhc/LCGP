@@ -20,8 +20,12 @@ xlabel_group_counts = {}
 
 for item in xlabel:
     item = item.strip('\n')
-    category = item.split('_')[0].strip()
-    if not category == 'pT':
+    last_underscore = item.rfind('_')
+    # category = item.split('_')[0].strip()
+    category = item[:last_underscore]
+    if 'dN_dy' in category:
+        category = 'dN_dy'
+    if 'fluct' not in category:
         if category in xlabel_groups:
             xlabel_groups[category].append(item)
             xlabel_group_counts[category] += 1
