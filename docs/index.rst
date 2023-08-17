@@ -4,6 +4,10 @@
    contain the root `toctree` directive.
 
 .. include:: readme.rst
+
+Modules
+__________________
+
 .. toctree::
    :maxdepth: 1
 

@@ -1,4 +1,4 @@
-# Latent component Gaussian process (LCGP)
+# [Latent component Gaussian process (LCGP)](https://github.com/mosesyhc/LCGP)
 
 [![CI](https://github.com/mosesyhc/lcgp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mosesyhc/LCGP/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/mosesyhc/LCGP/badge.svg)](https://coveralls.io/github/mosesyhc/LCGP)
