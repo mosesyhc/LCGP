@@ -36,15 +36,15 @@ jobs:
           ruff --format=github --exclude=illustration-examples,reference_code,tests .
       - name: Test with pytest
         run: pytest
-     - name: Upload coverage data
-       run: |
+      - name: Upload coverage data
+        run: |
          coveralls --service=github
-       env:
+        env:
          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
          COVERALLS_PARALLEL: true
-
- finish:
+  
+  finish:
    name: Finish Coveralls
    needs: test
    runs-on: ubuntu-latest
