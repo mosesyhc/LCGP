@@ -4,7 +4,6 @@
    contain the root `toctree` directive.
 
 .. include:: readme.rst
-
 .. toctree::
    :maxdepth: 1
 
