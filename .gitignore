@@ -54,4 +54,4 @@ reference_code/GPPCA/
 lcgp/_version.py
 
 # pdfs
-literature/
+literature/*
