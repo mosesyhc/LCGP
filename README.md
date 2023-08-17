@@ -34,6 +34,7 @@ pip install lcgp
 > this implementation.
 > Installation guide on PyTorch-LBFGS can be found on 
 > [its repository](https://github.com/hjmshi/PyTorch-LBFGS).
+> Note that PyTorch-LBFGS has an additional requirement `matplotlib`.
 
 ## Basic usage
 ### What most of us need:
