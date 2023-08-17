@@ -27,7 +27,7 @@ class LCGP(nn.Module):
         """
         Constructor for LCGP class.
 
-        :param y: Simulation outputs, of size (number of input, dimension of output).
+        :param y: Simulation outputs, of size (dimension of output, number of input).
         :param x: Inputs, of size (number of input, dimension of input).
         :param q: Number of latent components to construct.
         Defaults equivalent to dimension of output.
