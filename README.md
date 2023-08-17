@@ -27,6 +27,14 @@ The implementation of LCGP can be installed through
 pip install lcgp
 ```
 
+> **Note on LBFGS optimizer:** 
+> 
+> It is strongly recommended that 
+> [PyTorch-LBFGS](https://github.com/hjmshi/PyTorch-LBFGS) is installed to fully utilize
+> this implementation.
+> Installation guide on PyTorch-LBFGS can be found on 
+> [its repository](https://github.com/hjmshi/PyTorch-LBFGS).
+
 ## Basic usage
 ### What most of us need:
 ```python
