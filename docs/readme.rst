@@ -11,13 +11,16 @@ the emulation of multivariate stochastic simulation outputs.
 List of Contents:
 
 -  `Installation <#installation>`__
--  `Basic Usage <#usage>`__
+-  `Basic Usage <#basic-usage>`__
 
-   -  `What most of us need <#simplest-working-example>`__
-   -  `Specifying number of latent components <#latent-components>`__
-   -  `Specifying diagonal error groups <#diag-error-group>`__
-   -  `Calling different submethod <#submethod>`__
-   -  `Standardization choices <#standardization>`__
+   -  `What most of us need <#what-most-of-us-need>`__
+   -  `Specifying number of latent
+      components <#specifying-number-of-latent-components>`__
+   -  `Specifying diagonal error
+      groups <#specifying-diagonal-error-groupings>`__
+   -  `Calling different
+      submethod <#define-lcgp-using-different-submethod>`__
+   -  `Standardization choices <#standardization-choices>`__
 
 Installation
 ------------
@@ -28,12 +31,8 @@ The implementation of LCGP can be installed through
 
    pip install lcgp
 
-.. _usage:
-
 Basic usage
 -----------
-
-.. _simplest-working-example:
 
 What most of us need:
 ~~~~~~~~~~~~~~~~~~~~~
@@ -64,8 +63,6 @@ What most of us need:
    # Access parameters
    print(model)
 
-.. _latent-components:
-
 Specifying number of latent components
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -86,8 +83,6 @@ one of the following arguments in initializing an LCGP instance:
 
    model_q = LCGP(y=y, x=x, q=5)
    model_var = LCGP(y=y, x=x, var_threshold=0.99)
-
-.. _diag-error-group:
 
 Specifying diagonal error groupings
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -111,13 +106,6 @@ first two have low errors and the remaining four have high errors.
    y[:2] += np.random.normal(2, 1e-3, size=(2, 100))
    y[2:] += np.random.normal(-2, 1e-1, size=(4, 100))
 
-   import matplotlib.pyplot as plt
-   fig, ax = plt.subplots(2, 3)
-   for i, axi in enumerate(ax.flatten()):
-       axi.plot(x, y[i])
-   plt.tight_layout()
-   plt.show()
-
 Then, LCGP can be defined with the argument ``diag_error_structure`` as
 a list of output dimensions to group. The following code groups the
 first 2 and the remaining 4 output dimensions.
@@ -132,8 +120,6 @@ equivalent to
 .. code:: python
 
    model_diag = LCGP(y=y, x=x, diag_error_structure=[1]*6)
-
-.. _submethod:
 
 Define LCGP using different submethod
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -156,8 +142,6 @@ outputs are deterministic, the profile likelihood method should suffice.
        model = LCGP(y=y, x=x, submethod=submethod)
        LCGP_models.append(model)
 
-.. _standardization:
-
 Standardization choices
 ~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -173,6 +157,8 @@ hyperparameter training. The two choices are implemented through
 .. code:: python
 
    model = LCGP(y=y, x=x, robust_mean=False)
+
+--------------
 
 .. |CI| image:: https://github.com/mosesyhc/lcgp/actions/workflows/ci.yml/badge.svg?branch=main
    :target: https://github.com/mosesyhc/LCGP/actions/workflows/ci.yml

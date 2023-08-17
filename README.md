@@ -12,23 +12,23 @@ ___
 List of Contents:
 
 - [Installation](#installation)
-- [Basic Usage](#usage)
-  - [What most of us need](#simplest-working-example)
-  - [Specifying number of latent components](#latent-components)
-  - [Specifying diagonal error groups](#diag-error-group)
-  - [Calling different submethod](#submethod)
-  - [Standardization choices](#standardization)
+- [Basic Usage](#basic-usage)
+  - [What most of us need](#what-most-of-us-need)
+  - [Specifying number of latent components](#specifying-number-of-latent-components)
+  - [Specifying diagonal error groups](#specifying-diagonal-error-groupings)
+  - [Calling different submethod](#define-lcgp-using-different-submethod)
+  - [Standardization choices](#standardization-choices)
 
 
-## Installation {#installation}
+## Installation
 The implementation of LCGP can be installed through
 
 ```bash
 pip install lcgp
 ```
 
-## Basic usage {#usage}
-### What most of us need: {#simplest-working-example}
+## Basic usage
+### What most of us need:
 ```python
 import numpy as np
 from lcgp import LCGP
@@ -55,7 +55,7 @@ print('Dawid-Sebastiani score: {:.3f}'.format(dss))
 print(model)
 ```
 
-### Specifying number of latent components {#latent-components}
+### Specifying number of latent components
 There are two ways to specify the number of latent components by 
 passing one of the following arguments in initializing an LCGP instance:
 
@@ -71,7 +71,7 @@ model_q = LCGP(y=y, x=x, q=5)
 model_var = LCGP(y=y, x=x, var_threshold=0.99)
 ```
 
-### Specifying diagonal error groupings {#diag-error-group}
+### Specifying diagonal error groupings
 If errors of multiple output dimensions are expected to be similar, the error variances
 can be grouped in estimation.  
 
@@ -89,13 +89,6 @@ y = np.row_stack((
 
 y[:2] += np.random.normal(2, 1e-3, size=(2, 100))
 y[2:] += np.random.normal(-2, 1e-1, size=(4, 100))
-
-import matplotlib.pyplot as plt
-fig, ax = plt.subplots(2, 3)
-for i, axi in enumerate(ax.flatten()):
-    axi.plot(x, y[i])
-plt.tight_layout()
-plt.show()
 ```
 
 Then, LCGP can be defined with the argument `diag_error_structure` as a list
@@ -112,7 +105,7 @@ equivalent to
 model_diag = LCGP(y=y, x=x, diag_error_structure=[1]*6)
 ```
 
-### Define LCGP using different submethod {#submethod}
+### Define LCGP using different submethod
 Three submethods are implemented under LCGP:
 
 * Full posterior (`full`)
@@ -131,7 +124,7 @@ for submethod in submethods:
     LCGP_models.append(model)
 ```
 
-### Standardization choices{#standardization}
+### Standardization choices
 LCGP standardizes the simulation output by each dimension to facilitate hyperparameter
 training.  The two choices are implemented through `robust_mean = True` or 
 `robust_mean = False`. 
@@ -142,3 +135,5 @@ training.  The two choices are implemented through `robust_mean = True` or
 ```python
 model = LCGP(y=y, x=x, robust_mean=False)
 ```
+
+---
