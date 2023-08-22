@@ -4,7 +4,6 @@ Dheevatsa Mudigere (Facebook).  Refer to https://github.com/hjmshi/PyTorch-LBFGS
 '''
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
 from functools import reduce
 from copy import deepcopy
 from torch.optim import Optimizer
@@ -147,13 +146,6 @@ def polyinterp(points, x_min_bound=None, x_max_bound=None, plot=False):
                     if np.isreal(F_cp) and F_cp < f_min:
                         x_sol = np.real(crit_pt)
                         f_min = np.real(F_cp)
-
-            if (plot):
-                plt.figure()
-                x = np.arange(x_min_bound, x_max_bound, (x_max_bound - x_min_bound) / 10000)
-                f = np.polyval(coeff, x)
-                plt.plot(x, f)
-                plt.plot(x_sol, f_min, 'x')
 
     return x_sol
 
