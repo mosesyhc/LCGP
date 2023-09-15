@@ -19,8 +19,11 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.mathjax',
               'sphinx.ext.viewcode',
               'sphinx.ext.napoleon',
+              'sphinxcontrib.bibtex',
+              'sphinx_copybutton',
               'myst_parser']
 
+bibtex_bibfiles = ['lcgp.bib']
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
@@ -39,10 +42,36 @@ todo_include_todos = True
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 html_theme = 'sphinx_book_theme'
-#
-# html_theme_options = {
-#     "repository_url": "https://github.com/{your-docs-url}",
-#     "use_repository_button": True,
-# }
+
+# Side bar elements
+html_sidebars = {
+    "*": [
+        "navbar-logo.html",
+        "search-field.html",
+        "sbt-sidebar-nav.html"
+    ]
+}
+
+html_theme_options = {
+    "path_to_docs": "docs",
+    "show_navbar_depth": 2,
+    "repository_url": "https://github.com/mosesyhc/lcgp",
+    "use_source_button": True,
+    "use_repository_button": True,
+    "use_issues_button": True,
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/mosesyhc/lcgp",
+            "icon": "fa-brands fa-github",
+        },
+        {
+            "name": "PyPI",
+            "url": "https://pypi.org/project/lcgp/",
+            "icon": "https://img.shields.io/pypi/dw/lcgp",
+            "type": "url",
+        },
+    ],
+}
 
 html_title = "Latent component Gaussian process"

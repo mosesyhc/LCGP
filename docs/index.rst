@@ -1,4 +1,4 @@
-.. lcgp documentation master file, created by
+.. lcgp documentation main file, created by
    sphinx-quickstart on Sat Jul 22 22:33:09 2023.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
@@ -9,7 +9,8 @@ Modules
 __________________
 
 .. toctree::
-   :maxdepth: 1
+   :caption: Modules
+   :maxdepth: 2
 
    modules
 
