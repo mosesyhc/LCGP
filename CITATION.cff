@@ -8,8 +8,7 @@ message: >-
   metadata from this file.
 type: software
 authors:
-  - given-names: Moses
-    name-particle: Y.-H.
+  - given-names: Moses Y.-H.
     family-names: Chan
     email: mosesyhc@u.northwestern.edu
     affiliation: Northwestern University
