@@ -41,6 +41,17 @@ The implementation of LCGP can be installed through
    PyTorch-LBFGS can be found on `its
    repository <https://github.com/hjmshi/PyTorch-LBFGS>`__.
 
+Test suite
+~~~~~~~~~~
+
+A list of basic tests is provided for user to verify that LCGP is installed correctly.
+Execute the follow code within the root directory:
+
+.. code:: bash
+
+    pip install pytest pytest-cov
+    pytest
+
 Basic usage
 -----------
 

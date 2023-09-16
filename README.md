@@ -3,6 +3,7 @@
 [![CI](https://github.com/mosesyhc/lcgp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mosesyhc/LCGP/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/mosesyhc/LCGP/badge.svg)](https://coveralls.io/github/mosesyhc/LCGP)
 [![Documentation Status](https://readthedocs.org/projects/lcgp/badge/?version=latest)](https://lcgp.readthedocs.io/en/latest/?badge=latest)
+[![PyPI version](https://badge.fury.io/py/lcgp.svg)](https://badge.fury.io/py/lcgp)
 
 Implementation of latent component Gaussian process (LCGP).  LCGP handles the emulation
 of multivariate stochastic simulation outputs. 
@@ -34,6 +35,9 @@ pip install lcgp
 > this implementation.
 > Installation guide on PyTorch-LBFGS can be found on 
 > [its repository](https://github.com/hjmshi/PyTorch-LBFGS).
+> Note that PyTorch-LBFGS has an additional requirement `matplotlib`.  The source code of a version
+> of PyTorch-LBFGS that **does not** require `matplotlib` is included in [reference_code](reference_code/).
+> 
 
 ## Basic usage
 ### What most of us need:

@@ -1,0 +1,30 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: Latent component Gaussian process
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Moses Y.-H.
+    family-names: Chan
+    email: mosesyhc@u.northwestern.edu
+    affiliation: Northwestern University
+    orcid: 'https://orcid.org/0000-0002-2181-5116'
+identifiers:
+  - type: url
+    value: 'https://github.com/mosesyhc/lcgp'
+repository-code: 'https://github.com/mosesyhc/lcgp'
+url: 'https://lcgp.readthedocs.io'
+abstract: >-
+  An emulator strategy for multivariate stochastic
+  simulations.
+keywords:
+  - stochastic simulation
+  - multivariate output
+  - gaussian process
+  - emulator
+  - surrogate
+license: MIT
