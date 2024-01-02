@@ -14,7 +14,7 @@ The development of this work is described fully in the following work, cited as:
 .. code-block:: 
 
    @phdthesis{chan2023thesis,
-     author  = "Moses Y.-H, Chan",
+     author  = "Moses Y.-H. Chan",
      title   = "High-Dimensional Gaussian Process Methods for Uncertainty Quantification",
      school  = "Northwestern University",
      year    = "2023",
