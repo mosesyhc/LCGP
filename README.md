@@ -8,6 +8,17 @@
 Implementation of latent component Gaussian process (LCGP).  LCGP handles the emulation
 of multivariate stochastic simulation outputs. 
 
+## Reference
+The development of this work is described fully in the following work, cited as:
+```
+@phdthesis{chan2023thesis,
+  author  = "Moses Y.-H, Chan",
+  title   = "High-Dimensional Gaussian Process Methods for Uncertainty Quantification",
+  school  = "Northwestern University",
+  year    = "2023",
+}
+```
+
 ___
 
 List of Contents:

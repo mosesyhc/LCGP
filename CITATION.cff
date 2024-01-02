@@ -2,7 +2,7 @@
 # Visit https://bit.ly/cffinit to generate yours today!
 
 cff-version: 1.2.0
-title: Latent component Gaussian process
+title: LCGP
 message: >-
   If you use this software, please cite it using the
   metadata from this file.
@@ -10,21 +10,30 @@ type: software
 authors:
   - given-names: Moses Y.-H.
     family-names: Chan
-    email: mosesyhc@u.northwestern.edu
+    email: moses.chan@northwestern.edu
     affiliation: Northwestern University
     orcid: 'https://orcid.org/0000-0002-2181-5116'
 identifiers:
   - type: url
-    value: 'https://github.com/mosesyhc/lcgp'
+    value: 'https://lcgp.readthedocs.io/en/latest/'
+    description: 'LCGP documentation, v0.1.2'
 repository-code: 'https://github.com/mosesyhc/lcgp'
-url: 'https://lcgp.readthedocs.io'
+url: 'https://lcgp.readthedocs.io/en/latest/'
 abstract: >-
-  An emulator strategy for multivariate stochastic
-  simulations.
+  A statistical surrogate to model multivariate stochastic
+  simulation model outputs.
 keywords:
-  - stochastic simulation
-  - multivariate output
-  - gaussian process
-  - emulator
-  - surrogate
+  - emulation
+  - Gaussian process
+  - high dimensional
+  - stochastic output
 license: MIT
+commit: bedbf10f7e3aab4922d1c5a09013edb9caf61175
+version: 0.1.2
+references:
+  - type: thesis
+    title: "High-Dimensional Gaussian Process Methods for Uncertainty Quantification"
+    year: 2023
+    authors:
+    - family-names: Chan
+      given-names: Moses Y.-H.
