@@ -49,6 +49,7 @@ illustration-examples/lcgp_debug.py
 
 # other codes
 reference_code/GPPCA/
+sketch/
 
 # ignore version
 lcgp/_version.py
