@@ -45,7 +45,6 @@ class LCGP(nn.Module):
         Defaults to False.
         :param robust_mean: Set output standardization option to median and absolute
         deviation if True.  Defaults to True.
-        deviation if True. Defaults to True.
         :param penalty_const: Dictionary to set regularization constants for
         log_lengthscale and log_scale, e.g.,
         {'lLmb': 10, 'lLmb0': 5}.  Defaults equivalent to {'lLmb': 40, 'lLmb0': 5}.
