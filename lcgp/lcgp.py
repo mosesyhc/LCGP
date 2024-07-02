@@ -325,7 +325,6 @@ class LCGP(nn.Module):
             Wk_Q, Uk_Q = torch.linalg.eigh(Qk)
 
             modCk = Ck @ (torch.eye(n0) - Uk_Q / Wk_Q @ Uk_Q.T)
-            # Qk = Uk / (D[k] + 1 / Wk) @ Uk.T  # Qk = inv(dk In + Ckinv) = dkInpCkinv_inv
             Pk = psi_c.T[k].outer(psi_c.T[k])
             ryPk2 = rep0 * ybar.T @ Pk @ (rep0 * ybar)
 
