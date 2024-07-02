@@ -85,7 +85,8 @@ class LCGP(nn.Module):
             self.init_phi(var_threshold=var_threshold)
 
         # preprocess for replications
-        self.nuniq, self.xuniq, self.ybar, self.rep0, self.rep_flag = self.preprocess_reps(self.x, self.y)
+        self.nuniq, self.xuniq, self.ybar, self.rep0, self.rep_flag = \
+            self.preprocess_reps(self.x, self.y)
 
         self.submethod = submethod
         if submethod == 'full' and self.rep_flag:
@@ -319,7 +320,8 @@ class LCGP(nn.Module):
             Ck = Matern32(xu, xu, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
             Wk, Uk = torch.linalg.eigh(Ck)
 
-            Qk = Uk / Wk @ Uk.T / (D[k] * rep0) + torch.eye(n0)  # Qk = (In + dk^{-1} Ckinv R^{-1})
+            # Qk = (In + dk^{-1} Ckinv R^{-1})
+            Qk = Uk / Wk @ Uk.T / (D[k] * rep0) + torch.eye(n0)
             Wk_Q, Uk_Q = torch.linalg.eigh(Qk)
 
             modCk = Ck @ (torch.eye(n0) - Uk_Q / Wk_Q @ Uk_Q.T)
@@ -327,7 +329,8 @@ class LCGP(nn.Module):
             Pk = psi_c.T[k].outer(psi_c.T[k])
             ryPk2 = rep0 * ybar.T @ Pk @ (rep0 * ybar)
 
-            nlp += 1 / 2 * (Wk.log().sum() - Wk_Q.log().sum() - n0 * D[k].log() - rep0.log().sum())
+            nlp += 1 / 2 * (Wk.log().sum() - Wk_Q.log().sum() -
+                            n0 * D[k].log() - rep0.log().sum())
             nlp -= 1 / 2 * (ryPk2 * modCk).sum()
 
         nlp += N / 2 * lsigma2s.sum()
@@ -489,7 +492,8 @@ class LCGP(nn.Module):
     @torch.no_grad()
     def compute_aux_predictive_quantities_rep(self):
         """
-        Compute auxiliary quantities for predictions using full posterior approach, with replications.
+        Compute auxiliary quantities for predictions using full posterior
+        approach, with replications.
         """
         xu = self.xuniq
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
@@ -930,7 +934,8 @@ class LCGP(nn.Module):
 
     @staticmethod
     def preprocess_reps(x, y):
-        x0, inverse, rep0 = torch.unique(x, sorted=True, dim=0, return_inverse=True, return_counts=True)
+        x0, inverse, rep0 = torch.unique(x, sorted=True, dim=0,
+                                         return_inverse=True, return_counts=True)
         n0 = x0.shape[0]
         p = y.shape[0]
         rep0 = torch.zeros(n0)
