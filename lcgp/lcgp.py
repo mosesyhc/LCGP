@@ -60,18 +60,8 @@ class LCGP(nn.Module):
         y = self.verify_data_types(y)
 
         self.method = 'LCGP'
-        self.submethod = submethod
-        self.submethod_loss_map = {'full': self.neglpost,
-                                   'elbo': self.negelbo,
-                                   'proflik': self.negproflik}
-        self.submethod_predict_map = {'full': self.predict_full,
-                                      'elbo': self.predict_elbo,
-                                      'proflik': self.predict_proflik}
-        self.x = x
 
-        self.parameter_clamp_flag = parameter_clamp_flag
-        if self.submethod != 'full':
-            self.parameter_clamp_flag = True
+        self.x = x
 
         if (q is not None) and (var_threshold is not None):
             raise ValueError('Include only q or var_threshold but not both.')
@@ -93,6 +83,25 @@ class LCGP(nn.Module):
         # reset q if none is provided
         self.g, self.phi, self.diag_D, self.q = \
             self.init_phi(var_threshold=var_threshold)
+
+        # preprocess for replications
+        self.nuniq, self.xuniq, self.ybar, self.rep0, self.rep_flag = self.preprocess_reps(self.x, self.y)
+
+        self.submethod = submethod
+        if submethod == 'full' and self.rep_flag:
+            self.submethod += 'rep'
+        self.submethod_loss_map = {'full': self.neglpost,
+                                   'fullrep': self.neglpost_rep,
+                                   'elbo': self.negelbo,
+                                   'proflik': self.negproflik}
+        self.submethod_predict_map = {'full': self.predict_full,
+                                      'fullrep': self.predict_full_rep,
+                                      'elbo': self.predict_elbo,
+                                      'proflik': self.predict_proflik}
+
+        self.parameter_clamp_flag = parameter_clamp_flag
+        if self.submethod not in ['full', 'fullrep']:
+            self.parameter_clamp_flag = True
 
         if diag_error_structure is None:
             self.diag_error_structure = [1] * self.p
@@ -282,6 +291,56 @@ class LCGP(nn.Module):
         nlp /= n
         return nlp
 
+    def neglpost_rep(self):
+        """
+        Computes negative log posterior function, with replications.
+        """
+        assert self.rep_flag
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+        y = self.y
+
+        xu = self.x_unique
+        ybar = self.ybar
+
+        pc = self.penalty_const
+
+        N = self.n
+        n0 = self.nuniq
+        rep0 = self.rep0
+
+        q = self.q
+        D = self.diag_D
+        phi = self.phi
+        psi_c = (phi.T / lsigma2s.exp().sqrt()).T
+
+        nlp = 0
+
+        for k in range(q):
+            Ck = Matern32(xu, xu, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+            Wk, Uk = torch.linalg.eigh(Ck)
+
+            Qk = Uk / Wk @ Uk.T / (D[k] * rep0) + torch.eye(n0)  # Qk = (In + dk^{-1} Ckinv R^{-1})
+            Wk_Q, Uk_Q = torch.linalg.eigh(Qk)
+
+            modCk = Ck @ (torch.eye(n0) - Uk_Q / Wk_Q @ Uk_Q.T)
+            # Qk = Uk / (D[k] + 1 / Wk) @ Uk.T  # Qk = inv(dk In + Ckinv) = dkInpCkinv_inv
+            Pk = psi_c.T[k].outer(psi_c.T[k])
+            ryPk2 = rep0 * ybar.T @ Pk @ (rep0 * ybar)
+
+            nlp += 1 / 2 * (Wk.log().sum() - Wk_Q.log().sum() - n0 * D[k].log() - rep0.log().sum())
+            nlp -= 1 / 2 * (ryPk2 * modCk).sum()
+
+        nlp += N / 2 * lsigma2s.sum()
+        nlp += 1 / 2 * ((y.T / lsigma2s.exp().sqrt()) ** 2).sum()
+
+        # regularization
+        nlp += pc['lLmb'] * (lLmb ** 2).sum() + \
+               pc['lLmb0'] * (2 / N) * (lLmb0 ** 2).sum()
+        nlp += -(lnugGPs + 100).log().sum()
+
+        nlp /= N
+        return nlp
+
     def negelbo(self):
         n = self.n
         x = self.x
@@ -428,6 +487,38 @@ class LCGP(nn.Module):
         self.Ths = Th
 
     @torch.no_grad()
+    def compute_aux_predictive_quantities_rep(self):
+        """
+        Compute auxiliary quantities for predictions using full posterior approach, with replications.
+        """
+        xu = self.xuniq
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+
+        n0 = self.nuniq
+        rep0 = self.rep0
+
+        D = self.diag_D
+        # B := Ybar @ Sigma^{-1/2} @ Phi
+        B = (self.ybar.T / lsigma2s.exp().sqrt()) @ self.phi
+
+        CinvM = torch.zeros([self.q, n0])
+        Th = torch.zeros([self.q, n0, n0])
+
+        for k in range(self.q):
+            Ck = Matern32(xu, xu, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+            modCk = D[k] * Ck + torch.diag(1 / rep0)
+
+            Wk, Uk = torch.linalg.eigh(modCk)
+
+            CkinvMk = Uk / Wk @ Uk.T @ B.T[k]
+            Thk = Uk * D[k].sqrt() / Wk.sqrt() @ Uk.T
+
+            CinvM[k] = CkinvMk
+            Th[k] = Thk
+        self.CinvMs = CinvM
+        self.Ths = Th
+
+    @torch.no_grad()
     def predict_full(self, x0, return_fullcov=False):
         """
         Returns predictions using full posterior approach.
@@ -452,6 +543,60 @@ class LCGP(nn.Module):
             c00k = Matern32(x0, x0, diag_only=True, llmb=lLmb[k], llmb0=lLmb0[k],
                             lnug=lnugGPs[k])
             c0k = Matern32(x0, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+
+            ghat[k] = c0k @ CinvM[k]
+            gvar[k] = c00k - ((c0k @ Th[k]) ** 2).sum(1)
+
+        self.ghat = ghat
+        self.gvar = gvar
+
+        psi = (phi.T * lsigma2s.exp().sqrt()).T
+
+        predmean = psi @ ghat
+        confvar = (gvar.T @ (psi ** 2).T)
+        predvar = (gvar.T @ (psi ** 2).T) + lsigma2s.exp()
+
+        ypred = self.tx_y(predmean)
+        yconfvar = confvar.T * self.ystd ** 2
+        ypredvar = predvar.T * self.ystd ** 2
+
+        if return_fullcov:
+            CH = gvar.sqrt().T[:, :, None] * psi.T[None, :, :]
+            CH.transpose_(1, 2)
+            yfullpredcov = torch.einsum('nij,jkn->nik', CH,
+                                        CH.permute(*torch.arange(CH.ndim - 1, -1, -1)))\
+                           + lsigma2s.exp().diag()
+            yfullpredcov.transpose_(0, 2)
+            yfullpredcov *= self.ystd ** 2
+            return ypred, ypredvar, yconfvar, yfullpredcov
+
+        return ypred, ypredvar, yconfvar
+
+    @torch.no_grad()
+    def predict_full_rep(self, x0, return_fullcov=False):
+        """
+        Returns predictions using full posterior approach, with replications.
+        """
+        if self.CinvMs.isnan().any() or self.Ths.isnan().any():
+            self.compute_aux_predictive_quantities_rep()
+
+        xu = self.xuniq
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+
+        phi = self.phi
+
+        CinvM = self.CinvMs
+        Th = self.Ths
+
+        x0 = self.standardize_x(x0)
+        n0 = x0.shape[0]
+
+        ghat = torch.zeros([self.q, n0])
+        gvar = torch.zeros([self.q, n0])
+        for k in range(self.q):
+            c00k = Matern32(x0, x0, diag_only=True, llmb=lLmb[k], llmb0=lLmb0[k],
+                            lnug=lnugGPs[k])
+            c0k = Matern32(x0, xu, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
 
             ghat[k] = c0k @ CinvM[k]
             gvar[k] = c00k - ((c0k @ Th[k]) ** 2).sum(1)
@@ -782,3 +927,23 @@ class LCGP(nn.Module):
         assert sum(diag_error_structure) == y.shape[0], \
             'Sum of error_structure should' \
             ' equal the output dimension.'
+
+    @staticmethod
+    def preprocess_reps(x, y):
+        x0, inverse, rep0 = torch.unique(x, sorted=True, dim=0, return_inverse=True, return_counts=True)
+        n0 = x0.shape[0]
+        p = y.shape[0]
+        rep0 = torch.zeros(n0)
+
+        if x0.shape[0] == x.shape[0]:
+            rep_flag = False
+            return None, None, None, None, rep_flag
+        else:
+            rep_flag = True
+            xind, yind = torch.sort(inverse)
+            ybar = torch.full((p, n0), torch.nan)
+            for j in range(n0):
+                match = yind[xind==j]
+                ybar[:, j] = y[:, match].mean()
+                rep0[j] = match.shape[0]
+            return n0, x0, ybar, rep0, rep_flag
