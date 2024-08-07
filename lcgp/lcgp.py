@@ -300,7 +300,7 @@ class LCGP(nn.Module):
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         y = self.y
 
-        xu = self.x_unique
+        xu = self.xuniq
         ybar = self.ybar
 
         pc = self.penalty_const
@@ -320,17 +320,14 @@ class LCGP(nn.Module):
             Ck = Matern32(xu, xu, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
             Wk, Uk = torch.linalg.eigh(Ck)
 
-            # Qk = (In + dk^{-1} Ckinv R^{-1})
-            Qk = Uk / Wk @ Uk.T / (D[k] * rep0) + torch.eye(n0)
-            Wk_Q, Uk_Q = torch.linalg.eigh(Qk)
+            CkinvpdkR = Uk / Wk @ Uk.T + D[k] * rep0.diag()
+            Wrk, Urk = torch.linalg.eigh(CkinvpdkR)
 
-            modCk = Ck @ (torch.eye(n0) - Uk_Q / Wk_Q @ Uk_Q.T)
-            Pk = psi_c.T[k].outer(psi_c.T[k])
-            ryPk2 = rep0 * ybar.T @ Pk @ (rep0 * ybar)
+            ryPk = rep0 * ybar.T @ psi_c.T[k]
+            modCkh = Urk / Wrk.sqrt() @ Urk.T
 
-            nlp += 1 / 2 * (Wk.log().sum() - Wk_Q.log().sum() -
-                            n0 * D[k].log() - rep0.log().sum())
-            nlp -= 1 / 2 * (ryPk2 * modCk).sum()
+            nlp += 1 / 2 * (Wk.log().sum() + Wrk.log().sum())
+            nlp -= 1 / 2 * ((ryPk * modCkh)**2).sum()
 
         nlp += N / 2 * lsigma2s.sum()
         nlp += 1 / 2 * ((y.T / lsigma2s.exp().sqrt()) ** 2).sum()
