@@ -1,5 +1,5 @@
 import numpy as np
-import time
+# import time
 from lcgp import LCGP
 from lcgp import evaluation
 # import pandas as pd
