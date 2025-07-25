@@ -7,4 +7,4 @@ jobs:
       - uses: astral-sh/ruff-action@v3
         with:
           version: "latest"
-          args: --fix --exit-non-zero-on-fix
+      - run: ruff check --fix --exit-non-zero-on-fix
