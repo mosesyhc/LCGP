@@ -2,7 +2,6 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 import gpflow
 from .covmat import Matern32
-# from .hyperparameter_tuning import parameter_clamping
 import numpy as np
 
 # Display only code-breaking errors

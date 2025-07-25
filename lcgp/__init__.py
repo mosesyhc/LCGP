@@ -10,7 +10,7 @@ except PackageNotFoundError:
     # package is not installed
     pass
 
-__all__ = ['LCGP', 'Matern32'] # 'parameter_clamping', , 'optim_lbfgs']
+__all__ = ['LCGP', 'Matern32', 'test'] # 'parameter_clamping', , 'optim_lbfgs']
 
 __author__ = 'Moses Y.-H. Chan'
 __credits__ = 'Northwestern University'
