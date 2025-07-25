@@ -1,14 +1,15 @@
 from lcgp import LCGP
 
-try:
-    import gpytorch
-    import torch
-    from torch import tensor
-    from oilmm.tensorflow import OILMM
-    from stheno import GP, Matern32
-    from surmise.emulation import emulator
-except:
-    pass
+# try:
+#     import gpytorch
+#     import torch
+#     from torch import tensor
+#     from oilmm.tensorflow import OILMM
+#     from stheno import GP, Matern32
+#     from surmise.emulation import emulator
+# except:
+#     pass
+
 
 class SuperRun:
     def __init__(self, runno: str, data, verbose=False, **kwargs):
