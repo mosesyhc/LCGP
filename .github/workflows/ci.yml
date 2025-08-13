@@ -1,4 +1,6 @@
 name: Test with Python versions
+env:
+  CLONE_PATH:   ${{ github.workspace }}
 
 on:
   workflow_dispatch:
