@@ -4,6 +4,9 @@ import gpflow
 from .covmat import Matern32
 import numpy as np
 
+# for Python 3.9 inclusion
+from typing import Optional
+
 # Display only code-breaking errors
 tf.get_logger().setLevel('ERROR')
 # Set default float type to float64
@@ -12,8 +15,8 @@ tf.keras.backend.set_floatx('float64')
 
 class LCGP(gpflow.Module):
     def __init__(self,
-                 y: np.ndarray | tf.Tensor,
-                 x: np.ndarray | tf.Tensor,
+                 y: Optional[np.ndarray] = tf.Tensor,
+                 x: Optional[np.ndarray] = tf.Tensor,
                  q: int = None,
                  var_threshold: float = None,
                  diag_error_structure: list = None,
