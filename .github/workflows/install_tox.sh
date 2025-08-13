@@ -5,6 +5,7 @@ python -m pip install --upgrade setuptools
 python -m pip install --upgrade wheel
 python -m pip install --upgrade tox
 python -m pip install --upgrade ruff
+python -m pip install --upgrade coveralls
 echo
 which python
 which pip
