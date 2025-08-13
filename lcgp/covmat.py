@@ -51,40 +51,40 @@ def Matern32(x1, x2, llmb, llmb0, lnug, diag_only: bool = False):
 
         return llmb0 * C
 
-
-def Matern32_sp(x, xi, llmb, llmb0, lnug):  # assuming x1 = x2 = theta
-    '''
-    Returns the Nystr{\"o}m approximation of a covariance matrix,
-    its inverse, and the log of its determinant.
-
-    :param x: input of size (number of inputs, dimension of input)
-    :param xi: inducing inputs of size (number of inducing inputs, dimension of input)
-    :param llmb: log-lengthscale hyperparameter for each dimension
-    :param llmb0: log-scale hyperparameter
-    :param lnug: parameter to tune the nugget, nugget = exp(lnug) / (1 + exp(lnug))
-    :return: a covariance matrix of size (n, n)
-    '''
-
-    c_full_i = Matern32(x, xi, llmb=llmb, llmb0=llmb0, lnug=lnug)
-    C_i = Matern32(xi, xi, llmb=llmb, llmb0=llmb0, lnug=lnug)
-    C_full_diag = Matern32(x, x, llmb=llmb, llmb0=llmb0, lnug=lnug, diag_only=True)
-
-    Wi, Ui = tf.linalg.eigh(C_i)
-    Ciinvh = Ui / Wi.sqrt()
-
-    Crh = c_full_i @ Ciinvh
-
-    diag = C_full_diag - (Crh ** 2).sum(1)  #
-    Delta_inv_diag = 1 / diag
-
-    R = C_i + (c_full_i.T * Delta_inv_diag) @ c_full_i
-
-    WR, UR = tf.linalg.eigh(R)
-    Rinvh = UR / WR.abs().sqrt()
-
-    Q = (Delta_inv_diag * c_full_i.T).T
-    Q_Rinvh = Q @ Rinvh
-
-    logdet_C_sp = tf.log(WR.abs()).sum() - tf.log(Wi).sum() \
-                  + tf.log(diag).sum()
-    return Delta_inv_diag, Q, Rinvh, Q_Rinvh, logdet_C_sp, c_full_i, C_i
+# sparse implementation is not used in this iteration.
+# def Matern32_sp(x, xi, llmb, llmb0, lnug):  # assuming x1 = x2 = theta
+#     '''
+#     Returns the Nystr{\"o}m approximation of a covariance matrix,
+#     its inverse, and the log of its determinant.
+#
+#     :param x: input of size (number of inputs, dimension of input)
+#     :param xi: inducing inputs of size (number of inducing inputs, dimension of input)
+#     :param llmb: log-lengthscale hyperparameter for each dimension
+#     :param llmb0: log-scale hyperparameter
+#     :param lnug: parameter to tune the nugget, nugget = exp(lnug) / (1 + exp(lnug))
+#     :return: a covariance matrix of size (n, n)
+#     '''
+#
+#     c_full_i = Matern32(x, xi, llmb=llmb, llmb0=llmb0, lnug=lnug)
+#     C_i = Matern32(xi, xi, llmb=llmb, llmb0=llmb0, lnug=lnug)
+#     C_full_diag = Matern32(x, x, llmb=llmb, llmb0=llmb0, lnug=lnug, diag_only=True)
+#
+#     Wi, Ui = tf.linalg.eigh(C_i)
+#     Ciinvh = Ui / Wi.sqrt()
+#
+#     Crh = c_full_i @ Ciinvh
+#
+#     diag = C_full_diag - (Crh ** 2).sum(1)  #
+#     Delta_inv_diag = 1 / diag
+#
+#     R = C_i + (c_full_i.T * Delta_inv_diag) @ c_full_i
+#
+#     WR, UR = tf.linalg.eigh(R)
+#     Rinvh = UR / WR.abs().sqrt()
+#
+#     Q = (Delta_inv_diag * c_full_i.T).T
+#     Q_Rinvh = Q @ Rinvh
+#
+#     logdet_C_sp = tf.log(WR.abs()).sum() - tf.log(Wi).sum() \
+#                   + tf.log(diag).sum()
+#     return Delta_inv_diag, Q, Rinvh, Q_Rinvh, logdet_C_sp, c_full_i, C_i
