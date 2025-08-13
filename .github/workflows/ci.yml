@@ -36,7 +36,7 @@ jobs:
           # default set of ruff rules with GitHub Annotations
           ruff check --output-format=github --exclude=illustration-examples,reference_code,tests .
       - name: Run test suite
-        run: tox -r -e runtest
+        run: tox -r -e coverage
       - name: Upload coverage data
         run: |
          coveralls --service=github
