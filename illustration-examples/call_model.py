@@ -44,8 +44,6 @@ class SuperRun:
 class LCGPRun(SuperRun):
     def __init__(self, submethod='full', robust=True, err_struct=None, **kwargs):
         super().__init__(**kwargs)
-        import lcgp
-        print(lcgp.__file__)
         self.modelname = 'LCGP'
         self.num_latent = kwargs['num_latent']
         self.submethod = submethod
