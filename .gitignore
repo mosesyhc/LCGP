@@ -6,6 +6,9 @@ venv/
 *.pclprof
 *.dat
 
+# automatic version file
+lcgp/_version.py
+
 # build
 build/
 dist/

@@ -42,7 +42,7 @@ write_to = "lcgp/_version.py"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "--cov=lcgp --cov-report=html:.coverage_html.info"
+addopts = "--cov-report=html:.coverage_html.info"
 testpaths = [
     "lcgp/tests",
 ]
@@ -50,9 +50,6 @@ testpaths = [
 # Coverage
 [tool.coverage.run]
 branch = true
-
-[tool.coverage.report]
-omit = ['lcgp\_version.py']
 
 [tool.ruff]
 # In addition to the standard set of exclusions, omit all tests, plus a specific file.
