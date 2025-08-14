@@ -1,5 +1,4 @@
 from ._import_util import _import_tensorflow
-tf = _import_tensorflow()
 import tensorflow_probability as tfp
 import gpflow
 from .covmat import Matern32
@@ -7,6 +6,8 @@ import numpy as np
 
 # for Python 3.9 inclusion
 from typing import Optional
+
+tf = _import_tensorflow()
 
 # Display only code-breaking errors
 tf.get_logger().setLevel('ERROR')
