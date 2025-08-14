@@ -6,6 +6,9 @@ venv/
 *.pclprof
 *.dat
 
+# automatic version file
+lcgp/_version.py
+
 # build
 build/
 dist/
@@ -13,14 +16,14 @@ lcgp.egg-info/
 
 # archive
 src/archive/*
-lcgp/archive/
-lcgp/debug/
-lcgp/reference_code/
-lcgp/plot_code/
+../src/lcgp/lcgp/archive/
+../src/lcgp/lcgp/debug/
+../src/lcgp/lcgp/reference_code/
+../src/lcgp/lcgp/plot_code/
 
 # data files
-tests/data/*
-tests/testfunctions/*
+lcgp/tests/data/*
+lcgp/tests/testfunctions/*
 
 # documentation and coverage
 docs/_build
@@ -51,7 +54,7 @@ illustration-examples/lcgp_debug.py
 reference_code/GPPCA/
 
 # ignore version
-lcgp/_version.py
+../src/lcgp/lcgp/_version.py
 
 # pdfs
 literature/

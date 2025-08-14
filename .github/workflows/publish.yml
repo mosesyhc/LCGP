@@ -1,4 +1,4 @@
-# This workflow publishes releases to https://pypi.org/project/surmise/
+# This workflow publishes releases to https://pypi.org/project/lcgp/
 
 name: PyPI publisher
 

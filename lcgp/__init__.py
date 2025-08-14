@@ -1,6 +1,16 @@
 from .lcgp import LCGP
-from .hyperparameter_tuning import parameter_clamping
 from .covmat import Matern32
-from .optim import optim_lbfgs
+from importlib.metadata import version, PackageNotFoundError
+from .test import test
 
-__all__ = ['LCGP', 'parameter_clamping', 'Matern32', 'optim_lbfgs']
+
+try:
+    __version__ = version("lcgp")
+except PackageNotFoundError:
+    # package is not installed
+    pass
+
+__all__ = ['LCGP', 'Matern32', 'test'] # 'parameter_clamping', , 'optim_lbfgs']
+
+__author__ = 'Moses Y.-H. Chan'
+__credits__ = 'Northwestern University'
