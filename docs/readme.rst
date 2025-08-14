@@ -39,7 +39,7 @@ List of Contents:
 Installation
 ------------
 
-The implementation of LCGP can be installed through
+The implementation of LCGP requires Python 3.9 or above.  The package can be installed through
 
 .. code:: bash
 
@@ -47,6 +47,16 @@ The implementation of LCGP can be installed through
 
 ..
 
+The LCGP package has the following dependencies, as listed in its pyproject.toml configuration:
+
+.. code:: python
+
+    'numpy>=1.18.3',
+    'scipy>=1.10.1',
+    'tensorflow>=2.16.0',
+    'gpflow>=2.5.0'
+
+..
 
 Test suite
 ~~~~~~~~~~
