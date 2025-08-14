@@ -38,7 +38,6 @@ jobs:
       - name: Run test suite
         run: tox -r -e coverage
       - name: Upload coverage data
-        if: success() || failure()
         run: |
          coveralls --service=github
         env:
@@ -48,7 +47,6 @@ jobs:
   
   finish:
    name: Finish Coveralls
-   if: success() || failure()
    needs: test
    runs-on: ubuntu-latest
    steps:
