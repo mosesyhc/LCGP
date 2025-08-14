@@ -1,4 +1,5 @@
-import tensorflow as tf
+from ._import_util import _import_tensorflow
+tf = _import_tensorflow()
 import tensorflow_probability as tfp
 import gpflow
 from .covmat import Matern32
