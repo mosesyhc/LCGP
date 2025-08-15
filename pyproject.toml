@@ -30,12 +30,13 @@ Repository = "https://github.com/mosesyhc/lcgp"
 
 [build-system]
 requires = [
-    "setuptools>=50.0",
-    "setuptools_scm[toml]>=6.0",
+    "setuptools>=80",
+    "setuptools_scm>=8",
     "setuptools_scm_git_archive",
     "wheel>=0.33",
     "numpy>=1.16",
 ]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 write_to = "lcgp/_version.py"
