@@ -7,7 +7,7 @@ venv/
 *.dat
 
 # automatic version file
-lcgp/_version.py
+*_version.py
 
 # build
 build/
