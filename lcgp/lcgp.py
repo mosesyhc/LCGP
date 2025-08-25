@@ -39,12 +39,8 @@ class LCGP(gpflow.Module):
         self.method = 'LCGP'
         self.submethod = submethod
         self.submethod_loss_map = {'full': self.neglpost,
-                                   # 'elbo': self.negelbo,
-                                   # 'proflik': self.negproflik
                                    }
         self.submethod_predict_map = {'full': self.predict_full,
-                                      # 'elbo': self.predict_elbo,
-                                      # 'proflik': self.predict_proflik
                                       }
 
         self.parameter_clamp_flag = parameter_clamp_flag
@@ -53,6 +49,11 @@ class LCGP(gpflow.Module):
             raise ValueError('Include only q or var_threshold but not both.')
         self.q = q
         self.var_threshold = var_threshold
+
+        # compute R = diag(r_1, ..., r_n)
+        # X's are ordered?
+        # Y's are ordered accordingly
+        # ybar, ...,
 
         # standardize x to unit hypercube
         self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = \
@@ -110,6 +111,7 @@ class LCGP(gpflow.Module):
         self.init_params()
 
         # placeholders for predictive quantities
+        # C^{-1}mk, T^{1/2}, \hat{T}^{1/2}, C^{-1/2}
         self.CinvMs = tf.fill([self.q, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.Ths = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.Th_hats = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
@@ -275,9 +277,12 @@ class LCGP(gpflow.Module):
 
         nlp = tf.constant(0., dtype=tf.float64)
 
+        # no calling kronecker
+        # use woodbury for inversions of something like (dk Ck + R^{-1}???)^{-1}
         for k in range(q):
             Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
 
+            # components necessary for Ck^{-1}
             Wk, Uk = tf.linalg.eigh(Ck)
 
             Qk = tf.matmul(Uk, tf.matmul(tf.linalg.diag(1 / (D[k] + 1 / Wk)), tf.transpose(Uk)))
@@ -299,104 +304,6 @@ class LCGP(gpflow.Module):
         # nlp += (tf.reduce_sum(tf.math.log(lnugGPs - 100)))
         nlp /= tf.cast(n, tf.float64)
         return nlp
-
-    # def negelbo(self):
-    #     n = self.n
-    #     x = self.x
-    #     y = self.y
-    #     pc = self.penalty_const
-    #
-    #     lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-    #     B = tf.matmul(tf.transpose(y / tf.sqrt(tf.exp(lsigma2s))), self.phi)
-    #     D = self.diag_D
-    #     phi = self.phi
-    #
-    #     psi = tf.transpose(phi) * tf.sqrt(tf.exp(lsigma2s))
-    #
-    #     M = tf.zeros([self.q, n], dtype=tf.float64)
-    #
-    #     negelbo = tf.constant(0., dtype=tf.float64)
-    #     for k in range(self.q):
-    #         Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
-    #
-    #         Wk, Uk = tf.linalg.eigh(Ck)
-    #         dkInpCkinv = tf.matmul(Uk, tf.matmul(tf.linalg.diag(1 / Wk), tf.transpose(Uk))) + \
-    #                      D[k] * tf.eye(n, dtype=tf.float64)
-    #
-    #         # (dk * I + Ck^{-1})^{-1}
-    #         dkInpCkinv_inv = tf.matmul(Uk, tf.matmul(tf.linalg.diag(1 / (D[k] + 1 / Wk)), tf.transpose(Uk)))
-    #         Mk = tf.linalg.matvec(dkInpCkinv_inv, tf.transpose(B)[k])
-    #         Vk = 1 / tf.linalg.diag_part(dkInpCkinv)
-    #
-    #         CkinvhMk = tf.linalg.matvec(tf.matmul(tf.matmul(Uk, tf.linalg.diag(1 / tf.sqrt(Wk))), tf.transpose(Uk)),
-    #                                     Mk)
-    #
-    #         M = tf.tensor_scatter_nd_update(M, [[k]], tf.expand_dims(Mk, axis=0))
-    #
-    #         negelbo += 0.5 * tf.reduce_sum(tf.math.log(Wk))
-    #         negelbo += 0.5 * tf.reduce_sum(tf.square(CkinvhMk))
-    #         negelbo -= 0.5 * tf.reduce_sum(tf.math.log(Vk))
-    #         negelbo += 0.5 * tf.reduce_sum(
-    #             Vk * D[k] * tf.linalg.diag_part(tf.matmul(Uk, tf.matmul(tf.linalg.diag(1 / Wk), tf.transpose(Uk)))))
-    #
-    #     resid = (tf.transpose(y) - tf.matmul(tf.transpose(M), psi)) / tf.sqrt(tf.exp(lsigma2s))
-    #
-    #     negelbo += 0.5 * tf.reduce_sum(tf.square(resid))
-    #     negelbo += n / 2 * tf.reduce_sum(lsigma2s)
-    #
-    #     # Regularization
-    #     negelbo += pc['lLmb'] * tf.reduce_sum(tf.square(lLmb)) + \
-    #                pc['lLmb0'] * (2 / n) * tf.reduce_sum(tf.square(lLmb0))
-    #     negelbo += -tf.reduce_sum(tf.math.log(lnugGPs + 100))
-    #
-    #     negelbo /= tf.cast(n, tf.float64)
-    #
-    #     return negelbo
-    #
-    # def negproflik(self):
-    #     lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-    #     x = self.x
-    #     y = self.y
-    #
-    #     pc = self.penalty_const
-    #
-    #     n = self.n
-    #     q = self.q
-    #     D = self.diag_D
-    #     phi = self.phi
-    #     psi = tf.transpose(phi) * tf.sqrt(tf.exp(lsigma2s))
-    #
-    #     B = tf.matmul(tf.transpose(y / tf.sqrt(tf.exp(lsigma2s))), self.phi)
-    #     G = tf.zeros([self.q, n], dtype=tf.float64)
-    #
-    #     negproflik = tf.constant(0., dtype=tf.float64)
-    #
-    #     for k in range(q):
-    #         Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
-    #         Wk, Uk = tf.linalg.eigh(Ck)
-    #
-    #         dkInpCkinv_inv = tf.matmul(Uk, tf.matmul(tf.linalg.diag(1 / (D[k] + 1 / Wk)), tf.transpose(Uk)))
-    #         Gk = tf.matmul(dkInpCkinv_inv, tf.transpose(B)[k])
-    #
-    #         CkinvhGk = tf.matmul(tf.matmul(Uk, tf.linalg.diag(1 / Wk)), tf.transpose(Uk)) @ Gk
-    #
-    #         G = tf.tensor_scatter_nd_update(G, [[k]], tf.expand_dims(Gk, axis=0))
-    #
-    #         negproflik += 0.5 * tf.reduce_sum(tf.math.log(Wk))
-    #         negproflik += 0.5 * tf.reduce_sum(tf.square(CkinvhGk))
-    #
-    #     resid = (tf.transpose(y) - tf.matmul(tf.transpose(G), psi)) / tf.sqrt(tf.exp(lsigma2s))
-    #
-    #     negproflik += 0.5 * tf.reduce_sum(tf.square(resid))
-    #     negproflik += n / 2 * tf.reduce_sum(lsigma2s)
-    #
-    #     negproflik += pc['lLmb'] * tf.reduce_sum(tf.square(lLmb)) + \
-    #                   pc['lLmb0'] * (2 / n) * tf.reduce_sum(tf.square(lLmb0))
-    #     negproflik += -tf.reduce_sum(tf.math.log(lnugGPs + 100))
-    #
-    #     negproflik /= tf.cast(n, tf.float64)
-    #     return negproflik
-
 
     def predict(self, x0, return_fullcov=False):
         """
@@ -519,13 +426,6 @@ class LCGP(gpflow.Module):
             t = tf.expand_dims(t, axis=1)
         return t
 
-    # def predict_elbo(self, x0, return_fullcov=False):
-    #     pass
-    #
-    # def predict_proflik(self, x0, return_fullcov=False):
-    #     pass
-
-
     @staticmethod
     def verify_error_structure(diag_error_structure, y):
         """
@@ -539,11 +439,6 @@ class LCGP(gpflow.Module):
         """
         Returns the parameters for LCGP instance.
         """
-        # if self.parameter_clamp_flag:
-        #     lLmb, lLmb0, lsigma2s, lnugGPs = \
-        #         self.parameter_clamp(lLmb=self.lLmb, lLmb0=self.lLmb0,
-        #                              lsigma2s=self.lsigma2s, lnugs=self.lnugGPs)
-        # else:
         lLmb, lLmb0, lsigma2s, lnugGPs = \
             self.lLmb, self.lLmb0, self.lsigma2s, self.lnugGPs
 
