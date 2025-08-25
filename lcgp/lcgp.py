@@ -262,6 +262,10 @@ class LCGP(gpflow.Module):
             raise ValueError("Invalid submethod. Choices are 'full', 'elbo', or 'proflik'.")
 
     @tf.function
+    def neglpost_rep(self):
+        pass
+
+    @tf.function
     def neglpost(self):
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         x = self.x
