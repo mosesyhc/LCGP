@@ -158,6 +158,13 @@ class LCGP(gpflow.Module):
             xnorm = tf.tensor_scatter_nd_update(xnorm, [[j]], [mean_val])
         return xs, x_min, x_max, x, xnorm
 
+    '''
+    For replicated model, will likely want:
+          self.init_standard_ybar(y_raw, group_ids) -> (ybar_s, ybar_mean, ybar_std, ybar_raw)
+            where ybar_raw is built first by averaging replicates per unique input
+            and ybar_s = (ybar_raw - ybar_mean)/ybar_std
+    '''
+
     def init_standard_y(self, y):
         """
         Standardizes outputs and collects summary information.
