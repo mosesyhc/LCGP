@@ -201,6 +201,11 @@ class LCGP(gpflow.Module):
         """
         y, q = self.y, self.q
         n, p = self.n, self.p
+        
+        '''
+        Replace y with ybar_s here.
+             singvals, left_u, _ = tf.linalg.svd(self.ybar_s, full_matrices=False)
+        '''
 
         singvals, left_u, _ = tf.linalg.svd(y, full_matrices=False)
 
