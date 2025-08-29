@@ -260,6 +260,12 @@ class LCGP(gpflow.Module):
         """
         p, ny = tf.shape(y)[0], tf.shape(y)[1]
         nx, d = tf.shape(x)[0], tf.shape(x)[1]
+        
+        '''
+        For raw replicates, likely have N rows in x and N columns in y (ny == nx == N).
+        - Verify with (ybar_s, x_unique) so that
+            ny == n_unique and nx == n_unique. 
+        '''  
 
         assert ny == nx, 'Number of inputs (x) differs from number of outputs (y), y.shape[1] != x.shape[0]'
 
