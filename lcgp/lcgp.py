@@ -50,10 +50,17 @@ class LCGP(gpflow.Module):
         self.q = q
         self.var_threshold = var_threshold
 
-        # compute R = diag(r_1, ..., r_n)
-        # X's are ordered?
-        # Y's are ordered accordingly
-        # ybar, ...,
+        '''
+        Precompute replicate groups before any standardizations.
+        - Group identical input rows in self.x
+        - Create:
+            self.x_unique   : shape (n, d) unique inputs
+            self.gorup_ids  : list of length N mapping each row in x to unique index i
+            self.r          : shape (n, ) counts r_i (replicated per unique input)
+            self.R          : shape (n, n) diag of r
+        - Compute replicate-averaged outputs:
+            self.ybar       : shape (p, n)
+        '''
 
         # standardize x to unit hypercube
         self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = \
