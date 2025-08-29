@@ -65,6 +65,15 @@ class LCGP(gpflow.Module):
         # standardize x to unit hypercube
         self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = \
             self.init_standard_x(self.x)
+        
+        '''
+        Standardize y 
+        - Standardize per output dim across replicates
+        - For replicated likelihood, create standardized ybar:
+            self.ybar, self.ybar_mean, self.ybar_std
+                by averaging raw y in original scale, then standardize the averages
+        '''
+
         # standardize y
         self.y, self.ymean, self.ystd, self.y_orig = self.init_standard_y(self.y)
 
