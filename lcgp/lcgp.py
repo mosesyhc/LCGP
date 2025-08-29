@@ -222,6 +222,9 @@ class LCGP(gpflow.Module):
         phi = left_u[:, :q] * tf.sqrt(tf.cast(n, tf.float64)) / singvals
         diag_D = tf.reduce_sum(phi ** 2, axis=0)
 
+        '''
+        y_bar here for replication
+        '''
         g = tf.matmul(phi, y, transpose_a=True)
         return g, phi, diag_D, q
 
