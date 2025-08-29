@@ -83,6 +83,12 @@ class LCGP(gpflow.Module):
         # sets n, d, and p
         self.verify_dim(self.y, self.x)
 
+        '''
+        After verify_dim, reset (n, d) to unique counts if we use x_unique
+            self.n = n_unique
+            self.d = d
+        '''
+
         # reset q if none is provided
         self.g, self.phi, self.diag_D, self.q = \
             self.init_phi(var_threshold=var_threshold)
