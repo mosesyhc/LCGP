@@ -463,6 +463,13 @@ class LCGP(gpflow.Module):
             c0k = Matern32(x0, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k],
                            diag_only=False)
 
+            '''
+            Replace x with self.x_unique.
+            Mean/var structure stays the same, but uses:
+                - T_k = C_k^{-1} - C_k^{-1} S_k C_k^{-1}                    
+                - gvar_k = c00k - c0k @ T_k @ c0k^T (diagonal extracted)
+            '''
+
             ghat_k = tf.linalg.matvec(c0k, CinvM[k])
             gvar_k = c00k - tf.reduce_sum(tf.square(tf.matmul(c0k, Th[k])), axis=1)
 
