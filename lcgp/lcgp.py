@@ -306,6 +306,25 @@ class LCGP(gpflow.Module):
 
     @tf.function
     def neglpost_rep(self):
+        '''
+        1) Build covariances on unique inputs:
+              xk = self.x_unique       shape (n, d)
+              Ck = K(xk, xk; θ_k)      shape (n, n)
+        2) Build Σ^{-1/2}:
+              If diagonal-by-block: use built_lsigma2s from get_param() to form per-dim scalings.
+              If full Σ: use stored Cholesky/inverse-root.                 
+        3) Basis from ybar:
+              Φ shape (p, q), D = diag(d_k)                                       
+        4) b_k vector shape (n, 1):
+              b_k = R @ Ybar @ (Σ^{-1/2} φ_k)                              
+        5) Posterior precision and mean:
+              s_k = C_k^{-1} + d_k R,   S_k = s_k^{-1},   m_k = S_k b_k   
+        6) Negative log-marginal up to constants:
+              -0.5 * sum_i r_i * ybar_i^T Σ^{-1} ybar_i
+              +0.5 * sum_k b_k^T S_k b_k
+              + constants: -(np/2)log(2π) - (n/2)log|Σ| + (p/2)log|R|
+        7) Regularization/penalty same as current neglpost().
+        '''
         pass
 
     @tf.function
