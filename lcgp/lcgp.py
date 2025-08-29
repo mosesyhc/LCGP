@@ -403,6 +403,12 @@ class LCGP(gpflow.Module):
         # B := Y @ Sigma^{-1/2} @ Phi
         B = tf.matmul(tf.transpose(self.y) / tf.sqrt(tf.exp(lsigma2s)), self.phi)
 
+        '''
+        Use averaged data in replicated model:
+            - B = Ybar_s^T @ Σ^{-1/2} @ Φ                              
+            - Set x = self.x_unique for all covariances below.
+        '''
+
         CinvM = tf.zeros([self.q, self.n], dtype=tf.float64)
         Th = tf.zeros([self.q, self.n, self.n], dtype=tf.float64)
 
@@ -413,6 +419,12 @@ class LCGP(gpflow.Module):
 
             # (I + D_k * C_k)^{-1}
             IpdkCkinv = tf.matmul(Uk, tf.matmul(tf.linalg.diag(1.0 / (1.0 + D[k] * Wk)), tf.transpose(Uk)))
+
+            '''
+            With replication the transform changes:
+                S_k = (C_k^{-1} + d_k R)^{-1}                            
+                T_k = C_k^{-1} - C_k^{-1} S_k C_k^{-1} for var
+            '''
 
             CkinvMk = tf.linalg.matvec(IpdkCkinv, tf.transpose(B)[k])
             Thk = tf.matmul(Uk, tf.matmul(tf.linalg.diag(tf.sqrt((D[k] * Wk ** 2) / (Wk ** 2 + D[k] * Wk ** 3))),
