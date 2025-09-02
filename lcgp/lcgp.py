@@ -55,7 +55,7 @@ class LCGP(gpflow.Module):
         - Group identical input rows in self.x
         - Create:
             self.x_unique   : shape (n, d) unique inputs
-            self.gorup_ids  : list of length N mapping each row in x to unique index i
+            self.group_ids  : list of length N mapping each row in x to unique index i
             self.r          : shape (n, ) counts r_i (replicated per unique input)
             self.R          : shape (n, n) diag of r
         - Compute replicate-averaged outputs:
@@ -138,6 +138,65 @@ class LCGP(gpflow.Module):
         self.Ths = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.Th_hats = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.Cinvhs = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
+
+    def preprocess(self, y_raw=None, x_raw=None):
+        """
+        Build replicate structure.
+        Sets:
+            self.x_unique : (n, d) unique inputs (raw scale)
+            self.group_ids: (N,) int indices mapping each raw sample -> unique row
+            self.r        : (n,) replicate counts per unique input (int32)
+            self.R        : (n, n) diag(r) (float64)
+            self.ybar     : (p, n) replicate-averaged outputs on RAW scale (float64)
+            self.ybar_s   : (p, n) standardized ybar (float64)
+            self.ybar_mean: (p, 1) center used to standardize ybar (float64)
+            self.ybar_std : (p, 1) spread used to standardize ybar (float64)
+        """
+
+        if x_raw is None:
+            x_raw = self.x_orig
+        if y_raw is None:
+            y_raw = self.y_orig
+
+        xr = x_raw.numpy() if isinstance(x_raw, tf.Tensor) else np.asarray(x_raw)
+        yr = y_raw.numpy() if isinstance(y_raw, tf.Tensor) else np.asarray(y_raw)
+
+        assert xr.ndim == 2, "x_raw must be (N, d)"
+        assert yr.ndim == 2, "y_raw must be (p, N)"
+        N, d = xr.shape
+        p, Ny = yr.shape
+        assert Ny == N, "y_raw columns must match x_raw rows"
+
+        x_unique, inverse, counts = np.unique(xr, axis=0, return_inverse=True, return_counts=True)
+        n = x_unique.shape[0]                  
+        r = counts.astype(np.int32)             
+
+        ybar = np.zeros((p, n), dtype=np.float64)
+        for i in range(n):
+            cols = (inverse == i)
+            ybar[:, i] = yr[:, cols].mean(axis=1)
+
+        self.x_unique  = tf.convert_to_tensor(x_unique, dtype=tf.float64)   # (n, d)
+        self.group_ids = tf.convert_to_tensor(inverse,  dtype=tf.int32)     # (N,)
+        self.r         = tf.convert_to_tensor(r,        dtype=tf.int32)     # (n,)
+        self.R         = tf.linalg.diag(tf.cast(self.r, tf.float64))        # (n, n)
+        self.ybar      = tf.convert_to_tensor(ybar,     dtype=tf.float64)   # (p, n)
+
+        if self.robust_mean:
+            ycenter = tfp.stats.percentile(self.ybar, 50.0, axis=1, keepdims=True)
+            yspread = tfp.stats.percentile(tf.abs(self.ybar - ycenter), 50.0, axis=1, keepdims=True)
+        else:
+            ycenter = tf.reduce_mean(self.ybar, axis=1, keepdims=True)
+            yspread = tf.math.reduce_std(self.ybar, axis=1, keepdims=True)
+
+        yspread = tf.where(yspread > 0, yspread, tf.ones_like(yspread, dtype=tf.float64))
+        self.ybar_s   = (self.ybar - ycenter) / yspread
+        self.ybar_mean = ycenter
+        self.ybar_std  = yspread
+
+        self.n = tf.constant(n,  dtype=tf.int32)
+        self.d = tf.constant(d,  dtype=tf.int32)
+        self.p = tf.constant(p,  dtype=tf.int32)
 
     @staticmethod
     def init_standard_x(x):
