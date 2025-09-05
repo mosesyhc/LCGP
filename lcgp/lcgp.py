@@ -39,8 +39,10 @@ class LCGP(gpflow.Module):
         self.method = 'LCGP'
         self.submethod = submethod
         self.submethod_loss_map = {'full': self.neglpost,
+                                   'rep':  self.neglpost_rep
                                    }
         self.submethod_predict_map = {'full': self.predict_full,
+                                      'rep':  self.predict_full
                                       }
 
         self.parameter_clamp_flag = parameter_clamp_flag
