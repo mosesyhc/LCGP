@@ -29,6 +29,8 @@ class LCGP(gpflow.Module):
                  verbose: bool = False):
         """
         Constructor for LCGP class.
+
+        LCGP with optional replication support (set submethod='rep').
         """
         super().__init__()
         self.verbose = verbose
@@ -39,7 +41,7 @@ class LCGP(gpflow.Module):
         self.method = 'LCGP'
         self.submethod = submethod
         self.submethod_loss_map = {'full': self.neglpost,
-                                   'rep':  self.neglpost_rep
+                                   'rep':  self.neglpost_rep # replicated marginal likelihood
                                    }
         self.submethod_predict_map = {'full': self.predict_full,
                                       'rep':  self.predict_full
@@ -140,6 +142,21 @@ class LCGP(gpflow.Module):
         self.Ths = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.Th_hats = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.Cinvhs = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
+
+        self._rep_initialized = False
+
+    def _ensure_replication(self):
+        """
+        Build replication structures once if not yet built.
+        """
+        if not self._rep_initialized:
+            self.preprocess()  # builds x_unique, ybar, r, R, ybar_s, etc.
+            # rebuild basis on ybar_s
+            self.g, self.phi, self.diag_D, self.q = self.init_phi(var_threshold=self.var_threshold)
+            self.CinvMs = tf.fill([self.q, self.n], tf.constant(float('nan'), dtype=tf.float64))
+            self.Ths    = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
+            self.Tks    = None
+            self._rep_initialized = True
 
     def preprocess(self, y_raw=None, x_raw=None):
         """
