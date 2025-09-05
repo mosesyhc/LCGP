@@ -397,13 +397,86 @@ class LCGP(gpflow.Module):
               b_k = R @ Ybar @ (Σ^{-1/2} φ_k)                              
         5) Posterior precision and mean:
               s_k = C_k^{-1} + d_k R,   S_k = s_k^{-1},   m_k = S_k b_k   
-        6) Negative log-marginal up to constants:
-              -0.5 * sum_i r_i * ybar_i^T Σ^{-1} ybar_i
-              +0.5 * sum_k b_k^T S_k b_k
-              + constants: -(np/2)log(2π) - (n/2)log|Σ| + (p/2)log|R|
-        7) Regularization/penalty same as current neglpost().
+        6) Replicated negative log-marginal (up to constant):
+            0.5 * sum_i r_i * ybar_i^T Σ^{-1} ybar_i
+          - 0.5 * sum_k b_k^T S_k b_k
+          + 0.5 * sum_k log|I + d_k R^{1/2} C_k R^{1/2}|
+          + (n/2) log|Σ| - (p/2) log|R|
+          + regularization
         '''
-        pass
+        self._ensure_replication()
+
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+        xk = self.x_unique                          # (n,d)
+        ybar = self.ybar                            # (p,n)
+        r = tf.cast(self.r, tf.float64)             # (n,)
+        R = self.R                                  # (n,n)
+        n = tf.cast(self.n, tf.float64)
+        p = tf.cast(self.p, tf.float64)
+
+        D = self.diag_D                             # (q,)
+        phi = self.phi                              # (p,q)
+
+        sigma_log = lsigma2s                        # (p,)
+        sigma_inv = tf.exp(-sigma_log)              # Σ^{-1} diag
+        sigma_inv_sqrt = tf.exp(-0.5 * sigma_log)   # Σ^{-1/2}
+
+        nlp = tf.constant(0.0, tf.float64)
+
+        # 0.5 * sum_i r_i * ybar_i^T Σ^{-1} ybar_i
+        ybar_scaled = ybar * sigma_inv_sqrt[:, None]            # (p,n)
+        col_sq = tf.reduce_sum(tf.square(ybar_scaled), axis=0)  # (n,)
+        nlp += 0.5 * tf.reduce_sum(r * col_sq)
+
+        # + (n/2) log|Σ|
+        nlp += 0.5 * n * tf.reduce_sum(sigma_log)
+
+        # - (p/2) log|R| = - (p/2) * sum_i log(r_i)
+        nlp += -0.5 * p * tf.reduce_sum(tf.math.log(tf.cast(self.r, tf.float64)))
+
+        pc = self.penalty_const
+        reg = (pc['lLmb'] * tf.reduce_sum(tf.square(tf.math.log(self.lLmb))) +
+               pc['lLmb0'] * (2.0 / n) * tf.reduce_sum(tf.square(self.lLmb0.unconstrained_variable))
+               - tf.reduce_sum(tf.math.log(tf.math.log(self.lnugGPs) + 100.0))
+              )
+
+        bkSb_sum = tf.constant(0.0, tf.float64)
+        logA_sum = tf.constant(0.0, tf.float64)
+
+        sr = tf.sqrt(r)  # (n,)
+
+        q_int = tf.cast(self.q, tf.int32)
+        for k in range(q_int):
+            Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])  # (n,n)
+
+            # b_k = R * ybar^T * (Σ^{-1/2} phi_k)
+            phi_k = phi[:, k]
+            v_k = phi_k * sigma_inv_sqrt
+            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)   # (n,)
+            b_k = r * ytv
+
+            # A = I + d_k * R^{1/2} C_k R^{1/2}
+            d_k = D[k]
+            Csr = Ck * sr[None, :]
+            A = tf.eye(self.n, dtype=tf.float64) + d_k * (Csr * sr[:, None])
+
+            LA = tf.linalg.cholesky(A)
+            logdetA = 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(LA)))
+            logA_sum += logdetA
+
+            Cb = tf.linalg.matvec(Ck, b_k)
+            u = tf.sqrt(d_k) * (sr * Cb)
+            z = tf.linalg.cholesky_solve(LA, tf.expand_dims(u, -1))
+            z = tf.squeeze(z, -1)
+            Sb = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))
+
+            bkSb_sum += tf.tensordot(b_k, Sb, axes=1)
+
+        nlp += -0.5 * bkSb_sum
+        nlp += 0.5 * logA_sum
+        nlp += reg
+        nlp /= n
+        return nlp
 
     @tf.function
     def neglpost(self):
