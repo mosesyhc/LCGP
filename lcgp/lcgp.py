@@ -44,7 +44,7 @@ class LCGP(gpflow.Module):
                                    'rep':  self.neglpost_rep # replicated marginal likelihood
                                    }
         self.submethod_predict_map = {'full': self.predict_full,
-                                      'rep':  self.predict_full
+                                      'rep':  self.predict_rep # replicated predictive dist.
                                       }
 
         self.parameter_clamp_flag = parameter_clamp_flag
@@ -159,6 +159,7 @@ class LCGP(gpflow.Module):
             self._rep_initialized = True
 
     def preprocess(self, y_raw=None, x_raw=None):
+        # ADD SELF.IS_REP: shud i use replication structure??
         """
         Build replicate structure.
         Sets:
@@ -547,6 +548,10 @@ class LCGP(gpflow.Module):
         """
         Compute auxiliary quantities for predictions using full posterior approach.
         """
+        # If replication is present, compute replicated auxiliaries, else original ones
+        if hasattr(self, 'x_unique') and hasattr(self, 'ybar'):
+            self._compute_aux_predictive_quantities_rep()
+            return
         x = self.x
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
 
@@ -586,6 +591,65 @@ class LCGP(gpflow.Module):
 
         self.CinvMs = CinvM
         self.Ths = Th
+
+    def _compute_aux_predictive_quantities_rep(self):
+        """
+        Replication-aware auxiliaries:
+          - CinvMs[k] = C_k^{-1} m_k = b_k - d_k * R @ m_k  (avoid explicit C^{-1})
+          - Tks[k]    = C_k^{-1} - C_k^{-1} S_k C_k^{-1},   S_k = (C_k^{-1}+d_k R)^{-1}
+        """
+        self._ensure_replication()
+
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+        xk = self.x_unique
+        ybar = self.ybar
+        r = tf.cast(self.r, tf.float64)
+        R = self.R
+
+        D = self.diag_D
+        phi = self.phi
+
+        sigma_inv_sqrt = tf.exp(-0.5 * lsigma2s)
+
+        q = tf.cast(self.q, tf.int32)
+        n = tf.cast(self.n, tf.int32)
+
+        CinvM = tf.zeros([q, n], dtype=tf.float64)
+        Tks   = tf.zeros([q, n, n], dtype=tf.float64)
+
+        for k in range(q):
+            Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])  # (n,n)
+            phi_k = phi[:, k]
+            v_k = phi_k * sigma_inv_sqrt
+            b_k = r * tf.linalg.matvec(tf.transpose(ybar), v_k)  # (n,)
+
+            # m = S b via Woodbury in C-space:
+            d_k = D[k]
+            sr = tf.sqrt(r)
+            Cb = tf.linalg.matvec(Ck, b_k)
+            A = tf.eye(n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])  # I + d R^{1/2} C R^{1/2}
+            LA = tf.linalg.cholesky(A)
+            u = tf.sqrt(d_k) * (sr * Cb)
+            z = tf.linalg.cholesky_solve(LA, tf.expand_dims(u, -1))
+            z = tf.squeeze(z, -1)
+            m_k = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))  # (n,)
+
+            # C^{-1} m = b - d R m
+            CinvM_k = b_k - d_k * tf.linalg.matvec(R, m_k)
+
+            # T = C^{-1} - C^{-1} S C^{-1}
+            LC = tf.linalg.cholesky(Ck)
+            Id = tf.eye(n, dtype=tf.float64)
+            invC = tf.linalg.cholesky_solve(LC, Id)                 # C^{-1}
+            A_inv = tf.linalg.inv(invC + d_k * tf.cast(R, tf.float64))  # S
+            Tk = invC - invC @ A_inv @ invC
+
+            CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], [CinvM_k])
+            Tks   = tf.tensor_scatter_nd_update(Tks,   [[k]], [Tk])
+
+        self.CinvMs = CinvM
+        self.Tks    = Tks
+        self.Ths    = None
 
     def predict_full(self, x0, return_fullcov=False):
         """
