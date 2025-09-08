@@ -714,6 +714,63 @@ class LCGP(gpflow.Module):
 
         return ypred, ypredvar, yconfvar
 
+    def predict_rep(self, x0, return_fullcov=False):
+        """
+        Replication-aware prediction using Tks and CinvMs computed on unique inputs.
+        Mean:  ghat_k(x0) = c0k @ (C^{-1} m_k) = c0k @ CinvMs[k]
+        Var:   gvar_k(x0) = c00k - row_diag(c0k @ T_k @ c0k^T)
+        """
+        self._ensure_replication()
+        need_aux = (self.Tks is None) or tf.reduce_any(tf.math.is_nan(self.CinvMs))
+        if need_aux:
+            self._compute_aux_predictive_quantities_rep()
+
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+        phi = self.phi
+
+        Xtrain = self.x_unique
+        Tks = self.Tks
+        CinvM = self.CinvMs
+
+        x0 = self._verify_data_types(x0)
+        x0 = (x0 - self.x_min) / (self.x_max - self.x_min)
+        n0 = tf.shape(x0)[0]
+
+        ghat = tf.zeros([self.q, n0], dtype=tf.float64)
+        gvar = tf.zeros([self.q, n0], dtype=tf.float64)
+
+        for k in range(self.q):
+            c00k = Matern32(x0, x0,   llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=True)
+            c0k  = Matern32(x0, Xtrain, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=False)
+
+            ghat_k = tf.linalg.matvec(c0k, CinvM[k])
+
+            Tk = Tks[k]
+            v = tf.matmul(c0k, Tk)               
+            quad = tf.reduce_sum(v * c0k, axis=1)
+            gvar_k = c00k - quad
+
+            ghat = tf.tensor_scatter_nd_update(ghat, [[k]], [ghat_k])
+            gvar = tf.tensor_scatter_nd_update(gvar, [[k]], [gvar_k])
+
+        psi = tf.transpose(phi) * tf.sqrt(tf.exp(lsigma2s))
+        predmean = tf.matmul(psi, ghat, transpose_a=True)
+        confvar  = tf.matmul(tf.transpose(gvar), tf.square(psi))
+        predvar  = confvar + tf.exp(lsigma2s)
+
+        ypred    = self.tx_y(predmean)
+        yconfvar = tf.transpose(confvar) * tf.square(self.ystd)
+        ypredvar = tf.transpose(predvar) * tf.square(self.ystd)
+
+        if return_fullcov:
+            CH = tf.sqrt(gvar)[..., tf.newaxis] * psi[tf.newaxis, ...]
+            yfullpredcov = (tf.einsum('nij,njk->nik', CH, tf.transpose(CH, perm=[0, 2, 1])) +
+                            tf.linalg.diag(tf.exp(lsigma2s)))
+            yfullpredcov *= tf.square(self.ystd)
+            return ypred, ypredvar, yconfvar, yfullpredcov
+
+        return ypred, ypredvar, yconfvar
+
     @staticmethod
     def _verify_data_types(t):
         """
