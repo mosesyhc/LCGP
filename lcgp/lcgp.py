@@ -278,7 +278,11 @@ class LCGP(gpflow.Module):
         """
         Initialization of orthogonal basis, computed with singular value decomposition.
         """
-        y, q = self.y, self.q
+        y_in = getattr(self, 'ybar_s', None)
+        if y_in is None:
+            y_in = self.y
+
+        y, q = y_in, self.q
         n, p = self.n, self.p
         
         '''
