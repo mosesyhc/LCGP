@@ -54,7 +54,9 @@ The LCGP package has the following dependencies, as listed in its pyproject.toml
     'numpy>=1.18.3',
     'scipy>=1.10.1',
     'tensorflow>=2.16.0',
-    'gpflow>=2.5.0'
+    'gpflow>=2.5.0',
+    'pytest',
+    'pytest-cov'
 
 ..
 
@@ -62,7 +64,7 @@ Test suite
 ~~~~~~~~~~
 
 A list of basic tests is provided for user to verify that LCGP is installed correctly.
-Execute the following code within the root directory:
+Execute the following code to run the test suite:
 
 .. code:: bash
 
