@@ -15,7 +15,7 @@ The development of this work is described fully in the following work, cited as:
 
    @phdthesis{chan2023thesis,
      author  = "Moses Y.-H. Chan",
-     title   = "High-Dimensional Gaussian Process Methods for Uncertainty Quantification",
+     title   = "High-Dimensional {Gaussian} Process Methods for Uncertainty Quantification",
      school  = "Northwestern University",
      year    = "2023",
    }
@@ -62,7 +62,7 @@ Test suite
 ~~~~~~~~~~
 
 A list of basic tests is provided for user to verify that LCGP is installed correctly.
-Execute the follow code within the root directory:
+Execute the following code within the root directory:
 
 .. code:: bash
 
