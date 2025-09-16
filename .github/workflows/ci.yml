@@ -1,4 +1,6 @@
-name: CI
+name: Test with Python versions
+env:
+  CLONE_PATH:   ${{ github.workspace }}
 
 on:
   workflow_dispatch:
@@ -13,43 +15,44 @@ jobs:
       ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip setuptools 'setuptools_scm[toml]' setuptools_scm_git_archive numpy Cython
-          python setup.py --version
-          pip install --no-cache-dir -U -r requirements.txt | cat
-          pip install --upgrade numpy
-          pip install ruff pytest
+      - name: Setup Python with tox
+        shell: bash
+        run: $CLONE_PATH/.github/workflows/install_tox.sh
       - name: Lint with ruff
         run: |
           # stop the build if there are Python syntax errors or undefined names
           ruff check --output-format=github --select=E9,F63,F7,F82 --exclude=illustration-examples,reference_code .
           # default set of ruff rules with GitHub Annotations
           ruff check --output-format=github --exclude=illustration-examples,reference_code,tests .
-      - name: Test with pytest
-        run: pytest
+      - name: Run test suite
+        run: tox -r -e coverage
       - name: Upload coverage data
+        continue-on-error: true
         run: |
          coveralls --service=github
         env:
          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
          COVERALLS_PARALLEL: true
-  
+
   finish:
    name: Finish Coveralls
    needs: test
    runs-on: ubuntu-latest
    steps:
      - name: Coveralls GitHub Action
+       continue-on-error: true
        uses: coverallsapp/github-action@v2
        with:
          github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,4 +1,4 @@
-# This workflow publishes releases to https://pypi.org/project/surmise/
+# This workflow publishes releases to https://pypi.org/project/lcgp/
 
 name: PyPI publisher
 
@@ -14,11 +14,11 @@ jobs:
       name: pypi
       url: https://pypi.org/project/lcgp/
     permissions:
-      id-token: write  
+      id-token: write
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.x"
     - name: Install pypa/build

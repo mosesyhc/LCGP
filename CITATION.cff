@@ -16,7 +16,7 @@ authors:
 identifiers:
   - type: url
     value: 'https://lcgp.readthedocs.io/en/latest/'
-    description: 'LCGP documentation, v0.1.2'
+    description: 'LCGP documentation, v0.2.0'
 repository-code: 'https://github.com/mosesyhc/lcgp'
 url: 'https://lcgp.readthedocs.io/en/latest/'
 abstract: >-
@@ -28,12 +28,12 @@ keywords:
   - high dimensional
   - stochastic output
 license: MIT
-commit: bedbf10f7e3aab4922d1c5a09013edb9caf61175
-version: 0.1.2
+commit: 4349a6acfc9f0205d6f87d73e3548be3e62e3e1d
+version: 0.2.0
 references:
   - type: thesis
-    title: "High-Dimensional Gaussian Process Methods for Uncertainty Quantification"
+    title: High-Dimensional Gaussian Process Methods for Uncertainty Quantification
     year: 2023
     authors:
-    - family-names: Chan
-      given-names: Moses Y.-H.
+      - family-names: Chan
+        given-names: Moses Y.-H.

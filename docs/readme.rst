@@ -39,7 +39,7 @@ List of Contents:
 Installation
 ------------
 
-The implementation of LCGP can be installed through
+The implementation of LCGP requires Python 3.9 or above.  The package can be installed through
 
 .. code:: bash
 
@@ -47,13 +47,16 @@ The implementation of LCGP can be installed through
 
 ..
 
-   **Note on LBFGS optimizer:**
+The LCGP package has the following dependencies, as listed in its pyproject.toml configuration:
 
-   It is strongly recommended that
-   `PyTorch-LBFGS <https://github.com/hjmshi/PyTorch-LBFGS>`__ is
-   installed to fully utilize this implementation. Installation guide on
-   PyTorch-LBFGS can be found on `its
-   repository <https://github.com/hjmshi/PyTorch-LBFGS>`__.
+.. code:: python
+
+    'numpy>=1.18.3',
+    'scipy>=1.10.1',
+    'tensorflow>=2.16.0',
+    'gpflow>=2.5.0'
+
+..
 
 Test suite
 ~~~~~~~~~~
@@ -63,8 +66,11 @@ Execute the follow code within the root directory:
 
 .. code:: bash
 
-    pip install pytest pytest-cov
-    pytest
+    $ python
+    >>> import lcgp
+    >>> lcgp.__version__
+    <version string>
+    >>> lcgp.test()
 
 Basic usage
 -----------
@@ -159,11 +165,12 @@ equivalent to
 Define LCGP using different submethod
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Three submethods are implemented under LCGP:
+The main and recommended method under LCGP is the Full posterior (``full``) method.  The method
+takes into account the uncertainty propagated to the latent components and integrates out
+the latent components.
 
--  Full posterior (``full``)
--  ELBO (``elbo``)
--  Profile likelihood (``proflik``)
+In the current release, the full posterior method is fully implemented under LCGP, whereas ELBO
+(``elbo``) and Profile likelihood (``proflik``) methods are under reconstruction.
 
 Under circumstances where the simulation outputs are stochastic, the
 full posterior approach should perform the best. If the simulation
