@@ -16,13 +16,14 @@ dependencies = [
     'numpy>=1.18.3',
     'scipy>=1.10.1',
     'tensorflow>=2.16.0',
-    'gpflow>=2.5.0']
+    'gpflow>=2.5.0',
+    "pytest",
+    "pytest-cov",
+]
 dynamic = ["version"]
 
 [project.optional-dependencies]
 test = [
-    "pytest",
-    "pytest-cov",
 ]
 
 [project.urls]
