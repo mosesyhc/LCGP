@@ -1,7 +1,7 @@
 # BAND SDK v0.2 Community Policy Compatibility for `LCGP`
 
 
-> This document summarizes the efforts of current and future BAND member packages to achieve compatibility with the BAND SDK community policies.  Additional details on the BAND SDK are available [here](/resources/sdkpolicies/bandsdk.md) and should be considered when filling out this form. The most recent copy of this template exists [here](/resources/sdkpolicies/template.md).
+> This document summarizes the efforts of current and future BAND member packages to achieve compatibility with the BAND SDK community policies.  Additional details on the BAND SDK are available [here](https://github.com/bandframework/bandframework/blob/e720271fba0b73ff0a6ee1639b3722eacaca5844/resources/sdkpolicies/bandsdk.md) and should be considered when filling out this form. The most recent copy of this template exists [here](https://github.com/bandframework/bandframework/blob/e720271fba0b73ff0a6ee1639b3722eacaca5844/resources/sdkpolicies/template.md).
 >
 > This file should be filled out and placed in the directory in the `bandframework` repository representing the software name appended by `bandsdk`.  For example, if you have a software `foo`, the compatibility file should be named `foobandsdk.md` and placed in the directory housing the software in the `bandframework` repository. No open source code can be included without this file.
 >
@@ -26,7 +26,7 @@ the emulation of multivariate stochastic simulation outputs.
 | # | Policy                 |Support| Notes                   |
 |---|-----------------------|-------|-------------------------|
 | 1. | Support BAND community GNU Autoconf, CMake, or other build options. |Full| The source code is written fully in Python, built using `setuptools` backend for the use of pip installer. It does not require other build tools. |
-| 2. | Have a README file in the top directory that states a specific set of testing procedures for a user to verify the software was installed and run correctly. |Full| Refer to `docs/readme.rst` for a full test procedure. |
+| 2. | Have a README file in the top directory that states a specific set of testing procedures for a user to verify the software was installed and run correctly. |Partial| The README file lives under `docs/` directory.  Refer to `docs/readme.rst` for a full test procedure. |
 | 3. | Provide a documented, reliable way to contact the development team. |Full| The `LCGP` developers should be contacted through the public [issues page on GitHub](https://github.com/mosesyhc/LCGP/issues) |
 | 4. | Come with an open-source license. |Full| Uses the MIT license. |
 | 5. | Provide a runtime API to return the current version number of the software. |Full| The version can be returned within Python via `lcgp.__version__`. |
@@ -43,7 +43,7 @@ the emulation of multivariate stochastic simulation outputs.
 |**R3.**| Provide a mechanism to export ordered list of library dependencies. | Full     | Dependencies are listed in the project's pyproject.toml configuration.                                                 |
 |**R4.**| Document versions of packages that it works with or depends upon, preferably in machine-readable form. | Full     |                                                                                                                        |
 |**R5.**| Have SUPPORT, LICENSE, and CHANGELOG files in top directory.  | Partial. | LICENSE file is in the top directory.                                                                                  |
-|**R6.**| Have sufficient documentation to support use and further development.  | Full     | README provides usage examples.                                                                                        |
+|**R6.**| Have sufficient documentation to support use and further development.  | Full     | README can be accessed under `docs/readme`, or on [ReadTheDocs](https://lcgp.readthedocs.io/en/latest/).               |
 |**R7.**| Be buildable using 64-bit pointers; 32-bit is optional. | Full     | Package supports both 32 and 64 bit under same API.                                                                    |
 |**R8.**| Do not assume a full MPI communicator; allow for user-provided MPI communicator. | N/a      | None.                                                                                                                  |
 |**R9.**| Use a limited and well-defined name space (e.g., symbol, macro, library, include). | Full     | `LCGP` uses the `lcgp` namespace.                                                                                      |
