@@ -1,112 +1,150 @@
 import numpy as np
 import tensorflow as tf
-from lcgp import LCGP
-from lcgp import evaluation
-import pathlib
+import time
+import pandas as pd
+import matplotlib.pyplot as plt
+from pathlib import Path
 
-def make_hartmann_tf(alpha, A, P, a=0.0, b=1.0, axis=-1):
+from lcgp import evaluation
+from call_model import LCGPRun
+
+np.random.seed(42)
+tf.random.set_seed(42)
+
+def make_hartmann_tf(alpha, A, P, a=0.0, b=1.0):
+    A_tf = tf.constant(A, dtype=tf.float32)       
+    P_tf = tf.constant(P, dtype=tf.float32)      
+    alpha_tf = tf.constant(alpha, dtype=tf.float32)
+    a_tf = tf.constant(a, dtype=tf.float32)
+    b_tf = tf.constant(b, dtype=tf.float32)
+
     def hartmann(x):
-        r = tf.reduce_sum(A * tf.square(x - P), axis=axis)
-        return (a - tf.reduce_sum(alpha * tf.exp(-r), axis=-1)) / b
+        x_tf = tf.convert_to_tensor(x, dtype=tf.float32) 
+        x_exp = tf.expand_dims(x_tf, axis=1)              
+        r = tf.reduce_sum(A_tf * tf.square(x_exp - P_tf), axis=-1)  
+        val = (a_tf - tf.reduce_sum(alpha_tf * tf.exp(-r), axis=-1)) / b_tf
+        return val
     return hartmann
 
-outputdir = r'illustration-examples/rep/'
-pathlib.Path(outputdir).mkdir(exist_ok=True)
+alpha = np.array([1.0, 1.2, 3.0, 3.2], dtype=np.float32)
+A = np.array([[10.0, 3.0, 17.0, 3.5, 1.7, 8.0],
+              [0.05, 10.0, 17.0, 0.1, 8.0, 14.0],
+              [3.0, 3.5, 1.7, 10.0, 17.0, 8.0],
+              [17.0, 8.0, 0.05, 10.0, 0.1, 14.0]], dtype=np.float32)
+P = (1e-4 * np.array([[1312, 1696, 5569,  124, 8283, 5886],
+                      [2329, 4135, 8307, 3736, 1004, 9991],
+                      [2348, 1451, 3522, 2883, 3047, 6650],
+                      [4047, 8828, 8732, 5743, 1091,  381]], dtype=np.float32))
 
-# Hartmann 6D params
-alpha = np.array([1.0, 1.2, 3.0, 3.2])
-
-A = {}
-A[6] = np.array([[10.0, 3.0, 17.0, 3.5, 1.7, 8.0],
-                [0.05, 10.0, 17.0, 0.1, 8.0, 14.0],
-                [3.0, 3.5, 1.7, 10.0, 17.0, 8.0],
-                [17.0, 8.0, 0.05, 10.0, 0.1, 14.0]
-                ])
-
-P = {}
-P[6] = 1e-4 * np.array([[1312, 1696, 5569,  124, 8283, 5886],
-                        [2329, 4135, 8307, 3736, 1004, 9991],
-                        [2348, 1451, 3522, 2883, 3047, 6650],
-                        [4047, 8828, 8732, 5743, 1091,  381]])
-
-x_min = {}
-x_min[6] = np.array([0.20169, 0.150011, 0.476874, 0.275332, 0.311652, 0.6573])
-
-axis = {}
-axis[6] = -1
-
-a = {}
-a[6] = 0.0
-
-b = {}
-b[6] = 1.0
-
-# Create Hartmann 6D function
-hartmann6d = make_hartmann_tf(alpha, A[6], P[6], a[6], b[6], axis[6])
-
-n = 3
-ntest = 1000
-
-xtrain_uniq = np.random.uniform(0, 1, (n, 6))
-xtest = np.random.uniform(0, 1, (ntest, 6))
-
-reps = np.array((1, 2, 3))
-xtrain_replicated = np.repeat(xtrain_uniq, reps, axis=0)
-
-U = np.zeros((sum(reps), len(reps)))
-for i in range(len(reps)):
-    U[sum(reps[:i]):sum(reps[:(i+1)]), i] = 1
+hartmann6d = make_hartmann_tf(alpha, A, P, a=0.0, b=1.0)
 
 def generate_hartmann_data(x, noisy=True, noise_level=0.01):
-    x_tf = tf.constant(x, dtype=tf.float32)
-    
-    y_base = hartmann6d(x_tf).numpy()
-    
-    y1 = y_base  
+    """
+    x: (n, 6)
+    returns y with shape (3, n)
+    """
+    x = np.asarray(x, dtype=np.float32)
+    y_base = hartmann6d(x).numpy()
+
+    y1 = y_base
     y2 = 0.5 * y_base + 2.0 * np.sum(x, axis=1) - 1.0
-    y3 = -0.8 * y_base - 3.0 * np.prod(x, axis=1) + 2.0  
-    
+    y3 = -0.8 * y_base - 3.0 * np.prod(x, axis=1) + 2.0
+
     if noisy:
-        noise1 = np.random.normal(0, noise_level * 0.1, y1.shape)
-        noise2 = np.random.normal(0, noise_level * 0.2, y2.shape)
-        noise3 = np.random.normal(0, noise_level * 0.3, y3.shape)
-        
-        y1 += noise1
-        y2 += noise2
-        y3 += noise3
+        y1 = y1 + np.random.normal(0, noise_level * 0.1, y1.shape)
+        y2 = y2 + np.random.normal(0, noise_level * 0.2, y2.shape)
+        y3 = y3 + np.random.normal(0, noise_level * 0.3, y3.shape)
 
-    y = np.column_stack((y1, y2, y3))
-    return y.T  
+    y = np.vstack((y1, y2, y3)) 
+    return y
 
-ytrue = generate_hartmann_data(xtest, noisy=False)
-generating_noises_var = np.array([0.005, 0.1, 0.3]) * ytrue.var(1)
+ns = [50, 100]   
+ntest = 500
+results_fig_path = './results_figure_rep/'
+Path(results_fig_path).mkdir(parents=True, exist_ok=True)
 
-ytrain = generate_hartmann_data(xtrain_replicated, noisy=True, noise_level=0.01)
-ytest = generate_hartmann_data(xtest, noisy=True, noise_level=0.01)
+results_rmse = {}
 
-data = {
-    'xtrain': xtrain_replicated,
-    'xtest': xtest,
-    'ytrain': ytrain.T,  
-    'ytest': ytest.T,
-    'ytrue': ytrue.T,
-    'noisevars': generating_noises_var
-}
+for n in ns:
+    print(f'Testing number of samples: {n}')
+    xtrain = np.random.uniform(0, 1, (n, 6)).astype(np.float32)
+    xtest = np.random.uniform(0, 1, (ntest, 6)).astype(np.float32)
 
-model = LCGP(y=ytrain.T, 
-             x=xtrain_replicated,
-             U=U)  
+    ytrue = generate_hartmann_data(xtest, noisy=False)  
+    generating_noises_var = np.array([0.005, 0.1, 0.3]) * ytrue.var(1)
 
-model.fit()
-predmean, predvar = model.predict(xtest)
+    ytrain = generate_hartmann_data(xtrain, noisy=True, noise_level=0.01) 
+    ytest = generate_hartmann_data(xtest, noisy=True, noise_level=0.01)   
 
-rmse = evaluation.rmse(ytrue.T, predmean)
-nrmse = evaluation.normalized_rmse(ytrue.T, predmean)
-pcover, pwidth = evaluation.intervalstats(ytest.T, predmean, predvar)
-dss = evaluation.dss(ytrue.T, predmean, predvar, use_diag=True)
+    data = {
+        'xtrain': xtrain,  
+        'xtest': xtest, 
+        'ytrain': ytrain,  
+        'ytest': ytest,   
+        'ytrue': ytrue   
+    }
 
-print(f"RMSE: {rmse}")
-print(f"Normalized RMSE: {nrmse}")
-print(f"Prediction Coverage: {pcover}")
-print(f"Prediction Width: {pwidth}")
-print(f"DSS: {dss}")
+    modelrun = LCGPRun(
+        runno=f'n{n}_rep',
+        data=data,
+        num_latent=ytrain.shape[0]-1,
+        submethod='rep'   
+    )
+    modelrun.define_model()
+
+    t0 = time.time()
+    modelrun.train()
+    t1 = time.time()
+
+    predmean, predvar = modelrun.predict()  
+
+    rmse = evaluation.rmse(ytrue, predmean)
+    nrmse = evaluation.normalized_rmse(ytrue, predmean)
+    pcover, pwidth = evaluation.intervalstats(ytest, predmean, predvar)
+    dss = evaluation.dss(ytrue, predmean, predvar, use_diag=True)
+
+    result = {
+        'modelname': modelrun.modelname,
+        'modelrun': modelrun.runno,
+        'n': modelrun.n,
+        'traintime': t1 - t0,
+        'rmse': rmse,
+        'nrmse': nrmse,
+        'pcover': pcover,
+        'pwidth': pwidth,
+        'dss': dss
+    }
+
+    df = pd.DataFrame.from_dict(result, orient='index').reset_index()
+    print(df)
+
+    fig, ax = plt.subplots(3, 1, figsize=(10, 6))
+    order_test = np.argsort(xtest[:, 0])
+    order_train = np.argsort(xtrain[:, 0])
+
+    for i in range(3):
+        ax[i].scatter(xtrain[order_train, 0], ytrain[i, order_train],
+                      label='Training Data', s=10, alpha=0.6)
+        ax[i].plot(xtest[order_test, 0], ytrue[i, order_test],
+                   label='True', linewidth=1.5)
+        ax[i].plot(xtest[order_test, 0], predmean[i, order_test],
+                   label='Prediction', linewidth=1.2)
+        ax[i].fill_between(
+            xtest[order_test, 0],
+            predmean[i, order_test] - 2.0 * np.sqrt(predvar[i, order_test]),
+            predmean[i, order_test] + 2.0 * np.sqrt(predvar[i, order_test]),
+            alpha=0.25, label='95% CI'
+        )
+        ax[i].set_ylabel(f'Output {i+1}')
+        if i == 0:
+            ax[i].legend(loc='best', fontsize=8)
+
+    ax[-1].set_xlabel('x[:, 0]')
+    plt.tight_layout()
+    figpath = Path(results_fig_path) / f'lcgp-rep-n-{n}.png'
+    plt.savefig(figpath, dpi=150)
+    plt.close(fig)
+
+    results_rmse[n] = rmse
+
+print("RMSE summary:", results_rmse)

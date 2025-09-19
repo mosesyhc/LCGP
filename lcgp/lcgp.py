@@ -172,7 +172,7 @@ class LCGP(gpflow.Module):
             self.ybar_mean: (p, 1) center used to standardize ybar (float64)
             self.ybar_std : (p, 1) spread used to standardize ybar (float64)
         """
-
+        print('in pre process')
         if x_raw is None:
             x_raw = self.x_orig
         if y_raw is None:
@@ -277,39 +277,37 @@ class LCGP(gpflow.Module):
     def init_phi(self, var_threshold: float = None):
         """
         Initialization of orthogonal basis, computed with singular value decomposition.
+        Uses ybar_s if available (replication), else y.
         """
         y_in = getattr(self, 'ybar_s', None)
         if y_in is None:
             y_in = self.y
 
-        y, q = y_in, self.q
-        n, p = self.n, self.p
-        
-        '''
-        Replace y with ybar_s here.
-             singvals, left_u, _ = tf.linalg.svd(self.ybar_s, full_matrices=False)
-        '''
+        y = y_in  
+        n = int(self.n.numpy())
+        p = int(self.p.numpy())
 
-        singvals, left_u, _ = tf.linalg.svd(y, full_matrices=False)
+        singvals, left_u, _ = tf.linalg.svd(y, full_matrices=False)  
 
-        if (q is None) and (var_threshold is None):
+        if (self.q is None) and (var_threshold is None):
             q = p
-        elif (q is None) and (var_threshold is not None):
-            cumvar = tf.cumsum(singvals ** 2) / tf.reduce_sum(singvals ** 2)
-            q = int(tf.argmax(cumvar > var_threshold) + 1)
+        elif (self.q is None) and (var_threshold is not None):
+            s = singvals.numpy()
+            cumvar = np.cumsum(s**2) / np.sum(s**2)
+            idx = np.argmax(cumvar > var_threshold)
+            q = int(idx + 1) if np.any(cumvar > var_threshold) else p
+        else:
+            q = int(self.q)
 
         assert left_u.shape[1] == min(n, p)
-        singvals = singvals[:q]
 
-        # Compute phi and diag_D
-        phi = left_u[:, :q] * tf.sqrt(tf.cast(n, tf.float64)) / singvals
+        sing_q = singvals[:q]
+        phi = left_u[:, :q] * tf.sqrt(tf.cast(n, tf.float64)) / sing_q
         diag_D = tf.reduce_sum(phi ** 2, axis=0)
 
-        '''
-        y_bar here for replication
-        '''
         g = tf.matmul(phi, y, transpose_a=True)
         return g, phi, diag_D, q
+
 
     def init_params(self):
         """
@@ -374,20 +372,28 @@ class LCGP(gpflow.Module):
         opt.minimize(self.loss, self.trainable_variables)
         return
 
+    # def loss(self):
+    #     """
+    #     Computes the loss based on the submethod.
+    #     """
+    #     if self.submethod == 'full':
+    #         return self.neglpost()
+    #     # elif self.submethod == 'elbo':
+    #     #     return self.negelbo()
+    #     # elif self.submethod == 'proflik':
+    #     #     return self.negproflik()
+    #     else:
+    #         raise ValueError("Invalid submethod. Choices are 'full', 'elbo', or 'proflik'.")
+
     def loss(self):
         """
         Computes the loss based on the submethod.
         """
-        if self.submethod == 'full':
-            return self.neglpost()
-        # elif self.submethod == 'elbo':
-        #     return self.negelbo()
-        # elif self.submethod == 'proflik':
-        #     return self.negproflik()
-        else:
-            raise ValueError("Invalid submethod. Choices are 'full', 'elbo', or 'proflik'.")
+        try:
+            return self.submethod_loss_map[self.submethod]()
+        except KeyError:
+            raise ValueError("Invalid submethod. Choices are 'full' or 'rep'.")
 
-    @tf.function
     def neglpost_rep(self):
         '''
         1) Build covariances on unique inputs:
@@ -410,6 +416,7 @@ class LCGP(gpflow.Module):
           + regularization
         '''
         self._ensure_replication()
+        print('in neg log post')
 
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         xk = self.x_unique                          # (n,d)
@@ -485,6 +492,7 @@ class LCGP(gpflow.Module):
 
     @tf.function
     def neglpost(self):
+        print('in neg log normal')
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         x = self.x
         y = self.y
@@ -603,7 +611,6 @@ class LCGP(gpflow.Module):
           - Tks[k]    = C_k^{-1} - C_k^{-1} S_k C_k^{-1},   S_k = (C_k^{-1}+d_k R)^{-1}
         """
         self._ensure_replication()
-
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         xk = self.x_unique
         ybar = self.ybar
