@@ -369,7 +369,7 @@ class LCGP(gpflow.Module):
 
     def fit(self, verbose=False):
         opt = gpflow.optimizers.Scipy()
-        opt.minimize(self.loss, self.trainable_variables)
+        opt.minimize(self.loss, self.trainable_variables, compile=False)
         return
 
     # def loss(self):
