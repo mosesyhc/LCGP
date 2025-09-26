@@ -197,6 +197,7 @@ class LCGP(gpflow.Module):
             ybar[:, i] = yr[:, cols].mean(axis=1)
 
         self.x_unique  = tf.convert_to_tensor(x_unique, dtype=tf.float64)   # (n, d)
+        self.x_unique_s = (self.x_unique - self.x_min) / (self.x_max - self.x_min)
         self.group_ids = tf.convert_to_tensor(inverse,  dtype=tf.int32)     # (N,)
         self.r         = tf.convert_to_tensor(r,        dtype=tf.int32)     # (n,)
         self.R         = tf.linalg.diag(tf.cast(self.r, tf.float64))        # (n, n)
@@ -419,7 +420,7 @@ class LCGP(gpflow.Module):
         print('in neg log post')
 
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-        xk = self.x_unique                          # (n,d)
+        xk = self.x_unique_s                        # (n,d)
         ybar = self.ybar                            # (p,n)
         r = tf.cast(self.r, tf.float64)             # (n,)
         R = self.R                                  # (n,n)
@@ -612,7 +613,7 @@ class LCGP(gpflow.Module):
         """
         self._ensure_replication()
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-        xk = self.x_unique
+        xk = self.x_unique_s
         ybar = self.ybar
         r = tf.cast(self.r, tf.float64)
         R = self.R
@@ -739,7 +740,7 @@ class LCGP(gpflow.Module):
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         phi = self.phi
 
-        Xtrain = self.x_unique
+        Xtrain = self.x_unique_s
         Tks = self.Tks
         CinvM = self.CinvMs
 

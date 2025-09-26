@@ -11,140 +11,113 @@ from call_model import LCGPRun
 np.random.seed(42)
 tf.random.set_seed(42)
 
-def make_hartmann_tf(alpha, A, P, a=0.0, b=1.0):
-    A_tf = tf.constant(A, dtype=tf.float32)       
-    P_tf = tf.constant(P, dtype=tf.float32)      
-    alpha_tf = tf.constant(alpha, dtype=tf.float32)
-    a_tf = tf.constant(a, dtype=tf.float32)
-    b_tf = tf.constant(b, dtype=tf.float32)
+def f_true(x):  
+    x = np.asarray(x, dtype=np.float64)
+    f1 = 0.8 + 0.3*np.sin(2*np.pi*x) + 0.2*x
+    f2 = 0.3 + 0.5*np.cos(2*np.pi*x)
+    f3 = -0.4 - (x-0.5)**2 + 0.2*np.sin(4*np.pi*x)
+    return np.vstack([f1, f2, f3]) 
 
-    def hartmann(x):
-        x_tf = tf.convert_to_tensor(x, dtype=tf.float32) 
-        x_exp = tf.expand_dims(x_tf, axis=1)              
-        r = tf.reduce_sum(A_tf * tf.square(x_exp - P_tf), axis=-1)  
-        val = (a_tf - tf.reduce_sum(alpha_tf * tf.exp(-r), axis=-1)) / b_tf
-        return val
-    return hartmann
-
-alpha = np.array([1.0, 1.2, 3.0, 3.2], dtype=np.float32)
-A = np.array([[10.0, 3.0, 17.0, 3.5, 1.7, 8.0],
-              [0.05, 10.0, 17.0, 0.1, 8.0, 14.0],
-              [3.0, 3.5, 1.7, 10.0, 17.0, 8.0],
-              [17.0, 8.0, 0.05, 10.0, 0.1, 14.0]], dtype=np.float32)
-P = (1e-4 * np.array([[1312, 1696, 5569,  124, 8283, 5886],
-                      [2329, 4135, 8307, 3736, 1004, 9991],
-                      [2348, 1451, 3522, 2883, 3047, 6650],
-                      [4047, 8828, 8732, 5743, 1091,  381]], dtype=np.float32))
-
-hartmann6d = make_hartmann_tf(alpha, A, P, a=0.0, b=1.0)
-
-def generate_hartmann_data(x, noisy=True, noise_level=0.01):
+def make_rep_data(n_unique=12, rep_choices=(1,2,3,4), noise_std=(0.05, 0.08, 0.10)):
     """
-    x: (n, 6)
-    returns y with shape (3, n)
+    Returns:
+      xtrain: (N, 1) stacked with replicates
+      ytrain: (3, N) noisy
+      xtest:  (T, 1)
+      ytrue:  (3, T)
     """
-    x = np.asarray(x, dtype=np.float32)
-    y_base = hartmann6d(x).numpy()
+    x_unique = np.linspace(0.0, 1.0, n_unique, dtype=np.float64)
+    r = np.random.choice(rep_choices, size=n_unique, replace=True)
 
-    y1 = y_base
-    y2 = 0.5 * y_base + 2.0 * np.sum(x, axis=1) - 1.0
-    y3 = -0.8 * y_base - 3.0 * np.prod(x, axis=1) + 2.0
+    xs = []
+    ys = []
+    for i, xi in enumerate(x_unique):
+        yi_true = f_true([xi])[:, 0]  
+        for _ in range(r[i]):
+            eps = np.array([
+                np.random.normal(0, noise_std[0]),
+                np.random.normal(0, noise_std[1]),
+                np.random.normal(0, noise_std[2]),
+            ], dtype=np.float64)
+            xs.append([xi])
+            ys.append(yi_true + eps)
 
-    if noisy:
-        y1 = y1 + np.random.normal(0, noise_level * 0.1, y1.shape)
-        y2 = y2 + np.random.normal(0, noise_level * 0.2, y2.shape)
-        y3 = y3 + np.random.normal(0, noise_level * 0.3, y3.shape)
+    xtrain = np.array(xs, dtype=np.float64)              
+    ytrain = np.array(ys, dtype=np.float64).T         
 
-    y = np.vstack((y1, y2, y3)) 
-    return y
+    xtest = np.linspace(0.0, 1.0, 400, dtype=np.float64)[:, None]  
+    ytrue = f_true(xtest[:, 0])                                    
+    return xtrain, ytrain, xtest, ytrue
 
-ns = [50, 100]   
-ntest = 500
-results_fig_path = './results_figure_rep/'
+results_fig_path = './results_figure_rep_1d/'
 Path(results_fig_path).mkdir(parents=True, exist_ok=True)
 
-results_rmse = {}
+xtrain, ytrain, xtest, ytrue = make_rep_data(
+    n_unique=12,
+    rep_choices=(1,2,3,4,5),
+    noise_std=(0.05, 0.08, 0.10)
+)
 
-for n in ns:
-    print(f'Testing number of samples: {n}')
-    xtrain = np.random.uniform(0, 1, (n, 6)).astype(np.float32)
-    xtest = np.random.uniform(0, 1, (ntest, 6)).astype(np.float32)
+data = {
+    'xtrain': xtrain,         
+    'xtest': xtest,          
+    'ytrain': ytrain,         
+    'ytest':  ytrue,          
+    'ytrue':  ytrue
+}
 
-    ytrue = generate_hartmann_data(xtest, noisy=False)  
-    generating_noises_var = np.array([0.005, 0.1, 0.3]) * ytrue.var(1)
+num_latent = ytrain.shape[0] - 1   
+modelrun = LCGPRun(
+    runno='rep_1d',
+    data=data,
+    num_latent=num_latent,
+    submethod='rep'   
+)
+modelrun.define_model()
 
-    ytrain = generate_hartmann_data(xtrain, noisy=True, noise_level=0.01) 
-    ytest = generate_hartmann_data(xtest, noisy=True, noise_level=0.01)   
+t0 = time.time()
+modelrun.train()
+t1 = time.time()
 
-    data = {
-        'xtrain': xtrain,  
-        'xtest': xtest, 
-        'ytrain': ytrain,  
-        'ytest': ytest,   
-        'ytrue': ytrue   
-    }
+predmean, predvar = modelrun.predict()  
 
-    modelrun = LCGPRun(
-        runno=f'n{n}_rep',
-        data=data,
-        num_latent=ytrain.shape[0]-1,
-        submethod='rep'   
-    )
-    modelrun.define_model()
+rmse  = evaluation.rmse(ytrue, predmean)
+nrmse = evaluation.normalized_rmse(ytrue, predmean)
+pcover, pwidth = evaluation.intervalstats(ytrue, predmean, predvar)  
+dss = evaluation.dss(ytrue, predmean, predvar, use_diag=True)
 
-    t0 = time.time()
-    modelrun.train()
-    t1 = time.time()
+print("train time (s):", t1 - t0)
+print("RMSE:", rmse)
+print("NRMSE:", nrmse)
+print("PI coverage (≈95% target):", pcover)
+print("PI width:", pwidth)
+print("DSS:", dss)
 
-    predmean, predvar = modelrun.predict()  
+fig, ax = plt.subplots(3, 1, figsize=(10, 7), sharex=True)
 
-    rmse = evaluation.rmse(ytrue, predmean)
-    nrmse = evaluation.normalized_rmse(ytrue, predmean)
-    pcover, pwidth = evaluation.intervalstats(ytest, predmean, predvar)
-    dss = evaluation.dss(ytrue, predmean, predvar, use_diag=True)
+order_test  = np.argsort(xtest[:, 0])
+order_train = np.argsort(xtrain[:, 0])
 
-    result = {
-        'modelname': modelrun.modelname,
-        'modelrun': modelrun.runno,
-        'n': modelrun.n,
-        'traintime': t1 - t0,
-        'rmse': rmse,
-        'nrmse': nrmse,
-        'pcover': pcover,
-        'pwidth': pwidth,
-        'dss': dss
-    }
+for i in range(3):
+    # replicates as points
+    ax[i].scatter(xtrain[order_train, 0], ytrain[i, order_train],
+                  s=12, alpha=0.65, label='replicates' if i == 0 else None)
+    # true curve
+    ax[i].plot(xtest[order_test, 0], ytrue[i, order_test],
+               lw=1.8, label='true' if i == 0 else None)
+    # prediction mean
+    # ax[i].plot(xtest[order_test, 0], predmean[i, order_test],
+    #            lw=1.5, label='LCGP mean' if i == 0 else None)
+    # # 95% predictive interval
+    # lo = predmean[i, order_test] - 1.96*np.sqrt(predvar[i, order_test])
+    # hi = predmean[i, order_test] + 1.96*np.sqrt(predvar[i, order_test])
+    # ax[i].fill_between(xtest[order_test, 0], lo, hi, alpha=0.22,
+    #                    label='95% pred. interval' if i == 0 else None)
 
-    df = pd.DataFrame.from_dict(result, orient='index').reset_index()
-    print(df)
+    ax[i].set_ylabel(f'$f_{i+1}(x)$')
 
-    fig, ax = plt.subplots(3, 1, figsize=(10, 6))
-    order_test = np.argsort(xtest[:, 0])
-    order_train = np.argsort(xtrain[:, 0])
-
-    for i in range(3):
-        ax[i].scatter(xtrain[order_train, 0], ytrain[i, order_train],
-                      label='Training Data', s=10, alpha=0.6)
-        ax[i].plot(xtest[order_test, 0], ytrue[i, order_test],
-                   label='True', linewidth=1.5)
-        ax[i].plot(xtest[order_test, 0], predmean[i, order_test],
-                   label='Prediction', linewidth=1.2)
-        ax[i].fill_between(
-            xtest[order_test, 0],
-            predmean[i, order_test] - 2.0 * np.sqrt(predvar[i, order_test]),
-            predmean[i, order_test] + 2.0 * np.sqrt(predvar[i, order_test]),
-            alpha=0.25, label='95% CI'
-        )
-        ax[i].set_ylabel(f'Output {i+1}')
-        if i == 0:
-            ax[i].legend(loc='best', fontsize=8)
-
-    ax[-1].set_xlabel('x[:, 0]')
-    plt.tight_layout()
-    figpath = Path(results_fig_path) / f'lcgp-rep-n-{n}.png'
-    plt.savefig(figpath, dpi=150)
-    plt.close(fig)
-
-    results_rmse[n] = rmse
-
-print("RMSE summary:", results_rmse)
+ax[-1].set_xlabel('x')
+ax[0].legend(loc='best', fontsize=9)
+plt.tight_layout()
+plt.savefig(Path(results_fig_path)/'lcgp_rep_1d_demo.png', dpi=150)
+plt.close()
