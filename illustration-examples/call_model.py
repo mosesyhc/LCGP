@@ -41,22 +41,37 @@ class SuperRun:
         pass
 
 
+# class LCGPRun(SuperRun):
+#     def __init__(self, submethod='full', robust=True, err_struct=None, **kwargs):
+#         super().__init__(**kwargs)
+#         self.modelname = 'LCGP'
+#         self.num_latent = kwargs['num_latent']
+#         self.submethod = submethod
+#         self.robust = robust
+#         self.err_struct = err_struct
+#         if self.robust:
+#             self.modelname += '_robust'
+
 class LCGPRun(SuperRun):
-    def __init__(self, submethod='full', robust=True, err_struct=None, **kwargs):
+    def __init__(self, submethod='full', robust=True, err_struct=None,
+                 num_latent=None, var_threshold=None, **kwargs):
         super().__init__(**kwargs)
         self.modelname = 'LCGP'
-        self.num_latent = kwargs['num_latent']
+        self.num_latent = num_latent
+        self.var_threshold = var_threshold
         self.submethod = submethod
         self.robust = robust
         self.err_struct = err_struct
         if self.robust:
             self.modelname += '_robust'
 
+
     def define_model(self):
         self.model = LCGP(y=self.ytrain,
                           x=self.xtrain,
                           parameter_clamp_flag=False,
                           q=self.num_latent,
+                          var_threshold=self.var_threshold,
                           diag_error_structure=self.err_struct,
                           robust_mean=self.robust,
                           submethod=self.submethod)
@@ -64,14 +79,61 @@ class LCGPRun(SuperRun):
     def train(self):
         self.model.fit(verbose=self.verbose)
 
-    def predict(self, train=False):
-        if train:
-            xtest = self.xtrain
-        else:
-            xtest = self.xtest
-        ypredmean, ypredvar, _ = self.model.predict(xtest, return_fullcov=False)
+    # def predict(self, train=False):
+    #     if train:
+    #         xtest = self.xtrain
+    #     else:
+    #         xtest = self.xtest
+    #     ypredmean, ypredvar, _ = self.model.predict(xtest, return_fullcov=False)
 
-        return ypredmean.numpy(), ypredvar.numpy()
+    #     return ypredmean.numpy(), ypredvar.numpy()
+    def predict(self, train: bool = False, return_fullcov: bool = False):
+        xtest = self.xtrain if train else self.xtest
+        ymean, ypredvar, yconfvar = self.model.predict(xtest, return_fullcov=return_fullcov)
+        return ymean.numpy(), ypredvar.numpy(), yconfvar.numpy()
+
+    
+import numpy as np
+
+def rmse(ytrue, yhat):
+    return float(np.sqrt(np.mean((ytrue - yhat)**2)))
+
+def normalized_rmse(ytrue, yhat, method="range"):
+    if method == "range":
+        ranges = np.ptp(ytrue, axis=1, keepdims=True)  
+        ranges = np.where(ranges == 0, 1.0, ranges)
+        nrmse_per = np.sqrt(np.mean((ytrue - yhat)**2, axis=1, keepdims=True)) / ranges
+        return float(np.mean(nrmse_per))
+    elif method == "std":
+        stds = np.std(ytrue, axis=1, ddof=0, keepdims=True)
+        stds = np.where(stds == 0, 1.0, stds)
+        nrmse_per = np.sqrt(np.mean((ytrue - yhat)**2, axis=1, keepdims=True)) / stds
+        return float(np.mean(nrmse_per))
+    else:
+        raise ValueError("method must be 'range' or 'std'")
+
+def intervalstats(ytrue, mean, var, z=1.96):
+    """
+    95% nominal predictive interval coverage/width over all dims/points.
+    Use FUNCTION variance (var = confvar) if comparing to noise-free truth.
+    """
+    sd = np.sqrt(var)
+    lo, hi = mean - z*sd, mean + z*sd
+    covered = (ytrue >= lo) & (ytrue <= hi)
+    cover = float(np.mean(covered))
+    width = float(np.mean(2*z*sd))
+    return cover, width
+
+def dss(ytrue, mean, var, use_diag=True):
+    """
+    Dawid–Sebastiani score (Gaussian): (y-μ)^2 / σ^2 + log σ^2
+    Aggregated over dims/points; use function variance if scoring latent f.
+    """
+    eps = 1e-12
+    s2 = np.maximum(var, eps)
+    term = ((ytrue - mean)**2) / s2 + np.log(s2)
+    return float(np.mean(term))
+
 
 #
 # class OILMMRun(SuperRun):

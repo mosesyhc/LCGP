@@ -417,28 +417,27 @@ class LCGP(gpflow.Module):
           + regularization
         '''
         self._ensure_replication()
-        print('in neg log post')
 
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-        xk = self.x_unique_s                        # (n,d)
-        ybar = self.ybar                            # (p,n)
-        r = tf.cast(self.r, tf.float64)             # (n,)
-        R = self.R                                  # (n,n)
-        n = tf.cast(self.n, tf.float64)
-        p = tf.cast(self.p, tf.float64)
+        xk   = self.x_unique_s                      
+        ybar = self.ybar_s                          
+        r    = tf.cast(self.r, tf.float64)          
+        R    = self.R                                
+        n    = tf.cast(self.n, tf.float64)
+        p    = tf.cast(self.p, tf.float64)
 
-        D = self.diag_D                             # (q,)
-        phi = self.phi                              # (p,q)
+        D    = self.diag_D                          
+        phi  = self.phi                             
 
-        sigma_log = lsigma2s                        # (p,)
-        sigma_inv = tf.exp(-sigma_log)              # Σ^{-1} diag
-        sigma_inv_sqrt = tf.exp(-0.5 * sigma_log)   # Σ^{-1/2}
+        sigma_log       = lsigma2s                   
+        sigma_inv       = tf.exp(-sigma_log)          
+        sigma_inv_sqrt  = tf.exp(-0.5 * sigma_log)    
 
         nlp = tf.constant(0.0, tf.float64)
 
         # 0.5 * sum_i r_i * ybar_i^T Σ^{-1} ybar_i
-        ybar_scaled = ybar * sigma_inv_sqrt[:, None]            # (p,n)
-        col_sq = tf.reduce_sum(tf.square(ybar_scaled), axis=0)  # (n,)
+        ybar_scaled = ybar * sigma_inv_sqrt[:, None]          
+        col_sq      = tf.reduce_sum(tf.square(ybar_scaled), axis=0) 
         nlp += 0.5 * tf.reduce_sum(r * col_sq)
 
         # + (n/2) log|Σ|
@@ -449,47 +448,41 @@ class LCGP(gpflow.Module):
 
         pc = self.penalty_const
         reg = (pc['lLmb'] * tf.reduce_sum(tf.square(tf.math.log(self.lLmb))) +
-               pc['lLmb0'] * (2.0 / n) * tf.reduce_sum(tf.square(self.lLmb0.unconstrained_variable))
-               - tf.reduce_sum(tf.math.log(tf.math.log(self.lnugGPs) + 100.0))
-              )
+            pc['lLmb0'] * (2.0 / n) * tf.reduce_sum(tf.square(self.lLmb0.unconstrained_variable))
+            - tf.reduce_sum(tf.math.log(tf.math.log(self.lnugGPs) + 100.0)))
 
         bkSb_sum = tf.constant(0.0, tf.float64)
         logA_sum = tf.constant(0.0, tf.float64)
 
-        sr = tf.sqrt(r)  # (n,)
+        sr  = tf.sqrt(r) 
 
         q_int = tf.cast(self.q, tf.int32)
         for k in range(q_int):
-            Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])  # (n,n)
+            Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k]) 
 
-            # b_k = R * ybar^T * (Σ^{-1/2} phi_k)
-            phi_k = phi[:, k]
-            v_k = phi_k * sigma_inv_sqrt
-            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)   # (n,)
-            b_k = r * ytv
+            sigma_inv_sqrt = tf.exp(-0.5 * lsigma2s)          
+            v_k = sigma_inv_sqrt * phi[:, k]                   
+            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)    
+            b_k = r * ytv                                      
 
-            # A = I + d_k * R^{1/2} C_k R^{1/2}
             d_k = D[k]
-            Csr = Ck * sr[None, :]
-            A = tf.eye(self.n, dtype=tf.float64) + d_k * (Csr * sr[:, None])
-
-            LA = tf.linalg.cholesky(A)
-            logdetA = 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(LA)))
-            logA_sum += logdetA
-
-            Cb = tf.linalg.matvec(Ck, b_k)
-            u = tf.sqrt(d_k) * (sr * Cb)
-            z = tf.linalg.cholesky_solve(LA, tf.expand_dims(u, -1))
-            z = tf.squeeze(z, -1)
-            Sb = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))
+            Cb  = tf.linalg.matvec(Ck, b_k)
+            A   = tf.eye(self.n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])
+            LA  = tf.linalg.cholesky(A)
+            u   = tf.sqrt(d_k) * (sr * Cb)
+            z   = tf.linalg.cholesky_solve(LA, tf.expand_dims(u, -1))
+            z   = tf.squeeze(z, -1)
+            Sb  = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))
 
             bkSb_sum += tf.tensordot(b_k, Sb, axes=1)
+            logA_sum += 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(LA)))
 
         nlp += -0.5 * bkSb_sum
-        nlp += 0.5 * logA_sum
-        nlp += reg
+        nlp +=  0.5 * logA_sum
+        nlp +=  reg
         nlp /= n
         return nlp
+
 
     @tf.function
     def neglpost(self):
@@ -606,21 +599,15 @@ class LCGP(gpflow.Module):
         self.Ths = Th
 
     def _compute_aux_predictive_quantities_rep(self):
-        """
-        Replication-aware auxiliaries:
-          - CinvMs[k] = C_k^{-1} m_k = b_k - d_k * R @ m_k  (avoid explicit C^{-1})
-          - Tks[k]    = C_k^{-1} - C_k^{-1} S_k C_k^{-1},   S_k = (C_k^{-1}+d_k R)^{-1}
-        """
         self._ensure_replication()
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-        xk = self.x_unique_s
-        ybar = self.ybar
-        r = tf.cast(self.r, tf.float64)
-        R = self.R
+        xk   = self.x_unique_s
+        ybar = self.ybar_s                          
+        r    = tf.cast(self.r, tf.float64)
+        R    = self.R
 
-        D = self.diag_D
-        phi = self.phi
-
+        D    = self.diag_D
+        phi  = self.phi
         sigma_inv_sqrt = tf.exp(-0.5 * lsigma2s)
 
         q = tf.cast(self.q, tf.int32)
@@ -630,31 +617,29 @@ class LCGP(gpflow.Module):
         Tks   = tf.zeros([q, n, n], dtype=tf.float64)
 
         for k in range(q):
-            Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])  # (n,n)
-            phi_k = phi[:, k]
-            v_k = phi_k * sigma_inv_sqrt
-            b_k = r * tf.linalg.matvec(tf.transpose(ybar), v_k)  # (n,)
+            Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+            sigma_inv_sqrt = tf.exp(-0.5 * lsigma2s)
+            v_k = sigma_inv_sqrt * phi[:, k]
+            b_k = r * tf.linalg.matvec(tf.transpose(ybar), v_k)
 
-            # m = S b via Woodbury in C-space:
+
             d_k = D[k]
-            sr = tf.sqrt(r)
-            Cb = tf.linalg.matvec(Ck, b_k)
-            A = tf.eye(n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])  # I + d R^{1/2} C R^{1/2}
-            LA = tf.linalg.cholesky(A)
-            u = tf.sqrt(d_k) * (sr * Cb)
-            z = tf.linalg.cholesky_solve(LA, tf.expand_dims(u, -1))
-            z = tf.squeeze(z, -1)
-            m_k = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))  # (n,)
+            sr  = tf.sqrt(r)
+            Cb  = tf.linalg.matvec(Ck, b_k)
+            A   = tf.eye(n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])
+            LA  = tf.linalg.cholesky(A)
+            u   = tf.sqrt(d_k) * (sr * Cb)
+            z   = tf.linalg.cholesky_solve(LA, tf.expand_dims(u, -1))
+            z   = tf.squeeze(z, -1)
+            m_k = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))
 
-            # C^{-1} m = b - d R m
             CinvM_k = b_k - d_k * tf.linalg.matvec(R, m_k)
 
-            # T = C^{-1} - C^{-1} S C^{-1}
-            LC = tf.linalg.cholesky(Ck)
-            Id = tf.eye(n, dtype=tf.float64)
-            invC = tf.linalg.cholesky_solve(LC, Id)                 # C^{-1}
-            A_inv = tf.linalg.inv(invC + d_k * tf.cast(R, tf.float64))  # S
-            Tk = invC - invC @ A_inv @ invC
+            LC  = tf.linalg.cholesky(Ck)
+            Id  = tf.eye(n, dtype=tf.float64)
+            invC = tf.linalg.cholesky_solve(LC, Id)
+            A_inv = tf.linalg.inv(invC + d_k * tf.cast(R, tf.float64))  
+            Tk  = invC - invC @ A_inv @ invC
 
             CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], [CinvM_k])
             Tks   = tf.tensor_scatter_nd_update(Tks,   [[k]], [Tk])
@@ -727,22 +712,17 @@ class LCGP(gpflow.Module):
         return ypred, ypredvar, yconfvar
 
     def predict_rep(self, x0, return_fullcov=False):
-        """
-        Replication-aware prediction using Tks and CinvMs computed on unique inputs.
-        Mean:  ghat_k(x0) = c0k @ (C^{-1} m_k) = c0k @ CinvMs[k]
-        Var:   gvar_k(x0) = c00k - row_diag(c0k @ T_k @ c0k^T)
-        """
         self._ensure_replication()
         need_aux = (self.Tks is None) or tf.reduce_any(tf.math.is_nan(self.CinvMs))
         if need_aux:
             self._compute_aux_predictive_quantities_rep()
 
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-        phi = self.phi
+        phi  = self.phi
 
         Xtrain = self.x_unique_s
-        Tks = self.Tks
-        CinvM = self.CinvMs
+        Tks    = self.Tks
+        CinvM  = self.CinvMs
 
         x0 = self._verify_data_types(x0)
         x0 = (x0 - self.x_min) / (self.x_max - self.x_min)
@@ -752,35 +732,27 @@ class LCGP(gpflow.Module):
         gvar = tf.zeros([self.q, n0], dtype=tf.float64)
 
         for k in range(self.q):
-            c00k = Matern32(x0, x0,   llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=True)
+            c00k = Matern32(x0, x0,     llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=True)
             c0k  = Matern32(x0, Xtrain, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=False)
-
             ghat_k = tf.linalg.matvec(c0k, CinvM[k])
-
-            Tk = Tks[k]
-            v = tf.matmul(c0k, Tk)               
-            quad = tf.reduce_sum(v * c0k, axis=1)
+            Tk     = Tks[k]
+            v      = tf.matmul(c0k, Tk)
+            quad   = tf.reduce_sum(v * c0k, axis=1)
             gvar_k = c00k - quad
 
             ghat = tf.tensor_scatter_nd_update(ghat, [[k]], [ghat_k])
             gvar = tf.tensor_scatter_nd_update(gvar, [[k]], [gvar_k])
 
-        psi = tf.transpose(phi) * tf.sqrt(tf.exp(lsigma2s))
-        predmean = tf.matmul(psi, ghat, transpose_a=True)
-        confvar  = tf.matmul(tf.transpose(gvar), tf.square(psi))
-        predvar  = confvar + tf.exp(lsigma2s)
+        predmean_std = tf.matmul(phi, ghat)              
+        confvar_std  = tf.matmul(tf.square(phi), gvar)   
+        predvar_std  = confvar_std + tf.exp(lsigma2s)[:, None]
 
-        ypred    = self.tx_y(predmean)
-        yconfvar = tf.transpose(confvar) * tf.square(self.ystd)
-        ypredvar = tf.transpose(predvar) * tf.square(self.ystd)
+        ypred    = predmean_std * self.ybar_std + self.ybar_mean
+        yconfvar = confvar_std * tf.square(self.ybar_std)
+        ypredvar = predvar_std * tf.square(self.ybar_std)
 
         if return_fullcov:
-            CH = tf.sqrt(gvar)[..., tf.newaxis] * psi[tf.newaxis, ...]
-            yfullpredcov = (tf.einsum('nij,njk->nik', CH, tf.transpose(CH, perm=[0, 2, 1])) +
-                            tf.linalg.diag(tf.exp(lsigma2s)))
-            yfullpredcov *= tf.square(self.ystd)
-            return ypred, ypredvar, yconfvar, yfullpredcov
-
+            return ypred, ypredvar, yconfvar, None
         return ypred, ypredvar, yconfvar
 
     @staticmethod
