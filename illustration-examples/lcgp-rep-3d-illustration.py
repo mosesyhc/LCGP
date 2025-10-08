@@ -1,7 +1,6 @@
 import numpy as np
 import tensorflow as tf
 import time
-import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -19,13 +18,6 @@ def f_true(x):
     return np.vstack([f1, f2, f3])
 
 def make_rep_data(n_unique=12, rep_choices=(1,2,3,4), noise_std=(0.05, 0.08, 0.10), seed=None):
-    """
-    Returns:
-      xtrain: (N, 1) stacked with replicates
-      ytrain: (3, N) noisy
-      xtest:  (T, 1)
-      ytrue:  (3, T)
-    """
     if seed is not None:
         rng = np.random.default_rng(seed)
         choice = lambda a, size=None, replace=True: rng.choice(a, size=size, replace=replace)
@@ -39,20 +31,17 @@ def make_rep_data(n_unique=12, rep_choices=(1,2,3,4), noise_std=(0.05, 0.08, 0.1
 
     xs, ys = [], []
     for i, xi in enumerate(x_unique):
-        yi_true = f_true([xi])[:, 0] 
+        yi_true = f_true([xi])[:, 0]
         for _ in range(int(r[i])):
-            eps = np.array([
-                normal(0, noise_std[0]),
-                normal(0, noise_std[1]),
-                normal(0, noise_std[2]),
-            ], dtype=np.float64)
-            xs.append([xi])
-            ys.append(yi_true + eps)
+            eps = np.array([normal(0, noise_std[0]),
+                            normal(0, noise_std[1]),
+                            normal(0, noise_std[2])], dtype=np.float64)
+            xs.append([xi]); ys.append(yi_true + eps)
 
-    xtrain = np.array(xs, dtype=np.float64)           
-    ytrain = np.array(ys, dtype=np.float64).T          
+    xtrain = np.array(xs, dtype=np.float64)
+    ytrain = np.array(ys, dtype=np.float64).T
     xtest  = np.linspace(0.0, 1.0, 400, dtype=np.float64)[:, None]
-    ytrue  = f_true(xtest[:, 0])                  
+    ytrue  = f_true(xtest[:, 0])
     return xtrain, ytrain, xtest, ytrue
 
 def make_rep_data_skewed(n_unique=40,
@@ -61,33 +50,24 @@ def make_rep_data_skewed(n_unique=40,
                          heavy_rep_choices=(8, 12, 16, 20),
                          noise_std=(0.05, 0.08, 0.10),
                          seed=None):
-    """
-    many replicates inside heavy_region, few elsewhere.
-    """
     rng = np.random.default_rng(seed)
     x_unique = np.linspace(0.0, 1.0, n_unique, dtype=np.float64)
 
     xs, ys = [], []
     for xi in x_unique:
-        if heavy_region[0] <= xi <= heavy_region[1]:
-            r = int(rng.choice(heavy_rep_choices))
-        else:
-            r = int(rng.choice(light_rep_choices))
-
-        yi_base = f_true([xi])[:, 0]  # (3,)
+        r = int(rng.choice(heavy_rep_choices) if (heavy_region[0] <= xi <= heavy_region[1])
+                else rng.choice(light_rep_choices))
+        yi_base = f_true([xi])[:, 0]
         for _ in range(r):
-            eps = np.array([
-                rng.normal(0, noise_std[0]),
-                rng.normal(0, noise_std[1]),
-                rng.normal(0, noise_std[2]),
-            ], dtype=np.float64)
-            xs.append([xi])
-            ys.append(yi_base + eps)
+            eps = np.array([rng.normal(0, noise_std[0]),
+                            rng.normal(0, noise_std[1]),
+                            rng.normal(0, noise_std[2])], dtype=np.float64)
+            xs.append([xi]); ys.append(yi_base + eps)
 
-    xtrain = np.array(xs, dtype=np.float64)           
-    ytrain = np.array(ys, dtype=np.float64).T          
+    xtrain = np.array(xs, dtype=np.float64)
+    ytrain = np.array(ys, dtype=np.float64).T
     xtest  = np.linspace(0.0, 1.0, 400, dtype=np.float64)[:, None]
-    ytrue  = f_true(xtest[:, 0])                     
+    ytrue  = f_true(xtest[:, 0])
     return xtrain, ytrain, xtest, ytrue
 
 def make_rep_data_hotspots(n_unique=50,
@@ -95,16 +75,9 @@ def make_rep_data_hotspots(n_unique=50,
                            base_rep_choices=(1,),
                            noise_std=(0.05, 0.08, 0.10),
                            seed=None):
-    """
-    a few 'hot-spot' x locations with very high replication.
-    """
     rng = np.random.default_rng(seed)
     x_unique = np.linspace(0.0, 1.0, n_unique, dtype=np.float64)
-
-    hotspot_idx = {}
-    for (x0, lo, hi) in hotspots:
-        idx = np.argmin(np.abs(x_unique - x0))
-        hotspot_idx[idx] = (lo, hi)
+    hotspot_idx = {np.argmin(np.abs(x_unique - x0)): (lo, hi) for (x0, lo, hi) in hotspots}
 
     xs, ys = [], []
     for i, xi in enumerate(x_unique):
@@ -113,16 +86,12 @@ def make_rep_data_hotspots(n_unique=50,
             r = int(rng.integers(lo, hi + 1))
         else:
             r = int(rng.choice(base_rep_choices))
-
         yi_base = f_true([xi])[:, 0]
         for _ in range(r):
-            eps = np.array([
-                rng.normal(0, noise_std[0]),
-                rng.normal(0, noise_std[1]),
-                rng.normal(0, noise_std[2]),
-            ], dtype=np.float64)
-            xs.append([xi])
-            ys.append(yi_base + eps)
+            eps = np.array([rng.normal(0, noise_std[0]),
+                            rng.normal(0, noise_std[1]),
+                            rng.normal(0, noise_std[2])], dtype=np.float64)
+            xs.append([xi]); ys.append(yi_base + eps)
 
     xtrain = np.array(xs, dtype=np.float64)
     ytrain = np.array(ys, dtype=np.float64).T
@@ -130,29 +99,32 @@ def make_rep_data_hotspots(n_unique=50,
     ytrue  = f_true(xtest[:, 0])
     return xtrain, ytrain, xtest, ytrue
 
-# --- CASE 1: Uniform-ish replication ---
-results_fig_path = './results_figure_rep_1d_uniform/'
-Path(results_fig_path).mkdir(parents=True, exist_ok=True)
-xtrain, ytrain, xtest, ytrue = make_rep_data(
-    n_unique=16,
-    rep_choices=(1,2,3,4,5),
-    noise_std=(0.05, 0.08, 0.10),
-    seed=2025
-)
-
-# --- CASE 2: Skewed replication ---
-# results_fig_path = './results_figure_rep_1d_skewed/'
+# --------------------------
+# Choose dataset
+# --------------------------
+# CASE 1: Uniform-ish replication
+# results_fig_path = './results_figure_rep_1d_uniform/'
 # Path(results_fig_path).mkdir(parents=True, exist_ok=True)
-# xtrain, ytrain, xtest, ytrue = make_rep_data_skewed(
-#     n_unique=40,
-#     heavy_region=(0.20, 0.45),
-#     light_rep_choices=(1, 2),
-#     heavy_rep_choices=(8, 12, 16, 20),
+# xtrain, ytrain, xtest, ytrue = make_rep_data(
+#     n_unique=16,
+#     rep_choices=(1,2,3,4,5),
 #     noise_std=(0.05, 0.08, 0.10),
-#     seed=123
+#     seed=2025
 # )
 
-# # --- CASE 3: Hot-spots ---
+# CASE 2: Skewed replication
+results_fig_path = './results_figure_rep_1d_skewed/'
+Path(results_fig_path).mkdir(parents=True, exist_ok=True)
+xtrain, ytrain, xtest, ytrue = make_rep_data_skewed(
+    n_unique=40,
+    heavy_region=(0.20, 0.45),
+    light_rep_choices=(1, 2),
+    heavy_rep_choices=(8, 12, 16, 20),
+    noise_std=(0.05, 0.08, 0.10),
+    seed=123
+)
+
+# # CASE 3: Hot-spots
 # results_fig_path = './results_figure_rep_1d_hotspots/'
 # Path(results_fig_path).mkdir(parents=True, exist_ok=True)
 # xtrain, ytrain, xtest, ytrue = make_rep_data_hotspots(
@@ -163,20 +135,26 @@ xtrain, ytrain, xtest, ytrue = make_rep_data(
 #     seed=7
 # )
 
+# --------------------------
+# Build & train the model
+# --------------------------
+SUBMETHOD = 'rep'   # set 'rep' for replicated data; 'full' for non-replicated
+PLOT_MODE = 'g'     # 'g' to plot latents; 'y' to plot outputs
+
 data = {
     'xtrain': xtrain,
     'xtest':  xtest,
     'ytrain': ytrain,
-    'ytest':  ytrue,  
+    'ytest':  ytrue,
     'ytrue':  ytrue
 }
 
 modelrun = LCGPRun(
     runno='rep_1d',
     data=data,
-    num_latent=3,        
-    var_threshold=None,  
-    submethod='full',
+    num_latent=3,
+    var_threshold=None,
+    submethod=SUBMETHOD,
     diag_error_structure=[1,1,1],
     robust_mean=True,
 )
@@ -188,11 +166,37 @@ t1 = time.time()
 
 predmean, ypredvar, yconfvar = modelrun.predict(return_fullcov=False)
 
+# --------------------------
+# Transform consistency check
+# --------------------------
+def transform_consistency_check(modelrun, predmean_from_runner, xtest):
+    mdl = getattr(modelrun, 'model', None) or getattr(modelrun, 'lcgp', None)
+    assert mdl is not None, "Couldn't find underlying LCGP model."
+
+    _ = mdl.predict(x0=xtest, return_fullcov=False)
+
+    lLmb, lLmb0, built_lsigma2s, lnug = mdl.get_param()
+    sigma_sqrt = tf.sqrt(tf.exp(built_lsigma2s)).numpy()
+    phi = mdl.phi.numpy()                               
+    ghat = np.asarray(mdl.ghat)                         
+
+    if mdl.submethod == 'rep':
+        y_std = phi @ ghat    
+        y_from_g = y_std * np.asarray(mdl.ybar_std) + np.asarray(mdl.ybar_mean)
+    else:
+        psi = phi * sigma_sqrt[:, None]                    
+        predmean_std = psi @ ghat                          
+        y_from_g = mdl.tx_y(predmean_std).numpy()          
+
+    diff = np.max(np.abs(y_from_g - predmean_from_runner))
+    print(f"[transform check] max |recomposed - runner| = {diff:.3e}")
+
+transform_consistency_check(modelrun, predmean, xtest)
+
 rmse  = evaluation.rmse(ytrue, predmean)
 nrmse = evaluation.normalized_rmse(ytrue, predmean)
-pcover, pwidth = evaluation.intervalstats(ytrue, predmean, yconfvar) 
+pcover, pwidth = evaluation.intervalstats(ytrue, predmean, yconfvar)
 dss = evaluation.dss(ytrue, predmean, yconfvar, use_diag=True)
-
 print("train time (s):", round(t1 - t0, 3))
 print("RMSE:", rmse)
 print("NRMSE:", nrmse)
@@ -200,29 +204,55 @@ print("95% PI coverage:", pcover)
 print("95% PI width:", pwidth)
 print("DSS:", dss)
 
-fig, ax = plt.subplots(3, 1, figsize=(10, 7), sharex=True)
 order_test  = np.argsort(xtest[:, 0])
 order_train = np.argsort(xtrain[:, 0])
 
-for i in range(3):
-    ax[i].scatter(xtrain[order_train, 0], ytrain[i, order_train],
-                  s=12, alpha=0.65, label='replicates' if i == 0 else None)
+if PLOT_MODE == 'g':
+    mdl = getattr(modelrun, 'model', None) or getattr(modelrun, 'lcgp', None)
+    _ = mdl.predict(x0=xtest, return_fullcov=False)  
 
-    ax[i].plot(xtest[order_test, 0], ytrue[i, order_test],
-               lw=1.8, label='true' if i == 0 else None)
+    ghat = np.asarray(mdl.ghat)          
+    gstd = np.sqrt(np.asarray(mdl.gvar)) 
+    q = ghat.shape[0]
 
-    ax[i].plot(xtest[order_test, 0], predmean[i, order_test],
-               lw=1.5, label='LCGP mean' if i == 0 else None)
+    fig, axes = plt.subplots(q, 1, figsize=(10, 1.9*q), sharex=True)
+    if q == 1: axes = [axes]
+    x = xtest[order_test, 0]
 
-    lo = predmean[i, order_test] - 1.96*np.sqrt(yconfvar[i, order_test])
-    hi = predmean[i, order_test] + 1.96*np.sqrt(yconfvar[i, order_test])
-    ax[i].fill_between(xtest[order_test, 0], lo, hi, alpha=0.22,
-                       label='95% credible band' if i == 0 else None)
+    for k, ax in enumerate(axes):
+        m = ghat[k, order_test]
+        s = gstd[k, order_test]
+        ax.plot(x, m, lw=1.8, label=fr'$g_{{{k+1}}}(x)$ mean')
+        ax.fill_between(x, m - 1.96*s, m + 1.96*s, alpha=0.22, label='95% band')
+        ax.set_ylabel(fr'$g_{{{k+1}}}(x)$')
+        ax.legend(loc='best', fontsize=9)
 
-    ax[i].set_ylabel(f'$f_{i+1}(x)$')
+    axes[-1].set_xlabel('x')
+    plt.tight_layout()
+    plt.savefig(Path(results_fig_path)/'lcgp_latents_gkx.png', dpi=150)
+    plt.close()
 
-ax[-1].set_xlabel('x')
-ax[0].legend(loc='best', fontsize=9)
-plt.tight_layout()
-plt.savefig(Path(results_fig_path)/'lcgp_rep_1d_demo.png', dpi=150)
-plt.close()
+else:
+    fig, ax = plt.subplots(3, 1, figsize=(10, 7), sharex=True)
+    for i in range(3):
+        ax[i].scatter(xtrain[order_train, 0], ytrain[i, order_train],
+                      s=12, alpha=0.65, label='replicates' if i == 0 else None)
+
+        ax[i].plot(xtest[order_test, 0], ytrue[i, order_test],
+                   lw=1.8, label='true' if i == 0 else None)
+
+        ax[i].plot(xtest[order_test, 0], predmean[i, order_test],
+                   lw=1.5, label='LCGP mean' if i == 0 else None)
+
+        lo = predmean[i, order_test] - 1.96*np.sqrt(yconfvar[i, order_test])
+        hi = predmean[i, order_test] + 1.96*np.sqrt(yconfvar[i, order_test])
+        ax[i].fill_between(xtest[order_test, 0], lo, hi, alpha=0.22,
+                           label='95% credible band' if i == 0 else None)
+
+        ax[i].set_ylabel(f'$f_{i+1}(x)$')
+
+    ax[-1].set_xlabel('x')
+    ax[0].legend(loc='best', fontsize=9)
+    plt.tight_layout()
+    plt.savefig(Path(results_fig_path)/'lcgp_rep_1d_demo.png', dpi=150)
+    plt.close()

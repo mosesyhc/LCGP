@@ -743,6 +743,9 @@ class LCGP(gpflow.Module):
             ghat = tf.tensor_scatter_nd_update(ghat, [[k]], [ghat_k])
             gvar = tf.tensor_scatter_nd_update(gvar, [[k]], [gvar_k])
 
+        self.ghat = ghat
+        self.gvar = gvar
+
         predmean_std = tf.matmul(phi, ghat)              
         confvar_std  = tf.matmul(tf.square(phi), gvar)   
         predvar_std  = confvar_std + tf.exp(lsigma2s)[:, None]
