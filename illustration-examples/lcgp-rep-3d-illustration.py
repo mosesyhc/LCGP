@@ -209,28 +209,39 @@ order_train = np.argsort(xtrain[:, 0])
 
 if PLOT_MODE == 'g':
     mdl = getattr(modelrun, 'model', None) or getattr(modelrun, 'lcgp', None)
-    _ = mdl.predict(x0=xtest, return_fullcov=False)  
 
-    ghat = np.asarray(mdl.ghat)          
-    gstd = np.sqrt(np.asarray(mdl.gvar)) 
-    q = ghat.shape[0]
+    _ = mdl.predict(x0=xtest, return_fullcov=False)
+    ghat_test = np.asarray(mdl.ghat)           
+    gstd_test = np.sqrt(np.asarray(mdl.gvar))  
 
+    _ = mdl.predict(x0=xtrain, return_fullcov=False)
+    ghat_tr = np.asarray(mdl.ghat)             
+    gstd_tr = np.sqrt(np.asarray(mdl.gvar))    
+
+    q = ghat_test.shape[0]
     fig, axes = plt.subplots(q, 1, figsize=(10, 1.9*q), sharex=True)
     if q == 1: axes = [axes]
-    x = xtest[order_test, 0]
+
+    x_test = xtest[order_test, 0]
+    x_tr   = xtrain[order_train, 0]
 
     for k, ax in enumerate(axes):
-        m = ghat[k, order_test]
-        s = gstd[k, order_test]
-        ax.plot(x, m, lw=1.8, label=fr'$g_{{{k+1}}}(x)$ mean')
-        ax.fill_between(x, m - 1.96*s, m + 1.96*s, alpha=0.22, label='95% band')
+        m = ghat_test[k, order_test]
+        s = gstd_test[k, order_test]
+        ax.plot(x_test, m, lw=1.8, label=fr'$g_{{{k+1}}}(x)$ mean')
+        ax.fill_between(x_test, m - 1.96*s, m + 1.96*s, alpha=0.22, label='95% band')
+
+        ax.scatter(x_tr, ghat_tr[k, order_train],
+                   s=12, alpha=0.65, label='train pts')
+
         ax.set_ylabel(fr'$g_{{{k+1}}}(x)$')
         ax.legend(loc='best', fontsize=9)
 
     axes[-1].set_xlabel('x')
     plt.tight_layout()
-    plt.savefig(Path(results_fig_path)/'lcgp_latents_gkx.png', dpi=150)
+    plt.savefig(Path(results_fig_path)/'lcgp_latents_gkx_with_points.png', dpi=150)
     plt.close()
+
 
 else:
     fig, ax = plt.subplots(3, 1, figsize=(10, 7), sharex=True)
