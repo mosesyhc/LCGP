@@ -214,9 +214,14 @@ if PLOT_MODE == 'g':
     ghat_test = np.asarray(mdl.ghat)           
     gstd_test = np.sqrt(np.asarray(mdl.gvar))  
 
-    _ = mdl.predict(x0=xtrain, return_fullcov=False)
-    ghat_tr = np.asarray(mdl.ghat)               #  ghat_tr = Ybar Psi, Psi = Sigma^{1/2} Phi, [U^T Y = R Ybar]
-    gstd_tr = np.sqrt(np.asarray(mdl.gvar))    
+    # _ = mdl.predict(x0=xtrain, return_fullcov=False)
+    xtrain = np.asarray(mdl.x_unique)
+    order_train = np.argsort(xtrain[:, 0])
+    ghat_tr = np.asarray(tf.transpose(tf.matmul((tf.transpose(mdl.ybar_s * tf.cast(mdl.r, tf.float64))
+                                                 * tf.exp(-0.5 * mdl.lsigma2s)), mdl.phi)))
+
+    # ghat_tr = np.asarray(mdl.ghat)               #  ghat_tr = Ybar Psi, Psi = Sigma^{1/2} Phi, [U^T Y = R Ybar]
+    # gstd_tr = np.sqrt(np.asarray(mdl.gvar))
 
     q = ghat_test.shape[0]
     fig, axes = plt.subplots(q, 1, figsize=(10, 1.9*q), sharex=True)
