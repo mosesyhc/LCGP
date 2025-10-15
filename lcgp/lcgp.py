@@ -92,10 +92,16 @@ class LCGP(gpflow.Module):
             self.n = n_unique
             self.d = d
         '''
+        self._rep_initialized = False
+        if self.submethod == 'rep':
+            self.preprocess() 
+            self._rep_initialized = True
 
         # reset q if none is provided
         self.g, self.phi, self.diag_D, self.q = \
             self.init_phi(var_threshold=var_threshold)
+        
+        self.Tks = None
 
         if diag_error_structure is None:
             self.diag_error_structure = [1] * int(self.p)
@@ -152,10 +158,6 @@ class LCGP(gpflow.Module):
         if not self._rep_initialized:
             self.preprocess()  # builds x_unique, ybar, r, R, ybar_s, etc.
             # rebuild basis on ybar_s
-            self.g, self.phi, self.diag_D, self.q = self.init_phi(var_threshold=self.var_threshold)
-            self.CinvMs = tf.fill([self.q, self.n], tf.constant(float('nan'), dtype=tf.float64))
-            self.Ths    = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
-            self.Tks    = None
             self._rep_initialized = True
 
     def preprocess(self, y_raw=None, x_raw=None):
@@ -280,8 +282,9 @@ class LCGP(gpflow.Module):
         Initialization of orthogonal basis, computed with singular value decomposition.
         Uses ybar_s if available (replication), else y.
         """
-        y_in = getattr(self, 'ybar_s', None)
-        if y_in is None:
+        if self.submethod == 'rep' and hasattr(self, 'ybar_s'):
+            y_in = self.ybar_s
+        else:
             y_in = self.y
 
         y = y_in  
@@ -416,8 +419,6 @@ class LCGP(gpflow.Module):
           + (n/2) log|Σ| - (p/2) log|R|
           + regularization
         '''
-        self._ensure_replication()
-
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         xk   = self.x_unique_s                      
         ybar = self.ybar_s                          
@@ -599,7 +600,6 @@ class LCGP(gpflow.Module):
         self.Ths = Th
 
     def _compute_aux_predictive_quantities_rep(self):
-        self._ensure_replication()
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         xk   = self.x_unique_s
         ybar = self.ybar_s                          
@@ -652,6 +652,7 @@ class LCGP(gpflow.Module):
         """
         Returns predictions using full posterior approach.
         """
+        print("in predict full")
         if tf.reduce_any(tf.math.is_nan(self.CinvMs)) or tf.reduce_any(tf.math.is_nan(self.Ths)):
             self.compute_aux_predictive_quantities()
 
@@ -712,7 +713,6 @@ class LCGP(gpflow.Module):
         return ypred, ypredvar, yconfvar
 
     def predict_rep(self, x0, return_fullcov=False):
-        self._ensure_replication()
         need_aux = (self.Tks is None) or tf.reduce_any(tf.math.is_nan(self.CinvMs))
         if need_aux:
             self._compute_aux_predictive_quantities_rep()
@@ -746,13 +746,32 @@ class LCGP(gpflow.Module):
         self.ghat = ghat
         self.gvar = gvar
 
-        predmean_std = tf.matmul(phi, ghat)              
-        confvar_std  = tf.matmul(tf.square(phi), gvar)   
-        predvar_std  = confvar_std + tf.exp(lsigma2s)[:, None]
+        # predmean_std = tf.matmul(phi, ghat)              
+        # confvar_std  = tf.matmul(tf.square(phi), gvar)   
+        # predvar_std  = confvar_std + tf.exp(lsigma2s)[:, None]
 
-        ypred    = predmean_std * self.ybar_std + self.ybar_mean
-        yconfvar = confvar_std * tf.square(self.ybar_std)
-        ypredvar = predvar_std * tf.square(self.ybar_std)
+        # ypred    = predmean_std * self.ybar_std + self.ybar_mean
+        # yconfvar = confvar_std * tf.square(self.ybar_std)
+        # ypredvar = predvar_std * tf.square(self.ybar_std)
+
+        # if return_fullcov:
+        #     return ypred, ypredvar, yconfvar, None
+        # return ypred, ypredvar, yconfvar
+
+        # Build psi = phi * sqrt(sigma^2) for proper scaling
+        # psi is (q, p) transposed, so we multiply phi (p, q) by sigma and transpose
+        sigma_sqrt = tf.sqrt(tf.exp(lsigma2s))  # (p,)
+        psi = tf.transpose(phi) * sigma_sqrt    # (q, p)
+        
+        # Predictions in standardized space
+        predmean_std = tf.matmul(psi, ghat, transpose_a=True)  # (p, n0)
+        confvar_std  = tf.matmul(tf.transpose(gvar), tf.square(psi))  # (n0, p)
+        predvar_std  = confvar_std + tf.exp(lsigma2s)  # (n0, p)
+
+        # Transform back using ybar statistics
+        ypred    = predmean_std * self.ybar_std + self.ybar_mean  # (p, n0)
+        yconfvar = tf.transpose(confvar_std) * tf.square(self.ybar_std)  # (p, n0)
+        ypredvar = tf.transpose(predvar_std) * tf.square(self.ybar_std)  # (p, n0)
 
         if return_fullcov:
             return ypred, ypredvar, yconfvar, None
