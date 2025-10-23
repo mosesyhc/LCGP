@@ -430,22 +430,28 @@ class LCGP(gpflow.Module):
         D    = self.diag_D                          
         phi  = self.phi                             
 
-        sigma_log       = lsigma2s                   
-        sigma_inv       = tf.exp(-sigma_log)          
-        sigma_inv_sqrt  = tf.exp(-0.5 * sigma_log)    
+        sigma_var_raw = tf.exp(lsigma2s)  # Σ 
+        sigma_inv_raw = 1.0 / sigma_var_raw  # Σ^{-1}
+        sigma_inv_sqrt_raw = tf.sqrt(sigma_inv_raw)  # Σ^{-1/2}
+        
+        std = self.ybar_std[:, 0]  
+        std_sq = tf.square(std)
+        sigma_var_std = sigma_var_raw / std_sq  # Σ_s
+        sigma_inv_std = 1.0 / sigma_var_std  # Σ_s^{-1}
+        sigma_inv_sqrt_std = sigma_inv_sqrt_raw * std  # Σ_s^{-1/2}
 
         nlp = tf.constant(0.0, tf.float64)
 
         # 0.5 * sum_i r_i * ybar_i^T Σ^{-1} ybar_i
-        ybar_scaled = ybar * sigma_inv_sqrt[:, None]          
+        ybar_scaled = ybar * sigma_inv_sqrt_std[:, None]
         col_sq      = tf.reduce_sum(tf.square(ybar_scaled), axis=0) 
         nlp += 0.5 * tf.reduce_sum(r * col_sq)
 
-        # + (n/2) log|Σ|
-        nlp += 0.5 * n * tf.reduce_sum(sigma_log)
+        # + (n/2) log|Σ_s| = (n/2) (sum log Σ - 2 sum log std)
+        nlp += 0.5 * n * tf.reduce_sum(tf.math.log(sigma_var_std))
 
         # - (p/2) log|R| = - (p/2) * sum_i log(r_i)
-        nlp += -0.5 * p * tf.reduce_sum(tf.math.log(tf.cast(self.r, tf.float64)))
+        nlp += -0.5 * p * tf.reduce_sum(tf.math.log(r))
 
         pc = self.penalty_const
         reg = (pc['lLmb'] * tf.reduce_sum(tf.square(tf.math.log(self.lLmb))) +
@@ -461,13 +467,17 @@ class LCGP(gpflow.Module):
         for k in range(q_int):
             Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k]) 
 
-            sigma_inv_sqrt = tf.exp(-0.5 * lsigma2s)          
-            v_k = sigma_inv_sqrt * phi[:, k]                   
-            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)    
-            b_k = r * ytv                                      
+            LC_k = tf.linalg.cholesky(Ck)
+            logdet_Ck = 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(LC_k)))
+
+            # b_k = R @ ybar_s^T @ (Σ_s^{-1/2} φ_k)
+            v_k = sigma_inv_sqrt_std * phi[:, k]  # Σ_s^{-1/2} φ_k
+            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)  # ybar_s^T @ v_k
+            b_k = r * ytv  # R @ (ybar_s^T @ v_k)                                  
 
             d_k = D[k]
             Cb  = tf.linalg.matvec(Ck, b_k)
+            
             A   = tf.eye(self.n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])
             LA  = tf.linalg.cholesky(A)
             u   = tf.sqrt(d_k) * (sr * Cb)
@@ -477,6 +487,8 @@ class LCGP(gpflow.Module):
 
             bkSb_sum += tf.tensordot(b_k, Sb, axes=1)
             logA_sum += 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(LA)))
+
+            nlp += -0.5 * logdet_Ck
 
         nlp += -0.5 * bkSb_sum
         nlp +=  0.5 * logA_sum
@@ -608,7 +620,9 @@ class LCGP(gpflow.Module):
 
         D    = self.diag_D
         phi  = self.phi
-        sigma_inv_sqrt = tf.exp(-0.5 * lsigma2s)
+        sigma_inv_sqrt_raw = tf.exp(-0.5 * lsigma2s)  # Σ^{-1/2}
+        std = self.ybar_std[:, 0]  
+        sigma_inv_sqrt_std = sigma_inv_sqrt_raw * std
 
         q = tf.cast(self.q, tf.int32)
         n = tf.cast(self.n, tf.int32)
@@ -618,13 +632,13 @@ class LCGP(gpflow.Module):
 
         for k in range(q):
             Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
-            sigma_inv_sqrt = tf.exp(-0.5 * lsigma2s)
-            v_k = sigma_inv_sqrt * phi[:, k]
-            b_k = r * tf.linalg.matvec(tf.transpose(ybar), v_k)
-
+            v_k = sigma_inv_sqrt_std * phi[:, k]
+            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)
+            b_k = r * ytv
 
             d_k = D[k]
             sr  = tf.sqrt(r)
+
             Cb  = tf.linalg.matvec(Ck, b_k)
             A   = tf.eye(n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])
             LA  = tf.linalg.cholesky(A)
@@ -638,8 +652,12 @@ class LCGP(gpflow.Module):
             LC  = tf.linalg.cholesky(Ck)
             Id  = tf.eye(n, dtype=tf.float64)
             invC = tf.linalg.cholesky_solve(LC, Id)
-            A_inv = tf.linalg.inv(invC + d_k * tf.cast(R, tf.float64))  
-            Tk  = invC - invC @ A_inv @ invC
+
+            # V_k = (C_k^{-1} + d_k R)^{-1}, so:
+            # T_k = C_k^{-1} - C_k^{-1} (C_k^{-1} + d_k R)^{-1} C_k^{-1}
+            P_k = invC + d_k * R  # C_k^{-1} + d_k R (posterior precision)
+            V_k = tf.linalg.inv(P_k)  # (C_k^{-1} + d_k R)^{-1}
+            Tk  = invC - invC @ V_k @ invC  # T_k
 
             CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], [CinvM_k])
             Tks   = tf.tensor_scatter_nd_update(Tks,   [[k]], [Tk])
@@ -746,32 +764,18 @@ class LCGP(gpflow.Module):
         self.ghat = ghat
         self.gvar = gvar
 
-        # predmean_std = tf.matmul(phi, ghat)              
-        # confvar_std  = tf.matmul(tf.square(phi), gvar)   
-        # predvar_std  = confvar_std + tf.exp(lsigma2s)[:, None]
+        predmean_std = tf.matmul(phi, ghat)                   
+        confvar_std  = tf.matmul(tf.square(phi), gvar)     
+        sigma_var_raw = tf.exp(lsigma2s)
+        std_sq = tf.square(self.ybar_std[:, 0])
+        sigma_var_std = sigma_var_raw / std_sq
+        predvar_std = confvar_std + sigma_var_std[:, None]
 
-        # ypred    = predmean_std * self.ybar_std + self.ybar_mean
-        # yconfvar = confvar_std * tf.square(self.ybar_std)
-        # ypredvar = predvar_std * tf.square(self.ybar_std)
+        # raw: y = std * y_std + mean, Var[y] = std^2 Var[y_std]
+        ypred    = predmean_std * self.ybar_std + self.ybar_mean            
+        yconfvar = confvar_std * tf.square(self.ybar_std)                    
+        ypredvar = predvar_std * tf.square(self.ybar_std)                 
 
-        # if return_fullcov:
-        #     return ypred, ypredvar, yconfvar, None
-        # return ypred, ypredvar, yconfvar
-
-        # Build psi = phi * sqrt(sigma^2) for proper scaling
-        # psi is (q, p) transposed, so we multiply phi (p, q) by sigma and transpose
-        sigma_sqrt = tf.sqrt(tf.exp(lsigma2s))  # (p,)
-        psi = tf.transpose(phi) * sigma_sqrt    # (q, p)
-        
-        # Predictions in standardized space
-        predmean_std = tf.matmul(psi, ghat, transpose_a=True)  # (p, n0)
-        confvar_std  = tf.matmul(tf.transpose(gvar), tf.square(psi))  # (n0, p)
-        predvar_std  = confvar_std + tf.exp(lsigma2s)  # (n0, p)
-
-        # Transform back using ybar statistics
-        ypred    = predmean_std * self.ybar_std + self.ybar_mean  # (p, n0)
-        yconfvar = tf.transpose(confvar_std) * tf.square(self.ybar_std)  # (p, n0)
-        ypredvar = tf.transpose(predvar_std) * tf.square(self.ybar_std)  # (p, n0)
 
         if return_fullcov:
             return ypred, ypredvar, yconfvar, None
