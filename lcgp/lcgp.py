@@ -437,7 +437,7 @@ class LCGP(gpflow.Module):
         std = self.ybar_std[:, 0]  
         std_sq = tf.square(std)
         sigma_var_std = sigma_var_raw / std_sq  # Σ_s
-        sigma_inv_std = 1.0 / sigma_var_std  # Σ_s^{-1}
+        sigma_inv_std = 1.0 / sigma_var_std  # Σ_s^{-1} 
         sigma_inv_sqrt_std = sigma_inv_sqrt_raw * std  # Σ_s^{-1/2}
 
         nlp = tf.constant(0.0, tf.float64)
@@ -468,7 +468,6 @@ class LCGP(gpflow.Module):
             Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k]) 
 
             LC_k = tf.linalg.cholesky(Ck)
-            logdet_Ck = 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(LC_k)))
 
             # b_k = R @ ybar_s^T @ (Σ_s^{-1/2} φ_k)
             v_k = sigma_inv_sqrt_std * phi[:, k]  # Σ_s^{-1/2} φ_k
@@ -488,14 +487,12 @@ class LCGP(gpflow.Module):
             bkSb_sum += tf.tensordot(b_k, Sb, axes=1)
             logA_sum += 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(LA)))
 
-            nlp += -0.5 * logdet_Ck
-
         nlp += -0.5 * bkSb_sum
         nlp +=  0.5 * logA_sum
+
         nlp +=  reg
         nlp /= n
         return nlp
-
 
     @tf.function
     def neglpost(self):

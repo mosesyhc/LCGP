@@ -87,10 +87,31 @@ class LCGPRun(SuperRun):
     #     ypredmean, ypredvar, _ = self.model.predict(xtest, return_fullcov=False)
 
     #     return ypredmean.numpy(), ypredvar.numpy()
-    def predict(self, train: bool = False, return_fullcov: bool = False):
+    def predict(self, train: bool = False, return_fullcov: bool = False, as_pxn: bool = False):
         xtest = self.xtrain if train else self.xtest
-        ymean, ypredvar, yconfvar = self.model.predict(xtest, return_fullcov=return_fullcov)
-        return ymean.numpy(), ypredvar.numpy(), yconfvar.numpy()
+        out = self.model.predict(xtest, return_fullcov=return_fullcov)
+
+        if return_fullcov:
+            ymean, ypredvar, yconfvar, yfullpredcov = out
+            ymean = ymean.numpy()
+            ypredvar = ypredvar.numpy()
+            yconfvar = yconfvar.numpy()
+            yfullpredcov = yfullpredcov.numpy()
+            if as_pxn:  # return (p, n0) if you want to match your recomposition code
+                ymean = ymean.T
+                ypredvar = ypredvar.T
+                yconfvar = yconfvar.T
+            return ymean, ypredvar, yconfvar, yfullpredcov
+        else:
+            ymean, ypredvar, yconfvar = out
+            ymean = ymean.numpy()
+            ypredvar = ypredvar.numpy()
+            yconfvar = yconfvar.numpy()
+            if as_pxn:
+                ymean = ymean.T
+                ypredvar = ypredvar.T
+                yconfvar = yconfvar.T
+            return ymean, ypredvar, yconfvar
 
     
 import numpy as np

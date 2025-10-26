@@ -113,33 +113,33 @@ def make_rep_data_hotspots(n_unique=50,
 # )
 
 # # CASE 2: Skewed replication
-# results_fig_path = './results_figure_rep_1d_skewed/'
-# Path(results_fig_path).mkdir(parents=True, exist_ok=True)
-# xtrain, ytrain, xtest, ytrue = make_rep_data_skewed(
-#     n_unique=40,
-#     heavy_region=(0.20, 0.45),
-#     light_rep_choices=(1, 2),
-#     heavy_rep_choices=(8, 12, 16, 20),
-#     noise_std=(0.05, 0.08, 0.10),
-#     seed=123
-# )
+results_fig_path = './results_figure_rep_1d_skewed/'
+Path(results_fig_path).mkdir(parents=True, exist_ok=True)
+xtrain, ytrain, xtest, ytrue = make_rep_data_skewed(
+    n_unique=40,
+    heavy_region=(0.20, 0.45),
+    light_rep_choices=(1, 2),
+    heavy_rep_choices=(8, 12, 16, 20),
+    noise_std=(0.05, 0.08, 0.10),
+    seed=123
+)
 
 # CASE 3: Hot-spots
-results_fig_path = './results_figure_rep_1d_hotspots/'
-Path(results_fig_path).mkdir(parents=True, exist_ok=True)
-xtrain, ytrain, xtest, ytrue = make_rep_data_hotspots(
-    n_unique=50,
-    hotspots=((0.15, 10, 15), (0.50, 18, 25), (0.80, 12, 20)),
-    base_rep_choices=(1,),
-    noise_std=(0.05, 0.08, 0.10),
-    seed=7
-)
+# results_fig_path = './results_figure_rep_1d_hotspots/'
+# Path(results_fig_path).mkdir(parents=True, exist_ok=True)
+# xtrain, ytrain, xtest, ytrue = make_rep_data_hotspots(
+#     n_unique=50,
+#     hotspots=((0.15, 10, 15), (0.50, 18, 25), (0.80, 12, 20)),
+#     base_rep_choices=(1,),
+#     noise_std=(0.05, 0.08, 0.10),
+#     seed=7
+# )
 
 # --------------------------
 # Build & train the model
 # --------------------------
 SUBMETHOD = 'rep'   # set 'rep' for replicated data; 'full' for non-replicated
-PLOT_MODE = 'g'     # 'g' to plot latents; 'y' to plot outputs
+PLOT_MODE = 'y'     # 'g' to plot latents; 'y' to plot outputs
 
 data = {
     'xtrain': xtrain,
