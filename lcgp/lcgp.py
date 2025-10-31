@@ -148,8 +148,7 @@ class LCGP(gpflow.Module):
         self.Ths = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.Th_hats = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.Cinvhs = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
-
-        self._rep_initialized = False
+        self.mks = tf.fill([self.q, self.n], tf.constant(float('nan'), dtype=tf.float64))
 
     def _ensure_replication(self):
         """
@@ -467,8 +466,6 @@ class LCGP(gpflow.Module):
         for k in range(q_int):
             Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k]) 
 
-            LC_k = tf.linalg.cholesky(Ck)
-
             # b_k = R @ ybar_s^T @ (Σ_s^{-1/2} φ_k)
             v_k = sigma_inv_sqrt_std * phi[:, k]  # Σ_s^{-1/2} φ_k
             ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)  # ybar_s^T @ v_k
@@ -659,6 +656,7 @@ class LCGP(gpflow.Module):
             CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], [CinvM_k])
             Tks   = tf.tensor_scatter_nd_update(Tks,   [[k]], [Tk])
 
+        self.mks = tf.tensor_scatter_nd_update(self.mks, [[k]], [m_k])
         self.CinvMs = CinvM
         self.Tks    = Tks
         self.Ths    = None
@@ -772,7 +770,6 @@ class LCGP(gpflow.Module):
         ypred    = predmean_std * self.ybar_std + self.ybar_mean            
         yconfvar = confvar_std * tf.square(self.ybar_std)                    
         ypredvar = predvar_std * tf.square(self.ybar_std)                 
-
 
         if return_fullcov:
             return ypred, ypredvar, yconfvar, None
