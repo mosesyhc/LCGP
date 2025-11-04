@@ -619,6 +619,7 @@ class LCGP(gpflow.Module):
         sigma_inv_sqrt_raw = tf.exp(-0.5 * lsigma2s)  # Σ^{-1/2}
         std = self.ybar_std[:, 0]  
         sigma_inv_sqrt_std = sigma_inv_sqrt_raw * std
+        self.psi_c = tf.transpose(phi) / sigma_inv_sqrt_std[:, None]
 
         q = tf.cast(self.q, tf.int32)
         n = tf.cast(self.n, tf.int32)
@@ -771,6 +772,7 @@ class LCGP(gpflow.Module):
         std_sq = tf.square(self.ybar_std[:, 0])
         sigma_var_std = sigma_var_raw / std_sq
         predvar_std = confvar_std + sigma_var_std[:, None]
+
 
         # raw: y = std * y_std + mean, Var[y] = std^2 Var[y_std]
         ypred    = predmean_std * self.ybar_std + self.ybar_mean            
