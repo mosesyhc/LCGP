@@ -438,6 +438,8 @@ class LCGP(gpflow.Module):
         sigma_var_std = sigma_var_raw / std_sq  # Σ_s
         sigma_inv_std = 1.0 / sigma_var_std  # Σ_s^{-1} 
         sigma_inv_sqrt_std = sigma_inv_sqrt_raw * std  # Σ_s^{-1/2}
+        # psi_c = tf.transpose(phi) / sigma_inv_sqrt_std
+        # self.psi_c = psi_c
 
         nlp = tf.constant(0.0, tf.float64)
 
@@ -623,6 +625,7 @@ class LCGP(gpflow.Module):
 
         CinvM = tf.zeros([q, n], dtype=tf.float64)
         Tks   = tf.zeros([q, n, n], dtype=tf.float64)
+        mks = tf.zeros([q, n], dtype=tf.float64)
 
         for k in range(q):
             Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
@@ -655,8 +658,9 @@ class LCGP(gpflow.Module):
 
             CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], [CinvM_k])
             Tks   = tf.tensor_scatter_nd_update(Tks,   [[k]], [Tk])
+            mks = tf.tensor_scatter_nd_update(mks, [[k]], [m_k])
 
-        self.mks = tf.tensor_scatter_nd_update(self.mks, [[k]], [m_k])
+        self.mks = mks
         self.CinvMs = CinvM
         self.Tks    = Tks
         self.Ths    = None
@@ -759,8 +763,10 @@ class LCGP(gpflow.Module):
         self.ghat = ghat
         self.gvar = gvar
 
-        predmean_std = tf.matmul(phi, ghat)                   
-        confvar_std  = tf.matmul(tf.square(phi), gvar)     
+        predmean_std = tf.matmul(self.psi_c, ghat)                   
+        confvar_std  = tf.matmul(tf.square(self.psi_c), gvar)  
+        # predmean_std = tf.matmul(phi, ghat)                   
+        # confvar_std  = tf.matmul(tf.square(phi), gvar)        
         sigma_var_raw = tf.exp(lsigma2s)
         std_sq = tf.square(self.ybar_std[:, 0])
         sigma_var_std = sigma_var_raw / std_sq
