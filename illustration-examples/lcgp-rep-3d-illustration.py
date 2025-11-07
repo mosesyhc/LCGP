@@ -139,7 +139,7 @@ xtrain, ytrain, xtest, ytrue = make_rep_data_skewed(
 # Build & train the model
 # --------------------------
 SUBMETHOD = 'rep'   # set 'rep' for replicated data; 'full' for non-replicated
-PLOT_MODE = 'g'     # 'g' to plot latents; 'y' to plot outputs
+PLOT_MODE = 'y'     # 'g' to plot latents; 'y' to plot outputs
 
 data = {
     'xtrain': xtrain,
