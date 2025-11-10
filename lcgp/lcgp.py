@@ -331,7 +331,7 @@ class LCGP(gpflow.Module):
         for k in range(len(err_struct)):
             lsigma2_diag[k] = np.log(np.var(self.y[col:(col + err_struct[k])]))
             col += err_struct[k]
-
+        
         self.lLmb.assign(lLmb)
         self.lLmb0.assign(lLmb0)
         self.lnugGPs.assign(lnugGPs)
@@ -737,7 +737,7 @@ class LCGP(gpflow.Module):
             self._compute_aux_predictive_quantities_rep()
 
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-        phi  = self.phi
+        phi  = self.phi 
 
         Xtrain = self.x_unique_s
         Tks    = self.Tks
@@ -747,12 +747,13 @@ class LCGP(gpflow.Module):
         x0 = (x0 - self.x_min) / (self.x_max - self.x_min)
         n0 = tf.shape(x0)[0]
 
-        ghat = tf.zeros([self.q, n0], dtype=tf.float64)
-        gvar = tf.zeros([self.q, n0], dtype=tf.float64)
+        ghat = tf.zeros([self.q, n0], dtype=tf.float64) 
+        gvar = tf.zeros([self.q, n0], dtype=tf.float64) 
 
         for k in range(self.q):
             c00k = Matern32(x0, x0,     llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=True)
             c0k  = Matern32(x0, Xtrain, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=False)
+            
             ghat_k = tf.linalg.matvec(c0k, CinvM[k])
             Tk     = Tks[k]
             v      = tf.matmul(c0k, Tk)
@@ -765,20 +766,17 @@ class LCGP(gpflow.Module):
         self.ghat = ghat
         self.gvar = gvar
 
-        predmean_std = tf.matmul(self.psi_c, ghat)                   
-        confvar_std  = tf.matmul(tf.square(self.psi_c), gvar)  
-        # predmean_std = tf.matmul(phi, ghat)                   
-        # confvar_std  = tf.matmul(tf.square(phi), gvar)        
+        predmean_std = tf.matmul(phi, ghat)  
+        confvar_std  = tf.matmul(tf.square(phi), gvar)  
+        
         sigma_var_raw = tf.exp(lsigma2s)
         std_sq = tf.square(self.ybar_std[:, 0])
-        sigma_var_std = sigma_var_raw / std_sq
+        sigma_var_std = sigma_var_raw / std_sq 
         predvar_std = confvar_std + sigma_var_std[:, None]
 
-
-        # raw: y = std * y_std + mean, Var[y] = std^2 Var[y_std]
-        ypred    = predmean_std * self.ybar_std + self.ybar_mean            
-        yconfvar = confvar_std * tf.square(self.ybar_std)                    
-        ypredvar = predvar_std * tf.square(self.ybar_std)                 
+        ypred    = predmean_std * self.ybar_std + self.ybar_mean
+        yconfvar = confvar_std * tf.square(self.ybar_std)
+        ypredvar = predvar_std * tf.square(self.ybar_std)
 
         if return_fullcov:
             return ypred, ypredvar, yconfvar, None
