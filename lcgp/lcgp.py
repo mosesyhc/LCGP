@@ -305,11 +305,13 @@ class LCGP(gpflow.Module):
         assert left_u.shape[1] == min(n, p)
 
         sing_q = singvals[:q]
-        # phi = left_u[:, :q] * tf.sqrt(tf.cast(n, tf.float64)) / sing_q
-        phi = left_u[:, :q]
+        phi = left_u[:, :q] * tf.sqrt(tf.cast(n, tf.float64)) / sing_q
         diag_D = tf.reduce_sum(phi ** 2, axis=0)
 
         g = tf.matmul(phi, y, transpose_a=True)
+        print("======= VARIANCE OF G ======")
+        print(tf.math.reduce_variance(g, axis=1, keepdims=False, name=None))
+
         return g, phi, diag_D, q
 
 
