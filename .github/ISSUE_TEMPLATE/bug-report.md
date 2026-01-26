@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-Please submit an issue and provide as much details as you are able to. 
+Please submit an issue. Provide as much detail as you can; the template below will help you give us the details we need to have the best chance of solving the problem.
 <!--- Provide a general summary of the issue in the Title above -->
 
 ## Expected Behavior
