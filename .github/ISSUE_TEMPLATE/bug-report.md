@@ -21,7 +21,9 @@ Please submit an issue. Provide as much detail as you can; the template below wi
 
 ## Environment
 <!--- Provide the list of relevant packages and their versions -->
-<!--- and the machine (e.g. Windows 11), programming language (e.g. Python) version -->
+<!--- the machine (e.g. Windows 11), programming language (e.g. Python) version -->
+
+*For Python, consider command `python --version && pip freeze`.*
 
 ## Steps to Reproduce
 <!--- Provide a link to a live example, or an unambiguous set of steps to -->
