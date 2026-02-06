@@ -26,6 +26,7 @@ class LCGP(gpflow.Module):
                  robust_mean: bool = True,
                  penalty_const: dict = None,
                  submethod: str = 'full',
+                 rep_standardize_ybar: bool = True,
                  verbose: bool = False):
         """
         Constructor for LCGP class.
@@ -35,7 +36,7 @@ class LCGP(gpflow.Module):
         super().__init__()
         self.verbose = verbose
         self.robust_mean = robust_mean
-        self.rep_standardize_ybar = True            # can toggle this
+        self.rep_standardize_ybar = rep_standardize_ybar            # can toggle this
 
         self.x = self._verify_data_types(x)
         self.y = self._verify_data_types(y)
@@ -68,9 +69,6 @@ class LCGP(gpflow.Module):
             self.ybar       : shape (p, n)
         '''
 
-        # standardize x to unit hypercube
-        self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = \
-            self.init_standard_x(self.x)
         
         '''
         Standardize y 
@@ -80,28 +78,41 @@ class LCGP(gpflow.Module):
                 by averaging raw y in original scale, then standardize the averages
         '''
 
-        # standardize y
-        self.y, self.ymean, self.ystd, self.y_orig = self.init_standard_y(self.y)
-
-        # placeholders for variables
-        self.n, self.d, self.p = 0., 0., 0.
         # verify that input and output dimensions match
         # sets n, d, and p
-        self.verify_dim(self.y, self.x)
+        self.n, self.d, self.p = self.verify_dim(self.y, self.x)
 
         '''
         After verify_dim, reset (n, d) to unique counts if we use x_unique
             self.n = n_unique
             self.d = d
         '''
+
         self._rep_initialized = False
+        # if self.submethod == 'full':
+        # standardize x to unit hypercube
+        self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = \
+            self.init_standard_x(self.x)
+        # standardize y
+        self.y, self.ymean, self.ystd, self.y_orig = self.init_standard_y(self.y)
+
         if self.submethod == 'rep':
-            self.preprocess() 
+
+            # identify replication structure  ## TODO:
+
+            # standardization x
+
+            # standardization y
+
+            self.preprocess()  # mark outputs returned like line 85
             self._rep_initialized = True
+
+        else:
+            raise ValueError('submethod should be full or rep.')
 
         # reset q if none is provided
         self.g, self.phi, self.diag_D, self.q = \
-            self.init_phi(var_threshold=var_threshold)
+            self.init_phi(var_threshold=var_threshold)  # consider which y to use
         
         self.Tks = None
 
@@ -429,10 +440,7 @@ class LCGP(gpflow.Module):
 
         assert ny == nx, 'Number of inputs (x) differs from number of outputs (y), y.shape[1] != x.shape[0]'
 
-        self.n = tf.constant(nx, tf.int32)
-        self.d = tf.constant(d, tf.int32)
-        self.p = tf.constant(p, tf.int32)
-        return
+        return tf.constant(nx, tf.int32), tf.constant(d, tf.int32), tf.constant(p, tf.int32)
 
     def tx_x(self, xs):
         """
