@@ -35,6 +35,8 @@ class LCGP(gpflow.Module):
         super().__init__()
         self.verbose = verbose
         self.robust_mean = robust_mean
+        self.rep_standardize_ybar = True            # can toggle this
+
         self.x = self._verify_data_types(x)
         self.y = self._verify_data_types(y)
 
@@ -155,9 +157,72 @@ class LCGP(gpflow.Module):
         Build replication structures once if not yet built.
         """
         if not self._rep_initialized:
+            # (LaTeX: lines 540-546, 541-546)
             self.preprocess()  # builds x_unique, ybar, r, R, ybar_s, etc.
             # rebuild basis on ybar_s
             self._rep_initialized = True
+
+# def preprocess(self, y_raw=None, x_raw=None):
+#     """
+#     TF-only
+#     """
+#     if x_raw is None:
+#         x_raw = self.x_orig
+#     if y_raw is None:
+#         y_raw = self.y_orig
+
+#     x_raw = x_raw if isinstance(x_raw, tf.Tensor) else tf.convert_to_tensor(x_raw, dtype=tf.float64)
+#     y_raw = y_raw if isinstance(y_raw, tf.Tensor) else tf.convert_to_tensor(y_raw, dtype=tf.float64)
+
+#     tf.debugging.assert_rank(x_raw, 2, message="x_raw must be (N, d)")
+#     tf.debugging.assert_rank(y_raw, 2, message="y_raw must be (p, N)")
+#     N = tf.shape(x_raw)[0]
+#     d = tf.shape(x_raw)[1]
+#     p = tf.shape(y_raw)[0]
+#     tf.debugging.assert_equal(tf.shape(y_raw)[1], N, message="y_raw columns must match x_raw rows")
+
+#     row_str = tf.strings.reduce_join(
+#         tf.as_string(x_raw, precision=17), axis=1, separator=","
+#     )
+#     uniq_str, group_ids = tf.unique(row_str)  
+
+#     # counts per unique
+#     n = tf.shape(uniq_str)[0]
+#     r = tf.math.bincount(group_ids, minlength=n, maxlength=n, dtype=tf.int32)
+
+#     idx = tf.range(N, dtype=tf.int32)
+#     big = tf.constant(2**31 - 1, dtype=tf.int32)
+#     first_idx = tf.math.unsorted_segment_min(idx, group_ids, n)
+
+#     x_unique = tf.gather(x_raw, first_idx)  # (n, d)
+
+#     ybar_T = tf.math.unsorted_segment_mean(tf.transpose(y_raw), group_ids, n)  # (n, p)
+#     ybar = tf.transpose(ybar_T)  # (p, n)
+
+#     self.x_unique = tf.cast(x_unique, tf.float64)
+#     self.x_unique_s = (self.x_unique - self.x_min) / (self.x_max - self.x_min)
+
+#     self.group_ids = tf.cast(group_ids, tf.int32)          # (N,)
+#     self.r = tf.cast(r, tf.int32)                          # (n,)
+#     self.R = tf.linalg.diag(tf.cast(self.r, tf.float64))   # (n, n)
+#     self.ybar = tf.cast(ybar, tf.float64)                  # (p, n)
+
+#     if self.robust_mean:
+#         ycenter = tfp.stats.percentile(self.ybar, 50.0, axis=1, keepdims=True)
+#         yspread = tfp.stats.percentile(tf.abs(self.ybar - ycenter), 50.0, axis=1, keepdims=True)
+#     else:
+#         ycenter = tf.reduce_mean(self.ybar, axis=1, keepdims=True)
+#         yspread = tf.math.reduce_std(self.ybar, axis=1, keepdims=True)
+
+#     yspread = tf.where(yspread > 0, yspread, tf.ones_like(yspread, dtype=tf.float64))
+#     self.ybar_s = (self.ybar - ycenter) / yspread
+#     self.ybar_mean = ycenter
+#     self.ybar_std = yspread
+
+#     self.n = tf.cast(n, tf.int32)
+#     self.d = tf.cast(d, tf.int32)
+#     self.p = tf.cast(p, tf.int32)
+
 
     def preprocess(self, y_raw=None, x_raw=None):
         # ADD SELF.IS_REP: shud i use replication structure??
@@ -212,6 +277,7 @@ class LCGP(gpflow.Module):
             yspread = tf.math.reduce_std(self.ybar, axis=1, keepdims=True)
 
         yspread = tf.where(yspread > 0, yspread, tf.ones_like(yspread, dtype=tf.float64))
+        # (LaTeX: lines 540-546, 556-557)
         self.ybar_s   = (self.ybar - ycenter) / yspread
         self.ybar_mean = ycenter
         self.ybar_std  = yspread
@@ -282,7 +348,13 @@ class LCGP(gpflow.Module):
         Uses ybar_s if available (replication), else y.
         """
         if self.submethod == 'rep' and hasattr(self, 'ybar_s'):
-            y_in = self.ybar_s
+            # y_in = self.ybar_s
+            if getattr(self, "rep_standardize_ybar", True) and hasattr(self, "ybar_s"):
+                y_in = self.ybar_s
+            elif hasattr(self, "ybar"):
+                y_in = self.ybar
+            else:
+                y_in = self.y
         else:
             y_in = self.y
 
@@ -306,8 +378,9 @@ class LCGP(gpflow.Module):
 
         sing_q = singvals[:q]
         phi = left_u[:, :q] * tf.sqrt(tf.cast(n, tf.float64)) / sing_q
+        # (LaTeX: D = diag(d_k), 549-550)
         diag_D = tf.reduce_sum(phi ** 2, axis=0)
-
+        # (LaTeX around lines 256-290)
         g = tf.matmul(phi, y, transpose_a=True)
         print("======= VARIANCE OF G ======")
         print(tf.math.reduce_variance(g, axis=1, keepdims=False, name=None))
@@ -424,38 +497,56 @@ class LCGP(gpflow.Module):
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         xk   = self.x_unique_s                      
         ybar = self.ybar_s                          
-        r    = tf.cast(self.r, tf.float64)          
-        R    = self.R                                
+        r    = tf.cast(self.r, tf.float64)                          # r_i (LaTeX: lines 541-546)
+        R    = self.R                                               # R = diag(r_i) (LaTeX: lines 541-546)
         n    = tf.cast(self.n, tf.float64)
         p    = tf.cast(self.p, tf.float64)
 
-        D    = self.diag_D                          
-        phi  = self.phi                             
+        D    = self.diag_D                                          # D = diag(d_k) (LaTeX: lines 549-550)
+        phi  = self.phi                                             # Φ (LaTeX: lines 548-550)
 
-        sigma_var_raw = tf.exp(lsigma2s)  # Σ 
-        sigma_inv_raw = 1.0 / sigma_var_raw  # Σ^{-1}
-        sigma_inv_sqrt_raw = tf.sqrt(sigma_inv_raw)  # Σ^{-1/2}
+        # Choose whether to standardize ybar inside the replicated likelihood
+        use_std = getattr(self, "rep_standardize_ybar", True)
+
+        sigma_var_raw = tf.exp(lsigma2s)                            # Σ (LaTeX: lines 566-569)
+        sigma_inv_raw = 1.0 / sigma_var_raw                         # Σ^{-1}
+        sigma_inv_sqrt_raw = tf.sqrt(sigma_inv_raw)                 # Σ^{-1/2}  (LaTeX: lines 589-591, 594-596)
         
-        std = self.ybar_std[:, 0]  
-        std_sq = tf.square(std)
-        sigma_var_std = sigma_var_raw / std_sq  # Σ_s
-        sigma_inv_std = 1.0 / sigma_var_std  # Σ_s^{-1} 
-        sigma_inv_sqrt_std = sigma_inv_sqrt_raw * std  # Σ_s^{-1/2}
+        if use_std:
+            # Standardized replicate-averages
+            ybar = self.ybar_s
+
+            # When ybar_s = (ybar_raw - mean)/std, the implied noise variance in standardized space is:
+            #   Σ_std = Σ_raw / std^2
+            std = self.ybar_std[:, 0]                    
+            sigma_var_used = sigma_var_raw / tf.square(std)         # Σ_std
+            sigma_inv_sqrt = sigma_inv_sqrt_raw * std               # Σ_std^{-1/2} = (1/sqrt(Σ_raw)) * std
+        else:
+            # Raw replicate-averages
+            ybar = self.ybar
+            sigma_var_used = sigma_var_raw                          # Σ_raw
+            sigma_inv_sqrt = sigma_inv_sqrt_raw                     # Σ_raw^{-1/2}
+
+        # std = self.ybar_std[:, 0]  
+        # std_sq = tf.square(std)
+        # sigma_var_std = sigma_var_raw / std_sq                      # Σ_s (standardized) (maps to Σ in formulas)
+        # sigma_inv_std = 1.0 / sigma_var_std                         # Σ_s^{-1} 
+        # sigma_inv_sqrt_std = sigma_inv_sqrt_raw * std               # Σ_s^{-1/2}
         # psi_c = tf.transpose(phi) / sigma_inv_sqrt_std
         # self.psi_c = psi_c
 
         nlp = tf.constant(0.0, tf.float64)
 
-        # 0.5 * sum_i r_i * ybar_i^T Σ^{-1} ybar_i
-        ybar_scaled = ybar * sigma_inv_sqrt_std[:, None]
+        # 0.5 * sum_i r_i * ybar_i^T Σ^{-1} ybar_i                  (LaTeX: lines 693-694)
+        ybar_scaled = ybar * sigma_inv_sqrt[:, None]            # Σ^{-1/2} \bar{Y} (LaTeX: 581-583)
         col_sq      = tf.reduce_sum(tf.square(ybar_scaled), axis=0) 
-        nlp += 0.5 * tf.reduce_sum(r * col_sq)
+        nlp += 0.5 * tf.reduce_sum(r * col_sq)                      # (LaTeX: 693-694)
 
-        # + (n/2) log|Σ_s| = (n/2) (sum log Σ - 2 sum log std)
-        nlp += 0.5 * n * tf.reduce_sum(tf.math.log(sigma_var_std))
+        # + (n/2) log|Σ_s| = (n/2) (sum log Σ - 2 sum log std), (corresponds to the |Σ|^{-n/2} constant)
+        nlp += 0.5 * n * tf.reduce_sum(tf.math.log(sigma_var_used))  #  (LaTeX: lines 690-691)
 
         # - (p/2) log|R| = - (p/2) * sum_i log(r_i)
-        nlp += -0.5 * p * tf.reduce_sum(tf.math.log(r))
+        nlp += -0.5 * p * tf.reduce_sum(tf.math.log(r))             # (LaTeX: |R|^{p/2} in likelihood constant; 690-691)
 
         pc = self.penalty_const
         reg = (pc['lLmb'] * tf.reduce_sum(tf.square(tf.math.log(self.lLmb))) +
@@ -465,32 +556,36 @@ class LCGP(gpflow.Module):
         bkSb_sum = tf.constant(0.0, tf.float64)
         logA_sum = tf.constant(0.0, tf.float64)
 
-        sr  = tf.sqrt(r) 
+        sr  = tf.sqrt(r)                                            # R^{1/2} via diag(sqrt(r_i)) (LaTeX: lines 706-709)
 
         q_int = tf.cast(self.q, tf.int32)
         for k in range(q_int):
+            # C_k (LaTeX: lines 615-616, 712-713)
             Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k]) 
 
-            # b_k = R @ ybar_s^T @ (Σ_s^{-1/2} φ_k)
-            v_k = sigma_inv_sqrt_std * phi[:, k]  # Σ_s^{-1/2} φ_k
-            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)  # ybar_s^T @ v_k
-            b_k = r * ytv  # R @ (ybar_s^T @ v_k)                                  
+            # b_k = R @ ybar_s^T @ (Σ_s^{-1/2} φ_k) 
+            v_k = sigma_inv_sqrt * phi[:, k]                    # Σ^{-1/2} φ_k (LaTeX: 594-596)
+            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)         # \bar{Y}^T (Σ^{-1/2} φ_k) (LaTeX: 594-596)
+            b_k = r * ytv                                           # R @ (...) since R=diag(r) (LaTeX: 594-596, 625-628)                                 
 
             d_k = D[k]
+
+            # Below is a Woodbury-style way to compute S_k, b_k, etc. (LaTeX: lines 698-709)
             Cb  = tf.linalg.matvec(Ck, b_k)
             
-            A   = tf.eye(self.n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])
+            # A = I + d_k R^{1/2} C_k R^{1/2} (LaTeX: lines 703-704, 707-709)
+            A   = tf.eye(self.n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])   # (LaTeX: lines 698-709)
             LA  = tf.linalg.cholesky(A)
             u   = tf.sqrt(d_k) * (sr * Cb)
             z   = tf.linalg.cholesky_solve(LA, tf.expand_dims(u, -1))
             z   = tf.squeeze(z, -1)
-            Sb  = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))
+            Sb  = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))                          # (LaTeX: lines 692-695)
 
-            bkSb_sum += tf.tensordot(b_k, Sb, axes=1)
-            logA_sum += 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(LA)))
+            bkSb_sum += tf.tensordot(b_k, Sb, axes=1)               # b_k^T S_k b_k term (LaTeX: +0.5 b_k^T V_k b_k, lines 693-695)
+            logA_sum += 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(LA)))               # log|A| where A = I + d_k R^{1/2} C_k R^{1/2} (LaTeX: lines 707-709)
 
-        nlp += -0.5 * bkSb_sum
-        nlp +=  0.5 * logA_sum
+        nlp += -0.5 * bkSb_sum                                      # (LaTeX: lines 693-695)
+        # nlp +=  0.5 * logA_sum
 
         nlp +=  reg
         nlp /= n
@@ -622,7 +717,7 @@ class LCGP(gpflow.Module):
         sigma_inv_sqrt_raw = tf.exp(-0.5 * lsigma2s)  # Σ^{-1/2}
         std = self.ybar_std[:, 0]  
         sigma_inv_sqrt_std = sigma_inv_sqrt_raw * std
-        self.psi_c = tf.transpose(phi) / sigma_inv_sqrt_std[:, None]
+        self.psi_c = tf.transpose(phi) / sigma_inv_sqrt_std[:, None]                        # corresponds to Φ^T Σ^{-1/2} (LaTeX: lines 589-591)
 
         q = tf.cast(self.q, tf.int32)
         n = tf.cast(self.n, tf.int32)
@@ -633,32 +728,40 @@ class LCGP(gpflow.Module):
 
         for k in range(q):
             Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
-            v_k = sigma_inv_sqrt_std * phi[:, k]
-            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)
+
+            # b_k = R @ ybar^T @ (Σ^{-1/2} φ_k) (LaTeX: 594-596)
+            v_k = sigma_inv_sqrt_std * phi[:, k]                                            # Σ^{-1/2} φ_k (LaTeX: lines 594-596)
+            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)                                 # ybar^T (...) (LaTeX: lines 594-596)
             b_k = r * ytv
 
             d_k = D[k]
             sr  = tf.sqrt(r)
 
+            # m_k = V_k b_k (computed via Woodbury identity; LaTeX: m_k = V_k b_k, lines 635-638)
             Cb  = tf.linalg.matvec(Ck, b_k)
-            A   = tf.eye(n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])
+            A   = tf.eye(n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])    # I + d_k R^{1/2} C_k R^{1/2} (LaTeX: lines 703-704, 707-709)
             LA  = tf.linalg.cholesky(A)
             u   = tf.sqrt(d_k) * (sr * Cb)
             z   = tf.linalg.cholesky_solve(LA, tf.expand_dims(u, -1))
             z   = tf.squeeze(z, -1)
-            m_k = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))
+            m_k = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))                      # corresponds to V_k b_k (LaTeX: lines 635-638)
 
-            CinvM_k = b_k - d_k * tf.linalg.matvec(R, m_k)
+            # C_k^{-1} m_k = b_k - d_k R m_k  (LaTeX: lines 731-734)
+            CinvM_k = b_k - d_k * tf.linalg.matvec(R, m_k)                                  # (LaTeX: lines 731-734)
 
+            # Build C_k^{-1} explicitly to form T_k
             LC  = tf.linalg.cholesky(Ck)
             Id  = tf.eye(n, dtype=tf.float64)
-            invC = tf.linalg.cholesky_solve(LC, Id)
+            invC = tf.linalg.cholesky_solve(LC, Id)                                         # C_k^{-1} (LaTeX: lines 641-642)
 
-            # V_k = (C_k^{-1} + d_k R)^{-1}, so:
-            # T_k = C_k^{-1} - C_k^{-1} (C_k^{-1} + d_k R)^{-1} C_k^{-1}
-            P_k = invC + d_k * R  # C_k^{-1} + d_k R (posterior precision)
-            V_k = tf.linalg.inv(P_k)  # (C_k^{-1} + d_k R)^{-1}
-            Tk  = invC - invC @ V_k @ invC  # T_k
+            # P_k = C_k^{-1} + d_k R 
+            P_k = invC + d_k * R                                                            # (LaTeX: lines 631-634)
+            
+            # V_k = P_k^{-1}
+            V_k = tf.linalg.inv(P_k)                                                        # (LaTeX: lines 632-634)
+            
+            # T_k = C_k^{-1} - C_k^{-1} V_k C_k^{-1} 
+            Tk  = invC - invC @ V_k @ invC                                                  # (LaTeX: lines 641-642)
 
             CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], [CinvM_k])
             Tks   = tf.tensor_scatter_nd_update(Tks,   [[k]], [Tk])
@@ -753,14 +856,17 @@ class LCGP(gpflow.Module):
         gvar = tf.zeros([self.q, n0], dtype=tf.float64) 
 
         for k in range(self.q):
-            c00k = Matern32(x0, x0,     llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=True)
-            c0k  = Matern32(x0, Xtrain, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=False)
+            c00k = Matern32(x0, x0,     llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=True)      # c_{**} (LaTeX: lines 712-717)
+            c0k  = Matern32(x0, Xtrain, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=False)     # c_k(x_*) (LaTeX: lines 712-717)
             
-            ghat_k = tf.linalg.matvec(c0k, CinvM[k])
-            Tk     = Tks[k]
+            # μ_k(x_*) = c_k^T (C_k^{-1} m_k) = c_k^T CinvM_k
+            ghat_k = tf.linalg.matvec(c0k, CinvM[k])                                                        # (LaTeX: lines 720-722 / 731-734)
+
+            # σ_k^2(x_*) = c_{**} - c_k^T T_k c_k
+            Tk     = Tks[k]                                                                                 # T_k (LaTeX: lines 641-642)
             v      = tf.matmul(c0k, Tk)
-            quad   = tf.reduce_sum(v * c0k, axis=1)
-            gvar_k = c00k - quad
+            quad   = tf.reduce_sum(v * c0k, axis=1)                                                         # c_k^T T_k c_k (LaTeX: lines 724-726)
+            gvar_k = c00k - quad                                                                            # (LaTeX: lines 724-726)
 
             ghat = tf.tensor_scatter_nd_update(ghat, [[k]], [ghat_k])
             gvar = tf.tensor_scatter_nd_update(gvar, [[k]], [gvar_k])
@@ -768,13 +874,14 @@ class LCGP(gpflow.Module):
         self.ghat = ghat
         self.gvar = gvar
 
-        predmean_std = tf.matmul(phi, ghat)  
-        confvar_std  = tf.matmul(tf.square(phi), gvar)  
+        # Output prediction: μ_y = Ψ μ_g, Σ_y = Σ + Ψ Σ_g Ψ^T 
+        predmean_std = tf.matmul(phi, ghat)                                                                 # corresponds to μ_y = Ψ μ_g; LaTeX lines: 744-746)
+        confvar_std  = tf.matmul(tf.square(phi), gvar)                                                      # Ψ Σ_g Ψ^T diagonal (LaTeX lines: 749-751)
         
         sigma_var_raw = tf.exp(lsigma2s)
         std_sq = tf.square(self.ybar_std[:, 0])
         sigma_var_std = sigma_var_raw / std_sq 
-        predvar_std = confvar_std + sigma_var_std[:, None]
+        predvar_std = confvar_std + sigma_var_std[:, None]                                                  # + Σ_obs term (LaTeX lines: 749-751)
 
         ypred    = predmean_std * self.ybar_std + self.ybar_mean
         yconfvar = confvar_std * tf.square(self.ybar_std)
