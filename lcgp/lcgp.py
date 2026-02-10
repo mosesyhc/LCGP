@@ -57,62 +57,74 @@ class LCGP(gpflow.Module):
         self.q = q
         self.var_threshold = var_threshold
 
-        '''
-        Precompute replicate groups before any standardizations.
-        - Group identical input rows in self.x
-        - Create:
-            self.x_unique   : shape (n, d) unique inputs
-            self.group_ids  : list of length N mapping each row in x to unique index i
-            self.r          : shape (n, ) counts r_i (replicated per unique input)
-            self.R          : shape (n, n) diag of r
-        - Compute replicate-averaged outputs:
-            self.ybar       : shape (p, n)
-        '''
-
-        
-        '''
-        Standardize y 
-        - Standardize per output dim across replicates
-        - For replicated likelihood, create standardized ybar:
-            self.ybar, self.ybar_mean, self.ybar_std
-                by averaging raw y in original scale, then standardize the averages
-        '''
-
-        # verify that input and output dimensions match
-        # sets n, d, and p
+        # Verify dims (raw inputs)
         self.n, self.d, self.p = self.verify_dim(self.y, self.x)
 
-        '''
-        After verify_dim, reset (n, d) to unique counts if we use x_unique
-            self.n = n_unique
-            self.d = d
-        '''
+       # Keep raw copies for replication grouping
+        self.x_orig = self.x
+        self.y_orig = self.y
 
+        # Standardize x/y    
+        self.x, self.x_min, self.x_max, _, self.xnorm = self.init_standard_x(self.x)
+        self.y, self.ymean, self.ystd, _ = self.init_standard_y(self.y)
+
+        # Replication
         self._rep_initialized = False
-        # if self.submethod == 'full':
-        # standardize x to unit hypercube
-        self.x, self.x_min, self.x_max, self.x_orig, self.xnorm = \
-            self.init_standard_x(self.x)
-        # standardize y
-        self.y, self.ymean, self.ystd, self.y_orig = self.init_standard_y(self.y)
 
         if self.submethod == 'rep':
+            # 1) resolve raw xy numpy
+            xr, yr, N, d, p = self._get_raw_xy(x_raw=self.x_orig, y_raw=self.y_orig)
 
-            # identify replication structure  ## TODO:
+            # 2) group identical rows
+            x_unique_np, inverse_np, counts_np = self._group_unique_rows_np(xr)
+            n_unique = int(x_unique_np.shape[0])
+            r_np = counts_np.astype(np.int32)
 
-            # standardization x
+            # 3) compute replicate-averaged ybar 
+            ybar_np = self._compute_ybar_np(yr, inverse_np, n_unique)
 
-            # standardization y
+            # 4) pack into TF tensors + x_unique_s + R
+            (x_unique_tf,
+             x_unique_s,
+             group_ids_tf,
+             r_tf,
+             R_tf,
+             ybar_tf) = self._pack_replication_tensors(
+                x_unique_np=x_unique_np,
+                inverse_np=inverse_np,
+                r_np=r_np,
+                ybar_np=ybar_np
+            )
 
-            self.preprocess()  # mark outputs returned like line 85
+            # 5) compute standardization stats for ybar and standardized ybar_s
+            ybar_mean_tf, ybar_std_tf = self._compute_center_spread_tf(ybar_tf)
+            ybar_s_tf = (ybar_tf - ybar_mean_tf) / ybar_std_tf
+
+            # 6) assign to self
+            self.x_unique = x_unique_tf
+            self.x_unique_s = x_unique_s
+            self.group_ids = group_ids_tf
+            self.r = r_tf
+            self.R = R_tf
+            self.ybar = ybar_tf
+            self.ybar_s = ybar_s_tf
+            self.ybar_mean = ybar_mean_tf
+            self.ybar_std = ybar_std_tf
+
+            # 7) reset (n,d,p) to unique counts 
+            self.n = tf.constant(n_unique, dtype=tf.int32)
+            self.d = tf.constant(d, dtype=tf.int32)
+            self.p = tf.constant(p, dtype=tf.int32)
+
             self._rep_initialized = True
+        elif self.submethod == 'full':
+            pass
 
         else:
             raise ValueError('submethod should be full or rep.')
 
         # reset q if none is provided
-        self.g, self.phi, self.diag_D, self.q = \
-            self.init_phi(var_threshold=var_threshold)  # consider which y to use
+        self.g, self.phi, self.diag_D, self.q = self.init_phi(var_threshold=var_threshold)
         
         self.Tks = None
 
@@ -156,100 +168,17 @@ class LCGP(gpflow.Module):
         self.init_params()
 
         # placeholders for predictive quantities
-        # C^{-1}mk, T^{1/2}, \hat{T}^{1/2}, C^{-1/2}
         self.CinvMs = tf.fill([self.q, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.Ths = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.Th_hats = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.Cinvhs = tf.fill([self.q, self.n, self.n], tf.constant(float('nan'), dtype=tf.float64))
         self.mks = tf.fill([self.q, self.n], tf.constant(float('nan'), dtype=tf.float64))
 
-    def _ensure_replication(self):
+    # Replication preprocessing helpers
+    def _get_raw_xy(self, x_raw=None, y_raw=None):
         """
-        Build replication structures once if not yet built.
+        Resolve raw-scale x/y
         """
-        if not self._rep_initialized:
-            # (LaTeX: lines 540-546, 541-546)
-            self.preprocess()  # builds x_unique, ybar, r, R, ybar_s, etc.
-            # rebuild basis on ybar_s
-            self._rep_initialized = True
-
-# def preprocess(self, y_raw=None, x_raw=None):
-#     """
-#     TF-only
-#     """
-#     if x_raw is None:
-#         x_raw = self.x_orig
-#     if y_raw is None:
-#         y_raw = self.y_orig
-
-#     x_raw = x_raw if isinstance(x_raw, tf.Tensor) else tf.convert_to_tensor(x_raw, dtype=tf.float64)
-#     y_raw = y_raw if isinstance(y_raw, tf.Tensor) else tf.convert_to_tensor(y_raw, dtype=tf.float64)
-
-#     tf.debugging.assert_rank(x_raw, 2, message="x_raw must be (N, d)")
-#     tf.debugging.assert_rank(y_raw, 2, message="y_raw must be (p, N)")
-#     N = tf.shape(x_raw)[0]
-#     d = tf.shape(x_raw)[1]
-#     p = tf.shape(y_raw)[0]
-#     tf.debugging.assert_equal(tf.shape(y_raw)[1], N, message="y_raw columns must match x_raw rows")
-
-#     row_str = tf.strings.reduce_join(
-#         tf.as_string(x_raw, precision=17), axis=1, separator=","
-#     )
-#     uniq_str, group_ids = tf.unique(row_str)  
-
-#     # counts per unique
-#     n = tf.shape(uniq_str)[0]
-#     r = tf.math.bincount(group_ids, minlength=n, maxlength=n, dtype=tf.int32)
-
-#     idx = tf.range(N, dtype=tf.int32)
-#     big = tf.constant(2**31 - 1, dtype=tf.int32)
-#     first_idx = tf.math.unsorted_segment_min(idx, group_ids, n)
-
-#     x_unique = tf.gather(x_raw, first_idx)  # (n, d)
-
-#     ybar_T = tf.math.unsorted_segment_mean(tf.transpose(y_raw), group_ids, n)  # (n, p)
-#     ybar = tf.transpose(ybar_T)  # (p, n)
-
-#     self.x_unique = tf.cast(x_unique, tf.float64)
-#     self.x_unique_s = (self.x_unique - self.x_min) / (self.x_max - self.x_min)
-
-#     self.group_ids = tf.cast(group_ids, tf.int32)          # (N,)
-#     self.r = tf.cast(r, tf.int32)                          # (n,)
-#     self.R = tf.linalg.diag(tf.cast(self.r, tf.float64))   # (n, n)
-#     self.ybar = tf.cast(ybar, tf.float64)                  # (p, n)
-
-#     if self.robust_mean:
-#         ycenter = tfp.stats.percentile(self.ybar, 50.0, axis=1, keepdims=True)
-#         yspread = tfp.stats.percentile(tf.abs(self.ybar - ycenter), 50.0, axis=1, keepdims=True)
-#     else:
-#         ycenter = tf.reduce_mean(self.ybar, axis=1, keepdims=True)
-#         yspread = tf.math.reduce_std(self.ybar, axis=1, keepdims=True)
-
-#     yspread = tf.where(yspread > 0, yspread, tf.ones_like(yspread, dtype=tf.float64))
-#     self.ybar_s = (self.ybar - ycenter) / yspread
-#     self.ybar_mean = ycenter
-#     self.ybar_std = yspread
-
-#     self.n = tf.cast(n, tf.int32)
-#     self.d = tf.cast(d, tf.int32)
-#     self.p = tf.cast(p, tf.int32)
-
-
-    def preprocess(self, y_raw=None, x_raw=None):
-        # ADD SELF.IS_REP: shud i use replication structure??
-        """
-        Build replicate structure.
-        Sets:
-            self.x_unique : (n, d) unique inputs (raw scale)
-            self.group_ids: (N,) int indices mapping each raw sample -> unique row
-            self.r        : (n,) replicate counts per unique input (int32)
-            self.R        : (n, n) diag(r) (float64)
-            self.ybar     : (p, n) replicate-averaged outputs on RAW scale (float64)
-            self.ybar_s   : (p, n) standardized ybar (float64)
-            self.ybar_mean: (p, 1) center used to standardize ybar (float64)
-            self.ybar_std : (p, 1) spread used to standardize ybar (float64)
-        """
-        print('in pre process')
         if x_raw is None:
             x_raw = self.x_orig
         if y_raw is None:
@@ -264,38 +193,97 @@ class LCGP(gpflow.Module):
         p, Ny = yr.shape
         assert Ny == N, "y_raw columns must match x_raw rows"
 
-        x_unique, inverse, counts = np.unique(xr, axis=0, return_inverse=True, return_counts=True)
-        n = x_unique.shape[0]                  
-        r = counts.astype(np.int32)             
+        return xr, yr, N, d, p
 
+    def _group_unique_rows_np(self, xr):
+        """
+        Group identical rows of xr
+        """
+        x_unique, inverse, counts = np.unique(
+            xr, axis=0, return_inverse=True, return_counts=True
+        )
+        return x_unique, inverse, counts
+
+    def _compute_ybar_np(self, yr, inverse, n):
+        """
+        Compute replicate-averaged outputs ybar on RAW scale
+        """
+        p, N = yr.shape
         ybar = np.zeros((p, n), dtype=np.float64)
         for i in range(n):
             cols = (inverse == i)
             ybar[:, i] = yr[:, cols].mean(axis=1)
+        return ybar
 
-        self.x_unique  = tf.convert_to_tensor(x_unique, dtype=tf.float64)   # (n, d)
-        self.x_unique_s = (self.x_unique - self.x_min) / (self.x_max - self.x_min)
-        self.group_ids = tf.convert_to_tensor(inverse,  dtype=tf.int32)     # (N,)
-        self.r         = tf.convert_to_tensor(r,        dtype=tf.int32)     # (n,)
-        self.R         = tf.linalg.diag(tf.cast(self.r, tf.float64))        # (n, n)
-        self.ybar      = tf.convert_to_tensor(ybar,     dtype=tf.float64)   # (p, n)
+    def _pack_replication_tensors(self, x_unique_np, inverse_np, r_np, ybar_np):
+        """
+        Convert numpy replication structures
+        """
+        x_unique_tf = tf.convert_to_tensor(x_unique_np, dtype=tf.float64)     # (n,d)
+        x_unique_s = (x_unique_tf - self.x_min) / (self.x_max - self.x_min)   # (n,d)
 
+        group_ids_tf = tf.convert_to_tensor(inverse_np, dtype=tf.int32)       # (N,)
+        r_tf = tf.convert_to_tensor(r_np, dtype=tf.int32)                     # (n,)
+        R_tf = tf.linalg.diag(tf.cast(r_tf, tf.float64))                      # (n,n)
+        ybar_tf = tf.convert_to_tensor(ybar_np, dtype=tf.float64)             # (p,n)
+
+        return x_unique_tf, x_unique_s, group_ids_tf, r_tf, R_tf, ybar_tf
+
+    def _compute_center_spread_tf(self, Y):
+        """
+        Compute (center, spread) per output dim for standardization
+        """
         if self.robust_mean:
-            ycenter = tfp.stats.percentile(self.ybar, 50.0, axis=1, keepdims=True)
-            yspread = tfp.stats.percentile(tf.abs(self.ybar - ycenter), 50.0, axis=1, keepdims=True)
+            ycenter = tfp.stats.percentile(Y, 50.0, axis=1, keepdims=True)
+            yspread = tfp.stats.percentile(tf.abs(Y - ycenter), 50.0, axis=1, keepdims=True)
         else:
-            ycenter = tf.reduce_mean(self.ybar, axis=1, keepdims=True)
-            yspread = tf.math.reduce_std(self.ybar, axis=1, keepdims=True)
+            ycenter = tf.reduce_mean(Y, axis=1, keepdims=True)
+            yspread = tf.math.reduce_std(Y, axis=1, keepdims=True)
 
         yspread = tf.where(yspread > 0, yspread, tf.ones_like(yspread, dtype=tf.float64))
-        # (LaTeX: lines 540-546, 556-557)
-        self.ybar_s   = (self.ybar - ycenter) / yspread
-        self.ybar_mean = ycenter
-        self.ybar_std  = yspread
+        return ycenter, yspread
 
-        self.n = tf.constant(n,  dtype=tf.int32)
-        self.d = tf.constant(d,  dtype=tf.int32)
-        self.p = tf.constant(p,  dtype=tf.int32)
+    # preprocess combined (not used)
+    def preprocess(self, y_raw=None, x_raw=None):
+        """
+        Returns a tuple of replication structures 
+        """
+        xr, yr, N, d, p = self._get_raw_xy(x_raw=x_raw, y_raw=y_raw)
+        x_unique_np, inverse_np, counts_np = self._group_unique_rows_np(xr)
+        n_unique = int(x_unique_np.shape[0])
+        r_np = counts_np.astype(np.int32)
+        ybar_np = self._compute_ybar_np(yr, inverse_np, n_unique)
+
+        (x_unique_tf,
+         x_unique_s,
+         group_ids_tf,
+         r_tf,
+         R_tf,
+         ybar_tf) = self._pack_replication_tensors(
+            x_unique_np=x_unique_np,
+            inverse_np=inverse_np,
+            r_np=r_np,
+            ybar_np=ybar_np
+        )
+
+        ybar_mean_tf, ybar_std_tf = self._compute_center_spread_tf(ybar_tf)
+        ybar_s_tf = (ybar_tf - ybar_mean_tf) / ybar_std_tf
+
+        return (
+            x_unique_tf, x_unique_s, group_ids_tf, r_tf, R_tf,
+            ybar_tf, ybar_s_tf, ybar_mean_tf, ybar_std_tf,
+            tf.constant(n_unique, tf.int32), tf.constant(d, tf.int32), tf.constant(p, tf.int32)
+        )
+
+    def _ensure_replication(self):
+        """
+        Build replication structures once if not yet built.
+        """
+        if not self._rep_initialized:
+            # (LaTeX: lines 540-546, 541-546)
+            self.preprocess()  # builds x_unique, ybar, r, R, ybar_s, etc.
+            # rebuild basis on ybar_s
+            self._rep_initialized = True
 
     @staticmethod
     def init_standard_x(x):
