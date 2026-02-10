@@ -353,27 +353,32 @@ class LCGP(gpflow.Module):
                                          params)
         return desc
 
+    def _get_phi_input(self):
+        """
+        Choose which Y matrix to use for SVD basis.
+        Replicated: ybar_s if rep_standardize_ybar True and available;
+        Full: use y.
+        """
+        if self.submethod != "rep":
+            return self.y
+
+        if getattr(self, "rep_standardize_ybar", True) and hasattr(self, "ybar_s"):
+            return self.ybar_s
+        if hasattr(self, "ybar"):
+            return self.ybar
+        return self.y
+
     def init_phi(self, var_threshold: float = None):
         """
-        Initialization of orthogonal basis, computed with singular value decomposition.
-        Uses ybar_s if available (replication), else y.
+        Initialization of orthogonal basis, computed with SVD.
+        Uses ybar_s if replication, else y.
         """
-        if self.submethod == 'rep' and hasattr(self, 'ybar_s'):
-            # y_in = self.ybar_s
-            if getattr(self, "rep_standardize_ybar", True) and hasattr(self, "ybar_s"):
-                y_in = self.ybar_s
-            elif hasattr(self, "ybar"):
-                y_in = self.ybar
-            else:
-                y_in = self.y
-        else:
-            y_in = self.y
+        y = self._get_phi_input()
 
-        y = y_in  
         n = int(self.n.numpy())
         p = int(self.p.numpy())
 
-        singvals, left_u, _ = tf.linalg.svd(y, full_matrices=False)  
+        singvals, left_u, _ = tf.linalg.svd(y, full_matrices=False)
 
         if (self.q is None) and (var_threshold is None):
             q = p
