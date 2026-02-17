@@ -25,7 +25,7 @@ class LCGP(gpflow.Module):
                  parameter_clamp_flag: bool = False,
                  robust_mean: bool = True,
                  penalty_const: dict = None,
-                 submethod: str = 'full',
+                 submethod: str = 'rep',
                  rep_standardize_ybar: bool = True,
                  verbose: bool = False):
         """
@@ -42,12 +42,10 @@ class LCGP(gpflow.Module):
         self.y = self._verify_data_types(y)
 
         self.method = 'LCGP'
-        self.submethod = submethod
-        self.submethod_loss_map = {'full': self.neglpost,
-                                   'rep':  self.neglpost_rep # replicated marginal likelihood
+        self.submethod = 'rep'
+        self.submethod_loss_map = {'rep':  self.neglpost_rep # replicated marginal likelihood
                                    }
-        self.submethod_predict_map = {'full': self.predict_full,
-                                      'rep':  self.predict_rep # replicated predictive dist.
+        self.submethod_predict_map = {'rep':  self.predict_rep # replicated predictive dist.
                                       }
 
         self.parameter_clamp_flag = parameter_clamp_flag
@@ -64,67 +62,61 @@ class LCGP(gpflow.Module):
         self.x_orig = self.x
         self.y_orig = self.y
 
-        # Standardize x/y    
+        # Standardize x/y    # SHARED
         self.x, self.x_min, self.x_max, _, self.xnorm = self.init_standard_x(self.x)
+
         # Replication
         self._rep_initialized = False
 
-        if self.submethod == 'rep':
-            # 1) resolve raw xy numpy
-            xr, yr, N, d, p = self._get_raw_xy(x_raw=self.x_orig, y_raw=self.y_orig)
+        # 1) resolve raw xy numpy
+        xr, yr, N, d, p = self._get_raw_xy(x_raw=self.x_orig, y_raw=self.y_orig)
 
-            # 2) group identical rows
-            x_unique_np, inverse_np, counts_np = self._group_unique_rows_np(xr)
-            n_unique = int(x_unique_np.shape[0])
-            r_np = counts_np.astype(np.int32)
+        # 2) group identical rows
+        x_unique_np, inverse_np, counts_np = self._group_unique_rows_np(xr)
+        n_unique = int(x_unique_np.shape[0])
+        r_np = counts_np.astype(np.int32)
 
-            # 3) compute replicate-averaged ybar 
-            ybar_np = self._compute_ybar_np(yr, inverse_np, n_unique)
+        # 3) compute replicate-averaged ybar
+        ybar_np = self._compute_ybar_np(yr, inverse_np, n_unique)
 
-            # 4) pack into TF tensors + x_unique_s + R
-            (x_unique_tf,
-             x_unique_s,
-             group_ids_tf,
-             r_tf,
-             R_tf,
-             ybar_tf) = self._pack_replication_tensors(
-                x_unique_np=x_unique_np,
-                inverse_np=inverse_np,
-                r_np=r_np,
-                ybar_np=ybar_np
-            )
+        # 4) pack into TF tensors + x_unique_s + R
+        (x_unique_tf,
+         x_unique_s,
+         group_ids_tf,
+         r_tf,
+         R_tf,
+         ybar_tf) = self._pack_replication_tensors(
+            x_unique_np=x_unique_np,
+            inverse_np=inverse_np,
+            r_np=r_np,
+            ybar_np=ybar_np
+        )
 
-            # 5) compute standardization stats for ybar and standardized ybar_s
-            ybar_mean_tf, ybar_std_tf = self._compute_center_spread_tf(ybar_tf)
-            ybar_s_tf = (ybar_tf - ybar_mean_tf) / ybar_std_tf
+        # 5) compute standardization stats for ybar and standardized ybar_s
+        ybar_mean_tf, ybar_std_tf = self._compute_center_spread_tf(ybar_tf)
+        ybar_s_tf = (ybar_tf - ybar_mean_tf) / ybar_std_tf
 
-            # 6) assign to self
-            self.x_unique = x_unique_tf
-            self.x_unique_s = x_unique_s
-            self.group_ids = group_ids_tf
-            self.r = r_tf
-            self.R = R_tf
-            self.ybar = ybar_tf
-            self.ybar_s = ybar_s_tf
-            self.ybar_mean = ybar_mean_tf
-            self.ybar_std = ybar_std_tf
+        # 6) assign to self
+        self.x_unique = x_unique_tf
+        self.x_unique_s = x_unique_s
+        self.group_ids = group_ids_tf
+        self.r = r_tf
+        self.R = R_tf
+        self.ybar = ybar_tf
+        self.ybar_s = ybar_s_tf
+        self.ybar_mean = ybar_mean_tf
+        self.ybar_std = ybar_std_tf
 
-            # 7) reset (n,d,p) to unique counts 
-            self.n = tf.constant(n_unique, dtype=tf.int32)
-            self.d = tf.constant(d, dtype=tf.int32)
-            self.p = tf.constant(p, dtype=tf.int32)
+        # 7) reset (n,d,p) to unique counts
+        self.n = tf.constant(n_unique, dtype=tf.int32)
+        self.d = tf.constant(d, dtype=tf.int32)
+        self.p = tf.constant(p, dtype=tf.int32)
 
-            self._rep_initialized = True
-        elif self.submethod == 'full':
-            
-            self.y, self.ymean, self.ystd, _ = self.init_standard_y(self.y)
-
-        else:
-            raise ValueError('submethod should be full or rep.')
+        self._rep_initialized = True
 
         # reset q if none is provided
         self.g, self.phi, self.diag_D, self.q = self.init_phi(var_threshold=var_threshold)
-        
+
         self.Tks = None
 
         if diag_error_structure is None:
@@ -245,7 +237,7 @@ class LCGP(gpflow.Module):
     # preprocess combined (not used)
     def preprocess(self, y_raw=None, x_raw=None):
         """
-        Returns a tuple of replication structures 
+        Returns a tuple of replication structures
         """
         xr, yr, N, d, p = self._get_raw_xy(x_raw=x_raw, y_raw=y_raw)
         x_unique_np, inverse_np, counts_np = self._group_unique_rows_np(xr)
@@ -302,27 +294,6 @@ class LCGP(gpflow.Module):
 
             xnorm = tf.tensor_scatter_nd_update(xnorm, [[j]], [mean_val])
         return xs, x_min, x_max, x, xnorm
-
-    '''
-    For replicated model, will likely want:
-          self.init_standard_ybar(y_raw, group_ids) -> (ybar_s, ybar_mean, ybar_std, ybar_raw)
-            where ybar_raw is built first by averaging replicates per unique input
-            and ybar_s = (ybar_raw - ybar_mean)/ybar_std
-    '''
-
-    def init_standard_y(self, y):
-        """
-        Standardizes outputs and collects summary information.
-        """
-        if self.robust_mean:
-            ycenter = tfp.stats.percentile(y, 50.0, axis=1, keepdims=True)
-            yspread = tfp.stats.percentile(tf.abs(y - ycenter), 50.0, axis=1, keepdims=True)
-        else:
-            ycenter = tf.reduce_mean(y, axis=1, keepdims=True)
-            yspread = tf.math.reduce_std(y, axis=1, keepdims=True)
-
-        ys = (y - ycenter) / yspread
-        return ys, ycenter, yspread, y
 
     def __repr__(self):
         params = gpflow.utilities.tabulate_module_summary(self)
@@ -390,7 +361,6 @@ class LCGP(gpflow.Module):
 
         return g, phi, diag_D, q
 
-
     def init_params(self):
         """
         Initializes parameters for LCGP.
@@ -409,7 +379,7 @@ class LCGP(gpflow.Module):
         for k in range(len(err_struct)):
             lsigma2_diag[k] = np.log(np.var(self.y[col:(col + err_struct[k])]))
             col += err_struct[k]
-        
+
         self.lLmb.assign(lLmb)
         self.lLmb0.assign(lLmb0)
         self.lnugGPs.assign(lnugGPs)
@@ -423,12 +393,12 @@ class LCGP(gpflow.Module):
         """
         p, ny = tf.shape(y)[0], tf.shape(y)[1]
         nx, d = tf.shape(x)[0], tf.shape(x)[1]
-        
+
         '''
         For raw replicates, likely have N rows in x and N columns in y (ny == nx == N).
         - Verify with (ybar_s, x_unique) so that
-            ny == n_unique and nx == n_unique. 
-        '''  
+            ny == n_unique and nx == n_unique.
+        '''
 
         assert ny == nx, 'Number of inputs (x) differs from number of outputs (y), y.shape[1] != x.shape[0]'
 
@@ -446,23 +416,10 @@ class LCGP(gpflow.Module):
         """
         return ys * self.ystd + self.ymean
 
-    def fit(self, verbose=False):
+    def fit(self, verbose=False):  # SHARED
         opt = gpflow.optimizers.Scipy()
         opt.minimize(self.loss, self.trainable_variables, compile=False)
         return
-
-    # def loss(self):
-    #     """
-    #     Computes the loss based on the submethod.
-    #     """
-    #     if self.submethod == 'full':
-    #         return self.neglpost()
-    #     # elif self.submethod == 'elbo':
-    #     #     return self.negelbo()
-    #     # elif self.submethod == 'proflik':
-    #     #     return self.negproflik()
-    #     else:
-    #         raise ValueError("Invalid submethod. Choices are 'full', 'elbo', or 'proflik'.")
 
     def loss(self):
         """
@@ -480,13 +437,13 @@ class LCGP(gpflow.Module):
               Ck = K(xk, xk; θ_k)      shape (n, n)
         2) Build Σ^{-1/2}:
               If diagonal-by-block: use built_lsigma2s from get_param() to form per-dim scalings.
-              If full Σ: use stored Cholesky/inverse-root.                 
+              If full Σ: use stored Cholesky/inverse-root.
         3) Basis from ybar:
-              Φ shape (p, q), D = diag(d_k)                                       
+              Φ shape (p, q), D = diag(d_k)
         4) b_k vector shape (n, 1):
-              b_k = R @ Ybar @ (Σ^{-1/2} φ_k)                              
+              b_k = R @ Ybar @ (Σ^{-1/2} φ_k)
         5) Posterior precision and mean:
-              s_k = C_k^{-1} + d_k R,   S_k = s_k^{-1},   m_k = S_k b_k   
+              s_k = C_k^{-1} + d_k R,   S_k = s_k^{-1},   m_k = S_k b_k
         6) Replicated negative log-marginal (up to constant):
             0.5 * sum_i r_i * ybar_i^T Σ^{-1} ybar_i
           - 0.5 * sum_k b_k^T S_k b_k
@@ -495,8 +452,8 @@ class LCGP(gpflow.Module):
           + regularization
         '''
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-        xk   = self.x_unique_s                      
-        ybar = self.ybar_s                          
+        xk   = self.x_unique_s
+        ybar = self.ybar_s
         r    = tf.cast(self.r, tf.float64)                          # r_i (LaTeX: lines 541-546)
         R    = self.R                                               # R = diag(r_i) (LaTeX: lines 541-546)
         n    = tf.cast(self.n, tf.float64)
@@ -511,14 +468,14 @@ class LCGP(gpflow.Module):
         sigma_var_raw = tf.exp(lsigma2s)                            # Σ (LaTeX: lines 566-569)
         sigma_inv_raw = 1.0 / sigma_var_raw                         # Σ^{-1}
         sigma_inv_sqrt_raw = tf.sqrt(sigma_inv_raw)                 # Σ^{-1/2}  (LaTeX: lines 589-591, 594-596)
-        
+
         if use_std:
             # Standardized replicate-averages
             ybar = self.ybar_s
 
             # When ybar_s = (ybar_raw - mean)/std, the implied noise variance in standardized space is:
             #   Σ_std = Σ_raw / std^2
-            std = self.ybar_std[:, 0]                    
+            std = self.ybar_std[:, 0]
             sigma_var_used = sigma_var_raw / tf.square(std)         # Σ_std
             sigma_inv_sqrt = sigma_inv_sqrt_raw * std               # Σ_std^{-1/2} = (1/sqrt(Σ_raw)) * std
         else:
@@ -527,19 +484,11 @@ class LCGP(gpflow.Module):
             sigma_var_used = sigma_var_raw                          # Σ_raw
             sigma_inv_sqrt = sigma_inv_sqrt_raw                     # Σ_raw^{-1/2}
 
-        # std = self.ybar_std[:, 0]  
-        # std_sq = tf.square(std)
-        # sigma_var_std = sigma_var_raw / std_sq                      # Σ_s (standardized) (maps to Σ in formulas)
-        # sigma_inv_std = 1.0 / sigma_var_std                         # Σ_s^{-1} 
-        # sigma_inv_sqrt_std = sigma_inv_sqrt_raw * std               # Σ_s^{-1/2}
-        # psi_c = tf.transpose(phi) / sigma_inv_sqrt_std
-        # self.psi_c = psi_c
-
         nlp = tf.constant(0.0, tf.float64)
 
         # 0.5 * sum_i r_i * ybar_i^T Σ^{-1} ybar_i                  (LaTeX: lines 693-694)
         ybar_scaled = ybar * sigma_inv_sqrt[:, None]            # Σ^{-1/2} \bar{Y} (LaTeX: 581-583)
-        col_sq      = tf.reduce_sum(tf.square(ybar_scaled), axis=0) 
+        col_sq      = tf.reduce_sum(tf.square(ybar_scaled), axis=0)
         nlp += 0.5 * tf.reduce_sum(r * col_sq)                      # (LaTeX: 693-694)
 
         # + (n/2) log|Σ_s| = (n/2) (sum log Σ - 2 sum log std), (corresponds to the |Σ|^{-n/2} constant)
@@ -561,18 +510,18 @@ class LCGP(gpflow.Module):
         q_int = tf.cast(self.q, tf.int32)
         for k in range(q_int):
             # C_k (LaTeX: lines 615-616, 712-713)
-            Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k]) 
+            Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
 
-            # b_k = R @ ybar_s^T @ (Σ_s^{-1/2} φ_k) 
+            # b_k = R @ ybar_s^T @ (Σ_s^{-1/2} φ_k)
             v_k = sigma_inv_sqrt * phi[:, k]                    # Σ^{-1/2} φ_k (LaTeX: 594-596)
             ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)         # \bar{Y}^T (Σ^{-1/2} φ_k) (LaTeX: 594-596)
-            b_k = r * ytv                                           # R @ (...) since R=diag(r) (LaTeX: 594-596, 625-628)                                 
+            b_k = r * ytv                                           # R @ (...) since R=diag(r) (LaTeX: 594-596, 625-628)
 
             d_k = D[k]
 
             # Below is a Woodbury-style way to compute S_k, b_k, etc. (LaTeX: lines 698-709)
             Cb  = tf.linalg.matvec(Ck, b_k)
-            
+
             # A = I + d_k R^{1/2} C_k R^{1/2} (LaTeX: lines 703-704, 707-709)
             A   = tf.eye(self.n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])   # (LaTeX: lines 698-709)
             LA  = tf.linalg.cholesky(A)
@@ -591,52 +540,7 @@ class LCGP(gpflow.Module):
         nlp /= n
         return nlp
 
-    @tf.function
-    def neglpost(self):
-        print('in neg log normal')
-        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-        x = self.x
-        y = self.y
-
-        pc = self.penalty_const
-
-        n = self.n
-        q = self.q
-        D = self.diag_D
-        phi = self.phi
-        psi_c = tf.transpose(phi) / tf.sqrt(tf.exp(lsigma2s))
-
-        nlp = tf.constant(0., dtype=tf.float64)
-
-        # no calling kronecker
-        # use woodbury for inversions of something like (dk Ck + R^{-1}???)^{-1}
-        for k in range(q):
-            Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
-
-            # components necessary for Ck^{-1}
-            Wk, Uk = tf.linalg.eigh(Ck)
-
-            Qk = tf.matmul(Uk, tf.matmul(tf.linalg.diag(1 / (D[k] + 1 / Wk)), tf.transpose(Uk)))
-            Pk = tf.matmul(tf.expand_dims(psi_c[k], axis=1), tf.expand_dims(psi_c[k], axis=0))
-
-            yQk = tf.matmul(y, Qk)
-            yPk = tf.matmul(tf.transpose(y), tf.transpose(Pk))
-
-            nlp += (0.5 * tf.reduce_sum(tf.math.log(1 + D[k] * Wk)))
-            nlp += -(0.5 * tf.reduce_sum(yQk * tf.transpose(yPk)))
-
-        nlp += (n / 2 * tf.reduce_sum(lsigma2s))
-        nlp += (0.5 * tf.reduce_sum(tf.square(tf.transpose(y) / tf.sqrt(tf.exp(lsigma2s)))))
-
-        # Regularization
-        nlp += (pc['lLmb'] * tf.reduce_sum(tf.square(tf.math.log(lLmb))) +
-                pc['lLmb0'] * (2 / n) * tf.reduce_sum(tf.square(lLmb0.unconstrained_variable)))
-        nlp += (-tf.reduce_sum(tf.math.log(tf.math.log(lnugGPs) + 100)))
-        # nlp += (tf.reduce_sum(tf.math.log(lnugGPs - 100)))
-        nlp /= tf.cast(n, tf.float64)
-        return nlp
-
-    def predict(self, x0, return_fullcov=False):
+    def predict(self, x0, return_fullcov=False):  # SHARED
         """
         Returns predictive quantities at new input `x0`.  Both outputs are of
         size (number of new input, output dimension).
@@ -656,66 +560,17 @@ class LCGP(gpflow.Module):
             raise KeyError('Invalid submethod.  Choices are \'full\'.')
         return tf.stop_gradient(predict_call(x0=x0, return_fullcov=return_fullcov))
 
-
-    def compute_aux_predictive_quantities(self):
-        """
-        Compute auxiliary quantities for predictions using full posterior approach.
-        """
-        # If replication is present, compute replicated auxiliaries, else original ones
-        if hasattr(self, 'x_unique') and hasattr(self, 'ybar'):
-            self._compute_aux_predictive_quantities_rep()
-            return
-        x = self.x
-        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-
-        D = self.diag_D
-        # B := Y @ Sigma^{-1/2} @ Phi
-        B = tf.matmul(tf.transpose(self.y) / tf.sqrt(tf.exp(lsigma2s)), self.phi)
-
-        '''
-        Use averaged data in replicated model:
-            - B = Ybar_s^T @ Σ^{-1/2} @ Φ                              
-            - Set x = self.x_unique for all covariances below.
-        '''
-
-        CinvM = tf.zeros([self.q, self.n], dtype=tf.float64)
-        Th = tf.zeros([self.q, self.n, self.n], dtype=tf.float64)
-
-        for k in range(self.q):
-            Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
-
-            Wk, Uk = tf.linalg.eigh(Ck)
-
-            # (I + D_k * C_k)^{-1}
-            IpdkCkinv = tf.matmul(Uk, tf.matmul(tf.linalg.diag(1.0 / (1.0 + D[k] * Wk)), tf.transpose(Uk)))
-
-            '''
-            With replication the transform changes:
-                S_k = (C_k^{-1} + d_k R)^{-1}                            
-                T_k = C_k^{-1} - C_k^{-1} S_k C_k^{-1} for var
-            '''
-
-            CkinvMk = tf.linalg.matvec(IpdkCkinv, tf.transpose(B)[k])
-            Thk = tf.matmul(Uk, tf.matmul(tf.linalg.diag(tf.sqrt((D[k] * Wk ** 2) / (Wk ** 2 + D[k] * Wk ** 3))),
-                                          tf.transpose(Uk)))
-
-            CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], tf.expand_dims(CkinvMk, axis=0))
-            Th = tf.tensor_scatter_nd_update(Th, [[k]], tf.expand_dims(Thk, axis=0))
-
-        self.CinvMs = CinvM
-        self.Ths = Th
-
     def _compute_aux_predictive_quantities_rep(self):
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         xk   = self.x_unique_s
-        ybar = self.ybar_s                          
+        ybar = self.ybar_s
         r    = tf.cast(self.r, tf.float64)
         R    = self.R
 
         D    = self.diag_D
         phi  = self.phi
         sigma_inv_sqrt_raw = tf.exp(-0.5 * lsigma2s)  # Σ^{-1/2}
-        std = self.ybar_std[:, 0]  
+        std = self.ybar_std[:, 0]
         sigma_inv_sqrt_std = sigma_inv_sqrt_raw * std
         self.psi_c = tf.transpose(phi) / sigma_inv_sqrt_std[:, None]                        # corresponds to Φ^T Σ^{-1/2} (LaTeX: lines 589-591)
 
@@ -754,13 +609,13 @@ class LCGP(gpflow.Module):
             Id  = tf.eye(n, dtype=tf.float64)
             invC = tf.linalg.cholesky_solve(LC, Id)                                         # C_k^{-1} (LaTeX: lines 641-642)
 
-            # P_k = C_k^{-1} + d_k R 
+            # P_k = C_k^{-1} + d_k R
             P_k = invC + d_k * R                                                            # (LaTeX: lines 631-634)
-            
+
             # V_k = P_k^{-1}
             V_k = tf.linalg.inv(P_k)                                                        # (LaTeX: lines 632-634)
-            
-            # T_k = C_k^{-1} - C_k^{-1} V_k C_k^{-1} 
+
+            # T_k = C_k^{-1} - C_k^{-1} V_k C_k^{-1}
             Tk  = invC - invC @ V_k @ invC                                                  # (LaTeX: lines 641-642)
 
             CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], [CinvM_k])
@@ -772,77 +627,13 @@ class LCGP(gpflow.Module):
         self.Tks    = Tks
         self.Ths    = None
 
-    def predict_full(self, x0, return_fullcov=False):
-        """
-        Returns predictions using full posterior approach.
-        """
-        print("in predict full")
-        if tf.reduce_any(tf.math.is_nan(self.CinvMs)) or tf.reduce_any(tf.math.is_nan(self.Ths)):
-            self.compute_aux_predictive_quantities()
-
-        x = self.x
-        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-
-        phi = self.phi
-
-        CinvM = self.CinvMs
-        Th = self.Ths
-
-        x0 = self._verify_data_types(x0)
-        x0 = (x0 - self.x_min) / (self.x_max - self.x_min)  # Standardize x0
-        n0 = tf.shape(x0)[0]
-
-        ghat = tf.zeros([self.q, n0], dtype=tf.float64)
-        gvar = tf.zeros([self.q, n0], dtype=tf.float64)
-        for k in range(self.q):
-            c00k = Matern32(x0, x0, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k],
-                            diag_only=True)  # Diagonal-only covariance
-            c0k = Matern32(x0, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k],
-                           diag_only=False)
-
-            '''
-            Replace x with self.x_unique.
-            Mean/var structure stays the same, but uses:
-                - T_k = C_k^{-1} - C_k^{-1} S_k C_k^{-1}                    
-                - gvar_k = c00k - c0k @ T_k @ c0k^T (diagonal extracted)
-            '''
-
-            ghat_k = tf.linalg.matvec(c0k, CinvM[k])
-            gvar_k = c00k - tf.reduce_sum(tf.square(tf.matmul(c0k, Th[k])), axis=1)
-
-            ghat = tf.tensor_scatter_nd_update(ghat, [[k]], [ghat_k])
-            gvar = tf.tensor_scatter_nd_update(gvar, [[k]], [gvar_k])
-
-        self.ghat = ghat
-        self.gvar = gvar
-
-        psi = tf.transpose(phi) * tf.sqrt(tf.exp(lsigma2s))
-
-        predmean = tf.matmul(psi, ghat, transpose_a=True)
-        confvar = tf.matmul(tf.transpose(gvar), tf.square(psi))
-        predvar = confvar + tf.exp(lsigma2s)
-
-        ypred = self.tx_y(predmean)
-        yconfvar = tf.transpose(confvar) * tf.square(self.ystd)
-        ypredvar = tf.transpose(predvar) * tf.square(self.ystd)
-
-        if return_fullcov:
-            CH = tf.sqrt(gvar)[..., tf.newaxis] * psi[tf.newaxis, ...]
-            yfullpredcov = (tf.einsum('nij,njk->nik', CH,
-                                     tf.transpose(CH, perm=[0, 2, 1])) +
-                            tf.linalg.diag(tf.exp(lsigma2s)))
-            yfullpredcov *= tf.square(self.ystd)
-            return ypred, ypredvar, yconfvar, yfullpredcov
-
-        return ypred, ypredvar, yconfvar
-
     def predict_rep(self, x0, return_fullcov=False):
         need_aux = (self.Tks is None) or tf.reduce_any(tf.math.is_nan(self.CinvMs))
         if need_aux:
             self._compute_aux_predictive_quantities_rep()
 
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-        phi  = self.phi 
+        phi  = self.phi
 
         Xtrain = self.x_unique_s
         Tks    = self.Tks
@@ -852,13 +643,13 @@ class LCGP(gpflow.Module):
         x0 = (x0 - self.x_min) / (self.x_max - self.x_min)
         n0 = tf.shape(x0)[0]
 
-        ghat = tf.zeros([self.q, n0], dtype=tf.float64) 
-        gvar = tf.zeros([self.q, n0], dtype=tf.float64) 
+        ghat = tf.zeros([self.q, n0], dtype=tf.float64)
+        gvar = tf.zeros([self.q, n0], dtype=tf.float64)
 
         for k in range(self.q):
             c00k = Matern32(x0, x0,     llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=True)      # c_{**} (LaTeX: lines 712-717)
             c0k  = Matern32(x0, Xtrain, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=False)     # c_k(x_*) (LaTeX: lines 712-717)
-            
+
             # μ_k(x_*) = c_k^T (C_k^{-1} m_k) = c_k^T CinvM_k
             ghat_k = tf.linalg.matvec(c0k, CinvM[k])                                                        # (LaTeX: lines 720-722 / 731-734)
 
@@ -874,16 +665,15 @@ class LCGP(gpflow.Module):
         self.ghat = ghat
         self.gvar = gvar
 
-
         psi = tf.transpose(phi) * lsigma2s
 
-        # Output prediction: μ_y = Ψ μ_g, Σ_y = Σ + Ψ Σ_g Ψ^T 
+        # Output prediction: μ_y = Ψ μ_g, Σ_y = Σ + Ψ Σ_g Ψ^T
         predmean_std = tf.matmul(psi, ghat)                                                                 # corresponds to μ_y = Ψ μ_g; LaTeX lines: 744-746)
         confvar_std  = tf.matmul(tf.square(psi), gvar)                                                      # Ψ Σ_g Ψ^T diagonal (LaTeX lines: 749-751)
-        
+
         sigma_var_raw = tf.exp(lsigma2s)
         std_sq = tf.square(self.ybar_std[:, 0])
-        sigma_var_std = sigma_var_raw / std_sq 
+        sigma_var_std = sigma_var_raw / std_sq
         predvar_std = confvar_std + sigma_var_std[:, None]                                                  # + Σ_obs term (LaTeX lines: 749-751)
 
         # if self.rep_standardize_ybar:

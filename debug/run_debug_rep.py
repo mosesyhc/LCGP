@@ -54,6 +54,13 @@ def main():
     print("\n==== FIT ====")
     m.fit(verbose=True)
 
+    print("\n==== HYPERPARAMETERS (raw tensors) ====")
+    lLmb, lLmb0, lsigma2s, lnugGPs = m.get_param()
+    print("lLmb:", m.lLmb.numpy())
+    print("lLmb0:", m.lLmb0.numpy())
+    print("lsigma2s(built):", lsigma2s.numpy())
+    print("lnugGPs:", m.lnugGPs.numpy())
+
     print("\n==== PREDICT ====")
     ymean, ypredvar, yconfvar = m.predict(x0=xtest, return_fullcov=False)
     print("ymean:", ymean.numpy().shape)
