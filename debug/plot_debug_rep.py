@@ -3,7 +3,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from lcgp import LCGP 
+from lcgp.lcgp_rep import LCGP
 from debug.data_generation.read_debug_data import load_train_test_csv
 
 np.random.seed(42)

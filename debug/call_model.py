@@ -1,5 +1,5 @@
 import numpy as np
-from lcgp import LCGP
+from lcgp.lcgp_rep import LCGP
 
 
 class LCGPRun:
