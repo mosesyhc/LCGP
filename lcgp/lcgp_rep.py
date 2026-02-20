@@ -114,17 +114,15 @@ class LCGP(gpflow.Module):
 
         self._rep_initialized = True
 
-        # reset q if none is provided
-        self.g, self.phi, self.diag_D, self.q = self.init_phi(var_threshold=var_threshold)
-
         self.Tks = None
 
         if diag_error_structure is None:
             self.diag_error_structure = [1] * int(self.p)
         else:
             self.diag_error_structure = diag_error_structure
-
         self.verify_error_structure(self.diag_error_structure, self.y)
+
+        self.g, self.phi, self.diag_D, self.q = self.init_phi(var_threshold=var_threshold)
 
         # Initialize parameters
         self.lLmb = gpflow.Parameter(tf.ones([self.q, self.x.shape[1]], dtype=tf.float64),
@@ -561,71 +559,86 @@ class LCGP(gpflow.Module):
         return tf.stop_gradient(predict_call(x0=x0, return_fullcov=return_fullcov))
 
     def _compute_aux_predictive_quantities_rep(self):
-        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-        xk   = self.x_unique_s
-        ybar = self.ybar_s
-        r    = tf.cast(self.r, tf.float64)
-        R    = self.R
+            lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+            xk   = self.x_unique_s
+            r    = tf.cast(self.r, tf.float64)
+            R    = self.R
 
-        D    = self.diag_D
-        phi  = self.phi
-        sigma_inv_sqrt_raw = tf.exp(-0.5 * lsigma2s)  # Σ^{-1/2}
-        std = self.ybar_std[:, 0]
-        sigma_inv_sqrt_std = sigma_inv_sqrt_raw * std
-        self.psi_c = tf.transpose(phi) / sigma_inv_sqrt_std[:, None]                        # corresponds to Φ^T Σ^{-1/2} (LaTeX: lines 589-591)
+            D    = self.diag_D
+            phi  = self.phi  # (p, q)
 
-        q = tf.cast(self.q, tf.int32)
-        n = tf.cast(self.n, tf.int32)
+            # standardized-ybar space or raw-ybar 
+            use_std = getattr(self, "rep_standardize_ybar", True)
+            if use_std:
+                ybar = self.ybar_s  # (p, n)
+            else:
+                ybar = self.ybar    # (p, n)
 
-        CinvM = tf.zeros([q, n], dtype=tf.float64)
-        Tks   = tf.zeros([q, n, n], dtype=tf.float64)
-        mks = tf.zeros([q, n], dtype=tf.float64)
+            # Σ^{-1/2} on RAW scale
+            sigma_inv_sqrt_raw = tf.exp(-0.5 * lsigma2s)  # (p,)
 
-        for k in range(q):
-            Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
+            # if using standardized ybar: ybar_s = (ybar_raw - mean)/std
+            if use_std:
+                std = self.ybar_std[:, 0]                 # (p,)
+                sigma_inv_sqrt_used = sigma_inv_sqrt_raw * std
+            else:
+                sigma_inv_sqrt_used = sigma_inv_sqrt_raw
 
-            # b_k = R @ ybar^T @ (Σ^{-1/2} φ_k) (LaTeX: 594-596)
-            v_k = sigma_inv_sqrt_std * phi[:, k]                                            # Σ^{-1/2} φ_k (LaTeX: lines 594-596)
-            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)                                 # ybar^T (...) (LaTeX: lines 594-596)
-            b_k = r * ytv
+            self.psi_c = tf.transpose(phi) / sigma_inv_sqrt_used[:, None]  # (q,p), corresponds to Φ^T Σ^{-1/2}
 
-            d_k = D[k]
+            q = tf.cast(self.q, tf.int32)
+            n = tf.cast(self.n, tf.int32)
+
+            CinvM = tf.zeros([q, n], dtype=tf.float64)
+            Tks   = tf.zeros([q, n, n], dtype=tf.float64)
+            mks   = tf.zeros([q, n], dtype=tf.float64)
+
             sr  = tf.sqrt(r)
 
-            # m_k = V_k b_k (computed via Woodbury identity; LaTeX: m_k = V_k b_k, lines 635-638)
-            Cb  = tf.linalg.matvec(Ck, b_k)
-            A   = tf.eye(n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])    # I + d_k R^{1/2} C_k R^{1/2} (LaTeX: lines 703-704, 707-709)
-            LA  = tf.linalg.cholesky(A)
-            u   = tf.sqrt(d_k) * (sr * Cb)
-            z   = tf.linalg.cholesky_solve(LA, tf.expand_dims(u, -1))
-            z   = tf.squeeze(z, -1)
-            m_k = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))                      # corresponds to V_k b_k (LaTeX: lines 635-638)
+            for k in range(q):
+                Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
 
-            # C_k^{-1} m_k = b_k - d_k R m_k  (LaTeX: lines 731-734)
-            CinvM_k = b_k - d_k * tf.linalg.matvec(R, m_k)                                  # (LaTeX: lines 731-734)
+                # b_k = R @ ybar^T @ (Σ^{-1/2} φ_k)
+                v_k = sigma_inv_sqrt_used * phi[:, k]             # (p,)
+                ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)   # (n,)
+                b_k = r * ytv                                     # (n,)
 
-            # Build C_k^{-1} explicitly to form T_k
-            LC  = tf.linalg.cholesky(Ck)
-            Id  = tf.eye(n, dtype=tf.float64)
-            invC = tf.linalg.cholesky_solve(LC, Id)                                         # C_k^{-1} (LaTeX: lines 641-642)
+                d_k = D[k]
 
-            # P_k = C_k^{-1} + d_k R
-            P_k = invC + d_k * R                                                            # (LaTeX: lines 631-634)
+                # m_k = V_k b_k via Woodbury
+                Cb  = tf.linalg.matvec(Ck, b_k)
+                A   = tf.eye(n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])
+                LA  = tf.linalg.cholesky(A)
+                u   = tf.sqrt(d_k) * (sr * Cb)
+                z   = tf.linalg.cholesky_solve(LA, tf.expand_dims(u, -1))
+                z   = tf.squeeze(z, -1)
+                m_k = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))
 
-            # V_k = P_k^{-1}
-            V_k = tf.linalg.inv(P_k)                                                        # (LaTeX: lines 632-634)
+                # C_k^{-1} m_k = b_k - d_k R m_k
+                CinvM_k = b_k - d_k * tf.linalg.matvec(R, m_k)
 
-            # T_k = C_k^{-1} - C_k^{-1} V_k C_k^{-1}
-            Tk  = invC - invC @ V_k @ invC                                                  # (LaTeX: lines 641-642)
+                # Build C_k^{-1} explicitly for T_k
+                LC   = tf.linalg.cholesky(Ck)
+                Id   = tf.eye(n, dtype=tf.float64)
+                invC = tf.linalg.cholesky_solve(LC, Id)
 
-            CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], [CinvM_k])
-            Tks   = tf.tensor_scatter_nd_update(Tks,   [[k]], [Tk])
-            mks = tf.tensor_scatter_nd_update(mks, [[k]], [m_k])
+                # P_k = C_k^{-1} + d_k R
+                P_k = invC + d_k * R
 
-        self.mks = mks
-        self.CinvMs = CinvM
-        self.Tks    = Tks
-        self.Ths    = None
+                # V_k = P_k^{-1}
+                V_k = tf.linalg.inv(P_k)
+
+                # T_k = C_k^{-1} - C_k^{-1} V_k C_k^{-1}
+                Tk  = invC - invC @ V_k @ invC
+
+                CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], [CinvM_k])
+                Tks   = tf.tensor_scatter_nd_update(Tks,   [[k]], [Tk])
+                mks   = tf.tensor_scatter_nd_update(mks,   [[k]], [m_k])
+
+            self.mks    = mks
+            self.CinvMs = CinvM
+            self.Tks    = Tks
+            self.Ths    = None
 
     def predict_rep(self, x0, return_fullcov=False):
         need_aux = (self.Tks is None) or tf.reduce_any(tf.math.is_nan(self.CinvMs))
@@ -665,7 +678,8 @@ class LCGP(gpflow.Module):
         self.ghat = ghat
         self.gvar = gvar
 
-        psi = tf.transpose(phi) * lsigma2s
+        sigma_sqrt = tf.sqrt(tf.exp(lsigma2s))
+        psi = tf.transpose(phi) * sigma_sqrt
 
         # Output prediction: μ_y = Ψ μ_g, Σ_y = Σ + Ψ Σ_g Ψ^T
         predmean_std = tf.matmul(psi, ghat)                                                                 # corresponds to μ_y = Ψ μ_g; LaTeX lines: 744-746)
@@ -686,6 +700,41 @@ class LCGP(gpflow.Module):
         # ypred = self.ystd * ypred + self.ymean
         # yconfvar *= tf.square(self.ystd)
         # ypredvar *= tf.square(self.ystd)
+
+        if return_fullcov:
+            return ypred, ypredvar, yconfvar, None
+        return ypred, ypredvar, yconfvar
+
+        # choose whether we are predicting in standardized ybar space or raw ybar space
+        use_std = getattr(self, "rep_standardize_ybar", True)
+
+        sigma_var_raw  = tf.exp(lsigma2s)              # (p,)
+        sigma_sqrt_raw = tf.sqrt(sigma_var_raw)        # (p,)
+
+        if use_std:
+            std = self.ybar_std[:, 0]                  # (p,)
+            # In standardized space: Σ_std = Σ_raw / std^2  =>  Σ_std^{1/2} = Σ_raw^{1/2} / std
+            sigma_sqrt_used = sigma_sqrt_raw / std
+            sigma_var_used  = sigma_var_raw / tf.square(std)
+        else:
+            sigma_sqrt_used = sigma_sqrt_raw
+            sigma_var_used  = sigma_var_raw
+
+        # IMPORTANT: Psi must be (p,q), not (q,p)
+        Psi = phi * sigma_sqrt_used[:, None]           # (p,q)
+
+        # Output prediction in the "used" space (raw or standardized)
+        predmean_used = tf.matmul(Psi, ghat)           # (p,n0)
+        confvar_used  = tf.matmul(tf.square(Psi), gvar)  # (p,n0)
+        predvar_used  = confvar_used + sigma_var_used[:, None]
+
+        # If we predicted in standardized-ybar space, unstandardize back to raw outputs
+        if use_std:
+            ypred    = predmean_used * self.ybar_std + self.ybar_mean
+            yconfvar = confvar_used  * tf.square(self.ybar_std)
+            ypredvar = predvar_used  * tf.square(self.ybar_std)
+        else:
+            ypred, yconfvar, ypredvar = predmean_used, confvar_used, predvar_used
 
         if return_fullcov:
             return ypred, ypredvar, yconfvar, None
