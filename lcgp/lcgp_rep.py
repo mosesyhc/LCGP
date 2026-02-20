@@ -646,12 +646,13 @@ class LCGP(gpflow.Module):
             self._compute_aux_predictive_quantities_rep()
 
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
-        phi  = self.phi
+        phi  = self.phi  # (p, q)
 
         Xtrain = self.x_unique_s
         Tks    = self.Tks
         CinvM  = self.CinvMs
 
+        # standardize x0 into [0,1] using training mins/maxs
         x0 = self._verify_data_types(x0)
         x0 = (x0 - self.x_min) / (self.x_max - self.x_min)
         n0 = tf.shape(x0)[0]
@@ -660,50 +661,23 @@ class LCGP(gpflow.Module):
         gvar = tf.zeros([self.q, n0], dtype=tf.float64)
 
         for k in range(self.q):
-            c00k = Matern32(x0, x0,     llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=True)      # c_{**} (LaTeX: lines 712-717)
-            c0k  = Matern32(x0, Xtrain, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=False)     # c_k(x_*) (LaTeX: lines 712-717)
+            c00k = Matern32(x0, x0,     llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=True)      # (n0,)
+            c0k  = Matern32(x0, Xtrain, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k], diag_only=False)     # (n0,n)
 
-            # μ_k(x_*) = c_k^T (C_k^{-1} m_k) = c_k^T CinvM_k
-            ghat_k = tf.linalg.matvec(c0k, CinvM[k])                                                        # (LaTeX: lines 720-722 / 731-734)
+            # μ_k(x_*) = c_k(x_*)^T (C_k^{-1} m_k) = c_k^T CinvM_k
+            ghat_k = tf.linalg.matvec(c0k, CinvM[k])                                                        # (n0,)
 
             # σ_k^2(x_*) = c_{**} - c_k^T T_k c_k
-            Tk     = Tks[k]                                                                                 # T_k (LaTeX: lines 641-642)
-            v      = tf.matmul(c0k, Tk)
-            quad   = tf.reduce_sum(v * c0k, axis=1)                                                         # c_k^T T_k c_k (LaTeX: lines 724-726)
-            gvar_k = c00k - quad                                                                            # (LaTeX: lines 724-726)
+            Tk     = Tks[k]                                                                                 # (n,n)
+            v      = tf.matmul(c0k, Tk)                                                                     # (n0,n)
+            quad   = tf.reduce_sum(v * c0k, axis=1)                                                         # (n0,)
+            gvar_k = c00k - quad                                                                            # (n0,)
 
             ghat = tf.tensor_scatter_nd_update(ghat, [[k]], [ghat_k])
             gvar = tf.tensor_scatter_nd_update(gvar, [[k]], [gvar_k])
 
         self.ghat = ghat
         self.gvar = gvar
-
-        sigma_sqrt = tf.sqrt(tf.exp(lsigma2s))
-        psi = tf.transpose(phi) * sigma_sqrt
-
-        # Output prediction: μ_y = Ψ μ_g, Σ_y = Σ + Ψ Σ_g Ψ^T
-        predmean_std = tf.matmul(psi, ghat)                                                                 # corresponds to μ_y = Ψ μ_g; LaTeX lines: 744-746)
-        confvar_std  = tf.matmul(tf.square(psi), gvar)                                                      # Ψ Σ_g Ψ^T diagonal (LaTeX lines: 749-751)
-
-        sigma_var_raw = tf.exp(lsigma2s)
-        std_sq = tf.square(self.ybar_std[:, 0])
-        sigma_var_std = sigma_var_raw / std_sq
-        predvar_std = confvar_std + sigma_var_std[:, None]                                                  # + Σ_obs term (LaTeX lines: 749-751)
-
-        # if self.rep_standardize_ybar:
-        ypred    = predmean_std * self.ybar_std + self.ybar_mean
-        yconfvar = confvar_std * tf.square(self.ybar_std)
-        ypredvar = predvar_std * tf.square(self.ybar_std)
-
-        ### DOUBLE CHECK IF THIS IS CORRECT
-
-        # ypred = self.ystd * ypred + self.ymean
-        # yconfvar *= tf.square(self.ystd)
-        # ypredvar *= tf.square(self.ystd)
-
-        if return_fullcov:
-            return ypred, ypredvar, yconfvar, None
-        return ypred, ypredvar, yconfvar
 
         # choose whether we are predicting in standardized ybar space or raw ybar space
         use_std = getattr(self, "rep_standardize_ybar", True)
@@ -720,15 +694,13 @@ class LCGP(gpflow.Module):
             sigma_sqrt_used = sigma_sqrt_raw
             sigma_var_used  = sigma_var_raw
 
-        # IMPORTANT: Psi must be (p,q), not (q,p)
         Psi = phi * sigma_sqrt_used[:, None]           # (p,q)
 
-        # Output prediction in the "used" space (raw or standardized)
         predmean_used = tf.matmul(Psi, ghat)           # (p,n0)
         confvar_used  = tf.matmul(tf.square(Psi), gvar)  # (p,n0)
         predvar_used  = confvar_used + sigma_var_used[:, None]
 
-        # If we predicted in standardized-ybar space, unstandardize back to raw outputs
+        # if we predicted using standardized-ybar, unstandardize back to raw outputs
         if use_std:
             ypred    = predmean_used * self.ybar_std + self.ybar_mean
             yconfvar = confvar_used  * tf.square(self.ybar_std)
