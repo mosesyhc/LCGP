@@ -560,6 +560,7 @@ class LCGP(gpflow.Module):
     # =========================================================================
     # Loss: replicated
     # =========================================================================
+    @tf.function
     def neglpost_rep(self):
         '''
         Replicated negative log marginal (up to constants), matching your working rep file.
@@ -642,7 +643,7 @@ class LCGP(gpflow.Module):
     # =========================================================================
     @tf.function
     def neglpost(self):
-        print('in neg log normal')
+        # print('in neg log normal')
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         x = self.x
         y = self.y

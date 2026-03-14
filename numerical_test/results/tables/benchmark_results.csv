@@ -1,0 +1,79 @@
+rmse,rmse_y1,rmse_y2,rmse_y3,runno,model,fit_time_sec,pred_time_sec,total_time_sec,dataset,status,error,traceback,prediction_csv
+0.15215925057315363,0.11591266427806991,0.19422446708643826,0.13527166462308282,0,LCGP-full,1.9805162500124425,0.14020224998239428,2.1207184999948367,no_rep,ok,,,numerical_test/results/predictions/no_rep__LCGP-full.csv
+0.03157227423289924,0.01629157643039157,0.04200633839272764,0.03099157261193025,0,LCGP-rep,1.9805162079865113,0.153315500007011,2.1338317079935223,no_rep,ok,,,numerical_test/results/predictions/no_rep__LCGP-rep.csv
+,,,,0,OILMM,,,,no_rep,failed,"OILMM import failed. Make sure oilmm, stheno, probmods, and plum-dispatch are installed in a compatible environment.","Traceback (most recent call last):
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/call_model/oilmm_run.py"", line 16, in define_model
+    from oilmm.tensorflow import OILMM
+  File ""/Users/edberthandjaja/miniconda3/envs/lcgp-py311/lib/python3.11/site-packages/oilmm/__init__.py"", line 1, in <module>
+    from probmods import Transformed
+  File ""/Users/edberthandjaja/miniconda3/envs/lcgp-py311/lib/python3.11/site-packages/probmods/__init__.py"", line 1, in <module>
+    from .bijection import *
+  File ""/Users/edberthandjaja/miniconda3/envs/lcgp-py311/lib/python3.11/site-packages/probmods/bijection.py"", line 8, in <module>
+    from plum.parametric import CovariantMeta
+ModuleNotFoundError: No module named 'plum.parametric'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/benchmark_runner.py"", line 93, in run_single_dataset
+    out = runner.run_all(return_fullcov=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/call_model/base_run.py"", line 84, in run_all
+    self.define_model()
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/call_model/oilmm_run.py"", line 18, in define_model
+    raise ImportError(
+ImportError: OILMM import failed. Make sure oilmm, stheno, probmods, and plum-dispatch are installed in a compatible environment.
+",
+0.24508596367452323,0.17092612277802982,0.3540997995301217,0.15999681651710046,0,PUQ-multigetgp,4.0249957237392664e-05,1.2959004379808903e-05,5.320896161720157e-05,no_rep,ok,,,numerical_test/results/predictions/no_rep__PUQ-multigetgp.csv
+0.030520439519290593,0.008714713013138448,0.013477009488890595,0.050367803979198995,0,LCGP-full,1.2200275840004906,0.1547039169818163,1.374731500982307,equal_rep,ok,,,numerical_test/results/predictions/equal_rep__LCGP-full.csv
+0.0160593097185398,0.009600337834113749,0.012000704931816744,0.023184496555205034,0,LCGP-rep,1.452378874993883,0.15036812500329688,1.60274699999718,equal_rep,ok,,,numerical_test/results/predictions/equal_rep__LCGP-rep.csv
+,,,,0,OILMM,,,,equal_rep,failed,"OILMM import failed. Make sure oilmm, stheno, probmods, and plum-dispatch are installed in a compatible environment.","Traceback (most recent call last):
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/call_model/oilmm_run.py"", line 16, in define_model
+    from oilmm.tensorflow import OILMM
+  File ""/Users/edberthandjaja/miniconda3/envs/lcgp-py311/lib/python3.11/site-packages/oilmm/__init__.py"", line 1, in <module>
+    from probmods import Transformed
+  File ""/Users/edberthandjaja/miniconda3/envs/lcgp-py311/lib/python3.11/site-packages/probmods/__init__.py"", line 1, in <module>
+    from .bijection import *
+  File ""/Users/edberthandjaja/miniconda3/envs/lcgp-py311/lib/python3.11/site-packages/probmods/bijection.py"", line 8, in <module>
+    from plum.parametric import CovariantMeta
+ModuleNotFoundError: No module named 'plum.parametric'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/benchmark_runner.py"", line 93, in run_single_dataset
+    out = runner.run_all(return_fullcov=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/call_model/base_run.py"", line 84, in run_all
+    self.define_model()
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/call_model/oilmm_run.py"", line 18, in define_model
+    raise ImportError(
+ImportError: OILMM import failed. Make sure oilmm, stheno, probmods, and plum-dispatch are installed in a compatible environment.
+",
+0.2450810057320421,0.17084353331216245,0.354103616816589,0.1600537840687129,0,PUQ-multigetgp,3.512500552460551e-05,1.429201802238822e-05,4.941702354699373e-05,equal_rep,ok,,,numerical_test/results/predictions/equal_rep__PUQ-multigetgp.csv
+0.05359286863304824,0.026771743159735004,0.026019586083897255,0.08498730265851094,0,LCGP-full,1.6320722909877077,0.1582376669975929,1.7903099579853006,unequal_rep,ok,,,numerical_test/results/predictions/unequal_rep__LCGP-full.csv
+0.02248533687736274,0.013347445936409628,0.019629266588636125,0.030875697621792157,0,LCGP-rep,1.2349755840259604,0.14468295802362263,1.379658542049583,unequal_rep,ok,,,numerical_test/results/predictions/unequal_rep__LCGP-rep.csv
+,,,,0,OILMM,,,,unequal_rep,failed,"OILMM import failed. Make sure oilmm, stheno, probmods, and plum-dispatch are installed in a compatible environment.","Traceback (most recent call last):
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/call_model/oilmm_run.py"", line 16, in define_model
+    from oilmm.tensorflow import OILMM
+  File ""/Users/edberthandjaja/miniconda3/envs/lcgp-py311/lib/python3.11/site-packages/oilmm/__init__.py"", line 1, in <module>
+    from probmods import Transformed
+  File ""/Users/edberthandjaja/miniconda3/envs/lcgp-py311/lib/python3.11/site-packages/probmods/__init__.py"", line 1, in <module>
+    from .bijection import *
+  File ""/Users/edberthandjaja/miniconda3/envs/lcgp-py311/lib/python3.11/site-packages/probmods/bijection.py"", line 8, in <module>
+    from plum.parametric import CovariantMeta
+ModuleNotFoundError: No module named 'plum.parametric'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/benchmark_runner.py"", line 93, in run_single_dataset
+    out = runner.run_all(return_fullcov=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/call_model/base_run.py"", line 84, in run_all
+    self.define_model()
+  File ""/Users/edberthandjaja/Desktop/school/research/LCGP/numerical_test/call_model/oilmm_run.py"", line 18, in define_model
+    raise ImportError(
+ImportError: OILMM import failed. Make sure oilmm, stheno, probmods, and plum-dispatch are installed in a compatible environment.
+",
+0.27877961046943306,0.171844895486378,0.41761510304088906,0.17094201136025625,0,PUQ-multigetgp,2.7333036996424198e-05,1.266703475266695e-05,4.000007174909115e-05,unequal_rep,ok,,,numerical_test/results/predictions/unequal_rep__PUQ-multigetgp.csv
