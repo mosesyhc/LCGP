@@ -5,45 +5,67 @@ from numerical_test.call_model.base_run import BaseModelRun
 
 class PUQRun(BaseModelRun):
 
-    def __init__(self, runno, data, verbose=False):
-        super().__init__(runno=runno, data=data, model_name="PUQ-multigetgp", verbose=verbose)
+    def __init__(self, runno, data, covtype="Gaussian", verbose=False):
+        super().__init__(runno=runno, data=data, model_name="PUQ-hetGP", verbose=verbose)
+        self.covtype = covtype
+        self._models = []
 
     def define_model(self):
         try:
-            pass
+            from hetgpy import hetGP  
         except ImportError as e:
             raise ImportError(
-                "PUQ / multigetgp is not installed or import path is different."
+                "hetGPy not installed."
             ) from e
-
-        self.model = {
-            "name": "puq_placeholder_model",
-        }
+        self._models = []
 
     def train(self):
-        if self.model is None:
-            raise RuntimeError("Call define_model() first.")
+        if self._models is None:
+            raise RuntimeError("define model first!")
+
+        try:
+            from hetgpy import hetGP
+        except ImportError as e:
+            raise ImportError("hetGPy not installed.") from e
+
+        X = np.asarray(self.xtrain, dtype=np.float64)  
+        Y = np.asarray(self.ytrain, dtype=np.float64)  
+        p = Y.shape[0]
 
         t0 = time.perf_counter()
-
-        # EDIT THIS
-        self._train_mean = np.mean(self.ytrain, axis=1, keepdims=True)
-
+        self._models = []
+        for k in range(p):
+            gp = hetGP()
+            gp.mle(
+                X=X,
+                Z=Y[k],         
+                covtype=self.covtype,
+            )
+            self._models.append(gp)
         self.fit_time = time.perf_counter() - t0
 
     def predict(self, train=False, return_fullcov=False):
-        if self.model is None:
-            raise RuntimeError("Call define_model() first.")
+        if not self._models:
+            raise RuntimeError("train first!")
+
+        if return_fullcov:
+            raise NotImplementedError("bad covariance")
 
         x0 = self.xtrain if train else self.xtest
+        x0 = np.asarray(x0, dtype=np.float64)  
+        p  = len(self._models)
+        n0 = x0.shape[0]
+
+        ymean    = np.zeros((p, n0), dtype=np.float64)
+        ypredvar = np.zeros((p, n0), dtype=np.float64)
+        yconfvar = np.zeros((p, n0), dtype=np.float64)
 
         t0 = time.perf_counter()
-
-        # EDIT THIS 
-        ymean = np.repeat(self._train_mean, repeats=x0.shape[0], axis=1)
-        ypredvar = np.zeros_like(ymean)
-        yconfvar = np.zeros_like(ymean)
-
+        for k, gp in enumerate(self._models):
+            preds = gp.predict(x=x0)
+            ymean[k]    = preds["mean"].ravel()
+            yconfvar[k] = preds["sd2"].ravel()                        
+            ypredvar[k] = (preds["sd2"] + preds["nugs"]).ravel()     
         self.pred_time = time.perf_counter() - t0
 
         result = (ymean, ypredvar, yconfvar)

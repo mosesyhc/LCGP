@@ -203,7 +203,7 @@ def save_dataset(out_dir, xtrain, ytrain, xtest, ytrue, x_unique, reps):
     test_df.to_csv(out_dir / "test_data.csv", index=False)
     rep_df.to_csv(out_dir / "replication_structure.csv", index=False)
 
-def generate_all_datasets(base_dir="numerical_test/results/data", seed=2026):
+def generate_all_datasets(base_dir="numerical_test/results/data", seed=2026, n_unique=50):
     """
     Generate exactly these 6 dataset types:
 
@@ -272,7 +272,7 @@ def generate_all_datasets(base_dir="numerical_test/results/data", seed=2026):
         xtrain, ytrain, xtest, ytrue, x_unique, reps = make_dataset(
             noise_mode=spec["noise_mode"],
             replication_mode=spec["replication_mode"],
-            n_unique=50,
+            n_unique=n_unique,
             equal_rep_count=4,
             base_noise_std=(0.05, 0.08, 0.10),
             seed=seed,

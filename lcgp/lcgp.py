@@ -825,7 +825,6 @@ class LCGP(gpflow.Module):
         """
         Returns predictions using full posterior approach.
         """
-        print("in predict full")
         if tf.reduce_any(tf.math.is_nan(self.CinvMs)) or tf.reduce_any(tf.math.is_nan(self.Ths)):
             self.compute_aux_predictive_quantities()
 

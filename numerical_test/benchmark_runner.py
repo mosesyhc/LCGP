@@ -142,9 +142,12 @@ def run_all_datasets(data_root="numerical_test/results/data",
     out_csv.parent.mkdir(parents=True, exist_ok=True)
 
     dataset_dirs = {
-        "no_rep": data_root / "no_rep",
-        "equal_rep": data_root / "equal_rep",
-        "unequal_rep": data_root / "unequal_rep",
+        "same_noise__no_rep": data_root / "same_noise__no_rep",
+        "same_noise__equal_rep": data_root / "same_noise__equal_rep",
+        "same_noise__unequal_rep": data_root / "same_noise__unequal_rep",
+        "different_noise__no_rep": data_root / "different_noise__no_rep",
+        "different_noise__equal_rep": data_root / "different_noise__equal_rep",
+        "different_noise__unequal_rep": data_root / "different_noise__unequal_rep",
     }
 
     all_frames = []
