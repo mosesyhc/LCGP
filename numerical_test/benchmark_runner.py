@@ -46,6 +46,27 @@ def build_model_runners(runno, data, include_oilmm=True, include_puq=True):
     return runners
 
 
+def parse_dataset_metadata(dataset_name):
+    noise_type, rep_type = dataset_name.split("__")
+
+    return {
+        "noise_type": noise_type,
+        "replication_type": rep_type,
+        "equal": int(rep_type == "equal_rep"),
+        "no_rep": int(rep_type == "no_rep"),
+        "unequal_rep": int(rep_type == "unequal_rep"),
+    }
+
+
+def add_method_suffix(model_name, runner):
+    """
+    Make method names unique in the CSV.
+    """
+    if isinstance(runner, LCGPRun):
+        return f"{model_name}_{runner.submethod}"
+    return model_name
+
+
 def _save_prediction_csv(dataset_name, model_name, data, pred, pred_dir):
     pred_dir = Path(pred_dir)
     pred_dir.mkdir(parents=True, exist_ok=True)
@@ -80,22 +101,31 @@ def _save_prediction_csv(dataset_name, model_name, data, pred, pred_dir):
 def run_single_dataset(dataset_name,
                        dataset_dir,
                        runno=0,
+                       seed=None,
+                       n_unique=None,
                        include_oilmm=True,
                        include_puq=True,
                        pred_dir="numerical_test/results/predictions"):
     data = load_dataset(dataset_dir)
     runners = build_model_runners(runno, data, include_oilmm=include_oilmm, include_puq=include_puq)
 
+    dataset_meta = parse_dataset_metadata(dataset_name)
     rows = []
 
     for runner in runners:
         try:
             out = runner.run_all(return_fullcov=False)
             row = out["metrics"]
+
+            row["model"] = add_method_suffix(row["model"], runner)
             row["dataset"] = dataset_name
+            row["seed"] = seed
+            row["n"] = n_unique
             row["status"] = "ok"
             row["error"] = None
             row["traceback"] = None
+
+            row.update(dataset_meta)
 
             pred_path = _save_prediction_csv(
                 dataset_name=dataset_name,
@@ -111,9 +141,8 @@ def run_single_dataset(dataset_name,
 
         except Exception as e:
             err_row = {
-                "runno": runno,
                 "dataset": dataset_name,
-                "model": runner.model_name,
+                "model": add_method_suffix(runner.model_name, runner),
                 "fit_time_sec": None,
                 "pred_time_sec": None,
                 "total_time_sec": None,
@@ -121,13 +150,16 @@ def run_single_dataset(dataset_name,
                 "rmse_y1": None,
                 "rmse_y2": None,
                 "rmse_y3": None,
+                "seed": seed,
+                "n": n_unique,
                 "status": "failed",
                 "error": str(e),
                 "traceback": traceback.format_exc(),
                 "prediction_csv": None,
+                **dataset_meta,
             }
             rows.append(err_row)
-            print(f"[FAIL] {dataset_name} - {runner.model_name}: {e}")
+            print(f"[FAIL] {dataset_name} - {err_row['model']}: {e}")
 
     return pd.DataFrame(rows)
 
@@ -136,7 +168,9 @@ def run_all_datasets(data_root="numerical_test/results/data",
                      out_csv="numerical_test/results/tables/benchmark_results.csv",
                      pred_dir="numerical_test/results/predictions",
                      include_oilmm=True,
-                     include_puq=True):
+                     include_puq=True,
+                     seed=None,
+                     n_unique=None):
     data_root = Path(data_root)
     out_csv = Path(out_csv)
     out_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -155,7 +189,9 @@ def run_all_datasets(data_root="numerical_test/results/data",
         df = run_single_dataset(
             dataset_name=dataset_name,
             dataset_dir=dataset_dir,
-            runno=0,
+            runno=0,  # kept only because the model constructors still expect it
+            seed=seed,
+            n_unique=n_unique,
             include_oilmm=include_oilmm,
             include_puq=include_puq,
             pred_dir=pred_dir,

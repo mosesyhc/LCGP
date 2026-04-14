@@ -1,4 +1,4 @@
-rmse,rmse_y1,rmse_y2,rmse_y3,runno,model,fit_time_sec,pred_time_sec,total_time_sec,dataset,status,error,traceback,prediction_csv
+rmse,rmse_y1,rmse_y2,rmse_y3,runno,model,fit_time_sec,pred_time_sec,total_time_sec,dataset,status,error,traceback,prediction_csv, 
 0.15215925057315363,0.11591266427806991,0.19422446708643826,0.13527166462308282,0,LCGP-full,1.9062738749198616,0.14867433300241828,2.05494820792228,same_noise__no_rep,ok,,,numerical_test/results/predictions_n50/same_noise__no_rep__LCGP-full.csv
 0.03157227423289924,0.01629157643039157,0.04200633839272764,0.03099157261193025,0,LCGP-rep,2.0798987499438226,0.14935362490359694,2.2292523748474196,same_noise__no_rep,ok,,,numerical_test/results/predictions_n50/same_noise__no_rep__LCGP-rep.csv
 0.027577601781074847,0.01043240711926184,0.035981704723487336,0.029631978787728164,0,PUQ-hetGP,0.19764024997130036,0.08037933299783617,0.27801958296913654,same_noise__no_rep,ok,,,numerical_test/results/predictions_n50/same_noise__no_rep__PUQ-hetGP.csv
