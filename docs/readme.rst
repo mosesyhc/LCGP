@@ -170,7 +170,7 @@ takes into account the uncertainty propagated to the latent components and integ
 the latent components.
 
 In the current release, the full posterior method is fully implemented under LCGP, whereas ELBO
-(``elbo``) and Profile likelihood (``proflik``) methods are under reconstruction.
+(``elbo``) and Profile likelihood (``proflik``) methods are removed from the current version.
 
 Under circumstances where the simulation outputs are stochastic, the
 full posterior approach should perform the best. If the simulation
@@ -179,7 +179,7 @@ outputs are deterministic, the profile likelihood method should suffice.
 .. code:: python
 
    LCGP_models = []
-   submethods = ['full', 'elbo', 'proflik']
+   submethods = ['full', 'rep']
    for submethod in submethods:
        model = LCGP(y=y, x=x, submethod=submethod)
        LCGP_models.append(model)
