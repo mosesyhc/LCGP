@@ -1,0 +1,2 @@
+rmse,rmse_y1,rmse_y2,rmse_y3,runno,model,fit_time_sec,pred_time_sec,total_time_sec,dataset,seed,n,status,error,traceback,noise_type,replication_type,equal,no_rep,unequal_rep,prediction_csv
+0.030538845857604545,0.014800783605867463,0.011344669271444379,0.04949847071089592,0,LCGP-full_full,1.8822202499723062,0.16480037500150502,2.047020624973811,different_noise__equal_rep,2025,50,ok,,,different_noise,equal_rep,1,0,0,numerical_test/results/seed2025/predictions/predictions_n50/seed2025__n50__different_noise__equal_rep__LCGP-full_full__predictions.csv

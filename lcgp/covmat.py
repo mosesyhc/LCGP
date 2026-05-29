@@ -21,7 +21,8 @@ def Matern32(x1, x2, llmb, llmb0, lnug, diag_only: bool = False):
     d = x1.shape[1]
 
     if diag_only:
-        assert tf.reduce_all(tf.keras.ops.isclose(x1, x2)), \
+        # assert tf.reduce_all(tf.keras.ops.isclose(x1, x2)), \
+        assert tf.reduce_all(tf.math.abs(x1 - x2) <= (1e-6 + 1e-6 * tf.math.abs(x2))), \
             'diag_only should only be called ' \
             'when x1 and x2 are identical.'
         c = tf.ones(x1.shape[0], dtype=tf.float64)  # / (1 + tf.exp(llmb[-1]))
@@ -44,7 +45,9 @@ def Matern32(x1, x2, llmb, llmb0, lnug, diag_only: bool = False):
         nug = lnug / (1 + lnug)
         if x1.shape != x2.shape:
             C = (1 - nug) * C0
-        elif tf.reduce_all(tf.keras.ops.equal(x1, x2)):
+        # elif tf.reduce_all(tf.keras.ops.equal(x1, x2)):
+        elif tf.reduce_all(tf.equal(x1, x2)):
+
             C = (1 - nug) * C0 + nug * tf.eye(x1.shape[0], dtype=tf.float64)
         else:
             C = (1 - nug) * C0

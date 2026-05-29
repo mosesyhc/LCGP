@@ -15,7 +15,7 @@ The development of this work is described fully in the following work, cited as:
 
    @phdthesis{chan2023thesis,
      author  = "Moses Y.-H. Chan",
-     title   = "High-Dimensional {Gaussian} Process Methods for Uncertainty Quantification",
+     title   = "High-Dimensional Gaussian Process Methods for Uncertainty Quantification",
      school  = "Northwestern University",
      year    = "2023",
    }
@@ -54,9 +54,7 @@ The LCGP package has the following dependencies, as listed in its pyproject.toml
     'numpy>=1.18.3',
     'scipy>=1.10.1',
     'tensorflow>=2.16.0',
-    'gpflow>=2.5.0',
-    'pytest',
-    'pytest-cov'
+    'gpflow>=2.5.0'
 
 ..
 
@@ -64,7 +62,7 @@ Test suite
 ~~~~~~~~~~
 
 A list of basic tests is provided for user to verify that LCGP is installed correctly.
-Execute the following code to run the test suite:
+Execute the follow code within the root directory:
 
 .. code:: bash
 

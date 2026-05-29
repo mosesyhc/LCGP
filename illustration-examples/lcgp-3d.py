@@ -16,7 +16,7 @@ results_fig_path = './results_figure/'
 Path(results_fig_path).mkdir(parents=True, exist_ok=True)
 
 for n in ns:
-    # print(f'Testing number of samples: {n}')
+    print(f'Testing number of samples: {n}')
     xtrain = np.linspace(0, 1, n)
     xtest = np.linspace(1 / ntest, 1, ntest)
 
