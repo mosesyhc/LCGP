@@ -1,2 +1,0 @@
-rmse,rmse_y1,rmse_y2,rmse_y3,runno,model,fit_time_sec,pred_time_sec,total_time_sec,dataset,seed,n,status,error,traceback,noise_type,replication_type,equal,no_rep,unequal_rep,prediction_csv
-0.027691000109335995,0.021907838241831148,0.020747353852255526,0.03728227987750744,0,PUQ-hetGP,0.13755087507888675,0.0014458749210461974,0.13899674999993294,same_noise__no_rep,2025,50,ok,,,same_noise,no_rep,0,1,0,numerical_test/results/seed2025/predictions/predictions_n50/seed2025__n50__same_noise__no_rep__PUQ-hetGP__predictions.csv
