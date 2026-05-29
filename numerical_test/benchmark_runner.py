@@ -18,6 +18,7 @@ def build_model_runners(runno, data, include_oilmm=True, include_puq=True):
             data=data,
             submethod="full",
             num_latent=None,
+            # this what we wna change
             var_threshold=None,
             diag_error_structure=None,
             robust_mean=True,
@@ -30,6 +31,7 @@ def build_model_runners(runno, data, include_oilmm=True, include_puq=True):
             data=data,
             submethod="rep",
             num_latent=None,
+            # this what we wna change
             var_threshold=None,
             diag_error_structure=None,
             robust_mean=True,

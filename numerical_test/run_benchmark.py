@@ -45,8 +45,8 @@ def run_one(seed, n_unique):
 
 
 if __name__ == "__main__":
-    ns = [50, 100, 500, 1000, 2000]
-    seeds = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987]
+    ns = [50, 100]
+    seeds = [2000]
 
     jobs = [(seed, n) for seed in seeds for n in ns]
 

@@ -675,10 +675,10 @@ class LCGP(gpflow.Module):
         nlp += (0.5 * tf.reduce_sum(tf.square(tf.transpose(y) / tf.sqrt(tf.exp(lsigma2s)))))
 
         # Regularization
-        nlp += (pc['lLmb'] * tf.reduce_sum(tf.square(tf.math.log(lLmb))) +
-                pc['lLmb0'] * (2 / n) * tf.reduce_sum(tf.square(lLmb0.unconstrained_variable)))
-        nlp += (-tf.reduce_sum(tf.math.log(tf.math.log(lnugGPs) + 100)))
-        nlp /= tf.cast(n, tf.float64)
+        # nlp += (pc['lLmb'] * tf.reduce_sum(tf.square(tf.math.log(lLmb))) +
+        #         pc['lLmb0'] * (2 / n) * tf.reduce_sum(tf.square(lLmb0.unconstrained_variable)))
+        # nlp += (-tf.reduce_sum(tf.math.log(tf.math.log(lnugGPs) + 100)))
+        # nlp /= tf.cast(n, tf.float64)
         return nlp
 
     # =========================================================================
