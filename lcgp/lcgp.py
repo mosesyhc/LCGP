@@ -64,6 +64,8 @@ class LCGP(gpflow.Module):
         # Mode selection (full vs rep)
         # -----------------------------
         self.method = 'LCGP'
+        if submethod not in ['full', 'rep']:
+            raise ValueError('Invalid submethod. Choices are \'full\' or \'rep\'.')
         self.submethod = submethod
         self.submethod_loss_map = {'full': self.neglpost,
                                     'rep':  self.neglpost_rep # replicated marginal likelihood
