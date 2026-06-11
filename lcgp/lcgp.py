@@ -744,10 +744,7 @@ class LCGP(gpflow.Module):
 
     def _compute_aux_predictive_quantities_rep(self):
         """
-        MATCH TOP FILE:
-        - support rep_standardize_ybar toggle
-        - build psi_c consistently with the space used
-        - compute (CinvM, Tks, mks) the same way
+        Compute auxiliary quantities for predictions using rep submethod.
         """
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         xk = self.x_unique_s
