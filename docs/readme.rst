@@ -169,13 +169,9 @@ The main and recommended method under LCGP is the Full posterior (``full``) meth
 takes into account the uncertainty propagated to the latent components and integrates out
 the latent components.
 
-In the current release, the full posterior method is fully implemented under LCGP, whereas ELBO
-(``elbo``) and Profile likelihood (``proflik``) methods are removed from the current version.
-
 Under circumstances where the simulation outputs are stochastic, the
 full posterior approach or the replication method (``rep``) should perform the best.
 The replication method is recommended when the simulation outputs contain replicated inputs.
-If the simulation outputs are deterministic, the profile likelihood method should suffice.
 
 .. code:: python
 
