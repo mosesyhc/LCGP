@@ -210,17 +210,6 @@ class LCGP(gpflow.Module):
             dtype=tf.float64
         )
 
-        # -----------------------------
-        # Penalty constants / regularization
-        # -----------------------------
-        if penalty_const is None:
-            pc = {'lLmb': 40, 'lLmb0': 5}
-        else:
-            pc = penalty_const
-            for k, v in pc.items():
-                assert v >= 0, 'penalty constant should be nonnegative.'
-        self.penalty_const = pc
-
         self.init_params()
 
         # -----------------------------
@@ -571,7 +560,7 @@ class LCGP(gpflow.Module):
         xk = self.x_unique_s
 
         r = tf.cast(self.r, tf.float64)
-        R = self.R
+
         n = tf.cast(self.n, tf.float64)
         p = tf.cast(self.p, tf.float64)
 
@@ -650,8 +639,6 @@ class LCGP(gpflow.Module):
         x = self.x
         y = self.y
 
-        pc = self.penalty_const
-
         n = self.n
         q = self.q
         D = self.diag_D
@@ -676,11 +663,6 @@ class LCGP(gpflow.Module):
         nlp += (n / 2 * tf.reduce_sum(lsigma2s))
         nlp += (0.5 * tf.reduce_sum(tf.square(tf.transpose(y) / tf.sqrt(tf.exp(lsigma2s)))))
 
-        # Regularization
-        # nlp += (pc['lLmb'] * tf.reduce_sum(tf.square(tf.math.log(lLmb))) +
-        #         pc['lLmb0'] * (2 / n) * tf.reduce_sum(tf.square(lLmb0.unconstrained_variable)))
-        # nlp += (-tf.reduce_sum(tf.math.log(tf.math.log(lnugGPs) + 100)))
-        # nlp /= tf.cast(n, tf.float64)
         return nlp
 
     # =========================================================================
