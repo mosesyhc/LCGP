@@ -64,6 +64,8 @@ class LCGP(gpflow.Module):
         # Mode selection (full vs rep)
         # -----------------------------
         self.method = 'LCGP'
+        if submethod not in ['full', 'rep']:
+            raise ValueError('Invalid submethod. Choices are \'full\' or \'rep\'.')
         self.submethod = submethod
         self.submethod_loss_map = {'full': self.neglpost,
                                     'rep':  self.neglpost_rep # replicated marginal likelihood
@@ -686,14 +688,14 @@ class LCGP(gpflow.Module):
     # =========================================================================
     def predict(self, x0, return_fullcov=False):
         x0 = self._verify_data_types(x0)
-        submethod = self.submethod
-        predict_map = self.submethod_predict_map
         try:
-            predict_call = predict_map[submethod]
+            predict_call = self.submethod_predict_map[self.submethod]
         except KeyError as e:
             print(e)
             raise KeyError('Invalid submethod.  Choices are \'full\' or \'rep\'.')
-        return tf.stop_gradient(predict_call(x0=x0, return_fullcov=return_fullcov))
+        
+        result = predict_call(x0=x0, return_fullcov=return_fullcov)
+        return tuple(tf.stop_gradient(r) if r is not None else None for r in result)
 
     # =========================================================================
     # Aux predictive quantities 
@@ -735,10 +737,7 @@ class LCGP(gpflow.Module):
 
     def _compute_aux_predictive_quantities_rep(self):
         """
-        MATCH TOP FILE:
-        - support rep_standardize_ybar toggle
-        - build psi_c consistently with the space used
-        - compute (CinvM, Tks, mks) the same way
+        Compute auxiliary quantities for predictions using replication approach.
         """
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         xk = self.x_unique_s
@@ -864,10 +863,12 @@ class LCGP(gpflow.Module):
         ypredvar = tf.transpose(predvar) * tf.square(self.ystd)
 
         if return_fullcov:
-            CH = tf.sqrt(gvar)[..., tf.newaxis] * psi[tf.newaxis, ...]
-            yfullpredcov = (tf.einsum('nij,njk->nik', CH, tf.transpose(CH, perm=[0, 2, 1])) +
-                            tf.linalg.diag(tf.exp(lsigma2s)))
-            yfullpredcov *= tf.square(self.ystd)
+            CH = tf.einsum('kn,kp->npk', tf.sqrt(gvar), psi)
+            yfullpredcov = tf.matmul(CH, tf.transpose(CH, perm=[0, 2, 1]))
+            yfullpredcov += tf.linalg.diag(tf.exp(lsigma2s))[tf.newaxis, ...]
+            ystd_vec = tf.squeeze(self.ystd, axis=1)
+            scale = ystd_vec[:, tf.newaxis] * ystd_vec[tf.newaxis, :]
+            yfullpredcov *= scale[tf.newaxis, ...]
             return ypred, ypredvar, yconfvar, yfullpredcov
 
         return ypred, ypredvar, yconfvar
