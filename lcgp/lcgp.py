@@ -35,7 +35,6 @@ class LCGP(gpflow.Module):
                  diag_error_structure: list = None,
                  parameter_clamp_flag: bool = False,
                  robust_mean: bool = True,
-                 penalty_const: dict = None,
                  submethod: str = 'full',
                  rep_standardize_ybar: bool = True,
                  verbose: bool = False):
