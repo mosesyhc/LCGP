@@ -3,6 +3,7 @@ import tensorflow_probability as tfp
 import gpflow
 from .covmat import Matern32
 import numpy as np
+from joblib import Parallel, delayed
 
 # for Python 3.9 inclusion
 from typing import Optional
@@ -698,18 +699,26 @@ class LCGP(gpflow.Module):
         CinvM = tf.zeros([self.q, self.n], dtype=tf.float64)
         Th = tf.zeros([self.q, self.n, self.n], dtype=tf.float64)
 
-        for k in range(self.q):
+        def _compute_aux_full_k(k):
             Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
             Wk, Uk = tf.linalg.eigh(Ck)
-
-            IpdkCkinv = tf.matmul(Uk, tf.matmul(tf.linalg.diag(1.0 / (1.0 + D[k] * Wk)), tf.transpose(Uk)))
-
+            IpdkCkinv = tf.matmul(Uk, tf.matmul(
+                tf.linalg.diag(1.0 / (1.0 + D[k] * Wk)), tf.transpose(Uk)
+            ))
             CkinvMk = tf.linalg.matvec(IpdkCkinv, tf.transpose(B)[k])
             Thk = tf.matmul(
                 Uk,
-                tf.matmul(tf.linalg.diag(tf.sqrt((D[k] * Wk ** 2) / (Wk ** 2 + D[k] * Wk ** 3))), tf.transpose(Uk))
+                tf.matmul(
+                    tf.linalg.diag(tf.sqrt((D[k] * Wk ** 2) / (Wk ** 2 + D[k] * Wk ** 3))),
+                    tf.transpose(Uk)
+                )
             )
+            return k, CkinvMk, Thk
 
+        results = Parallel(n_jobs=-1, backend='threading')(
+            delayed(_compute_aux_full_k)(k) for k in range(self.q)
+        )
+        for k, CkinvMk, Thk in results:
             CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], tf.expand_dims(CkinvMk, axis=0))
             Th = tf.tensor_scatter_nd_update(Th, [[k]], tf.expand_dims(Thk, axis=0))
 
@@ -719,7 +728,6 @@ class LCGP(gpflow.Module):
     def _compute_aux_predictive_quantities_rep(self):
         """
         Compute auxiliary quantities for predictions using replication approach.
-        """
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         xk = self.x_unique_s
         r = tf.cast(self.r, tf.float64)
@@ -753,17 +761,14 @@ class LCGP(gpflow.Module):
 
         sr = tf.sqrt(r)
 
-        for k in range(q):
+        def _compute_aux_rep_k(k):
             Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
 
-            # b_k = R @ ybar^T @ (Σ^{-1/2} φ_k)
-            v_k = sigma_inv_sqrt_used * phi[:, k]               # (p,)
-            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)     # (n,)
-            b_k = r * ytv                                       # (n,)
-
+            v_k = sigma_inv_sqrt_used * phi[:, k]
+            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)
+            b_k = r * ytv
             d_k = D[k]
 
-            # m_k = V_k b_k via Woodbury
             Cb = tf.linalg.matvec(Ck, b_k)
             A = tf.eye(n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])
             LA = tf.linalg.cholesky(A)
@@ -772,23 +777,21 @@ class LCGP(gpflow.Module):
             z = tf.squeeze(z, -1)
             m_k = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))
 
-            # C_k^{-1} m_k = b_k - d_k R m_k
             CinvM_k = b_k - d_k * tf.linalg.matvec(R, m_k)
 
-            # Build C_k^{-1} explicitly for T_k
             LC = tf.linalg.cholesky(Ck)
             Id = tf.eye(n, dtype=tf.float64)
             invC = tf.linalg.cholesky_solve(LC, Id)
-
-            # P_k = C_k^{-1} + d_k R
             P_k = invC + d_k * R
-
-            # V_k = P_k^{-1}
             V_k = tf.linalg.inv(P_k)
-
-            # T_k = C_k^{-1} - C_k^{-1} V_k C_k^{-1}
             Tk = invC - invC @ V_k @ invC
 
+            return k, CinvM_k, Tk, m_k
+
+        results = Parallel(n_jobs=-1, backend='threading')(
+            delayed(_compute_aux_rep_k)(k) for k in range(q)
+        )
+        for k, CinvM_k, Tk, m_k in results:
             CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], [CinvM_k])
             Tks = tf.tensor_scatter_nd_update(Tks, [[k]], [Tk])
             mks = tf.tensor_scatter_nd_update(mks, [[k]], [m_k])
