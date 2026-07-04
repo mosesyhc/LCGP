@@ -7,7 +7,7 @@
 
 project = 'lcgp'
 copyright = '2023, Moses Y.-H. Chan'
-author = 'Moses Y.-H. Chan, Edbert Handjaja'
+author = ['Moses Y.-H. Chan', 'Edbert Handjaja']
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
