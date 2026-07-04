@@ -296,32 +296,36 @@ class LCGPVerifier:
         # print("  ypredvar = (confvar_std + sigma_std^2) * ybar_std^2")
         #
         return True
-    
-    def run_all_tests(self):
-        """Run all verification tests."""
-        print("\n" + "="*70)
-        print("LCGP VERIFICATION TEST SUITE")
-        print("="*70)
+
+def test_run_all():
+    """Run all verification tests."""
+    print("\n" + "="*70)
+    print("LCGP VERIFICATION TEST SUITE")
+    print("="*70)
+
+    x, y = create_sample_data_with_replicates(50, 3, 2, 3, 0)
+
+    model = LCGP(y=y, x=x, submethod='rep')
+    all_tests = LCGPVerifier(model=model)
+
+    results = {}
+
+    results['test_1_transformation'] = all_tests.test_1_transformation_consistency()
+    results['test_2_basis_reconstruction'] = all_tests.test_2_basis_reconstruction()
+    results['test_3_psi_c_computation'] = all_tests.test_3_psi_c_computation()
+    results['test_4_prediction_pipeline'] = all_tests.test_4_prediction_at_training_points()
+    results['test_5_detailed_steps'] = all_tests.test_5_detailed_prediction_steps()
+
+    print("\n" + "="*70)
+    print("TEST SUMMARY")
+    print("="*70)
+    for test_name, passed in results.items():
+        status = "PASS" if passed else "FAIL"
+        print(f"{test_name}: {status}")
+
+    print("="*70)
         
-        results = {}
-        
-        results['test_1_transformation'] = self.test_1_transformation_consistency()
-        results['test_2_basis_reconstruction'] = self.test_2_basis_reconstruction()
-        results['test_3_psi_c_computation'] = self.test_3_psi_c_computation()
-        results['test_4_prediction_pipeline'] = self.test_4_prediction_at_training_points()
-        results['test_5_detailed_steps'] = self.test_5_detailed_prediction_steps()
-        
-        print("\n" + "="*70)
-        print("TEST SUMMARY")
-        print("="*70)
-        for test_name, passed in results.items():
-            status = "PASS" if passed else "FAIL"
-            print(f"{test_name}: {status}")
-        
-        all_passed = all(results.values())
-        print("="*70)
-        
-        return all_passed
+    return results
 
 
 def create_sample_data_with_replicates(n_unique=10, n_replicates=3, d=2, p=3, seed=42):
@@ -335,16 +339,3 @@ def create_sample_data_with_replicates(n_unique=10, n_replicates=3, d=2, p=3, se
     y = y_true + 0.1 * np.random.randn(p, n_unique * n_replicates)
     
     return x, y
-
-if __name__ == "__main__":
-    print("Creating sample replicated data...")
-    x, y = create_sample_data_with_replicates(n_unique=10, n_replicates=3, d=2, p=3)
-    
-    print("Initializing LCGP model...")
-    model = LCGP(y=y, x=x, q=None, submethod='rep', verbose=False)
-    
-    print("\nRunning verification tests...")
-    verifier = LCGPVerifier(model, verbose=True)
-    results = verifier.run_all_tests()
-    
-    sys.exit(0 if all(results.values()) else 1)
