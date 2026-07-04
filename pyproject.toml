@@ -1,29 +1,31 @@
 [project]
 name = "lcgp"
 authors = [
-  {name = "Moses Chan", email = "moses.chan@northwestern.edu"}
+    {name = "Moses Y.-H. Chan", email = "moses.chan@northwestern.edu"},
+    {name = "Edbert Handjaja"}
 ]
 description = "Latent component Gaussian process"
 license = {file = "LICENSE.txt"}
-readme = "README.md"
+readme = "docs/readme.rst"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.9, <3.14"
 dependencies = [
     'numpy>=1.18.3',
     'scipy>=1.10.1',
     'tensorflow>=2.16.0',
+    'joblib>=1.4.2',
     'gpflow>=2.5.0',
-    "pytest",
-    "pytest-cov",
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
 test = [
+    "pytest",
+    "pytest-cov",
 ]
 
 [project.urls]
@@ -31,7 +33,7 @@ Repository = "https://github.com/mosesyhc/lcgp"
 
 [build-system]
 requires = [
-    "setuptools>=80",
+    "setuptools>=80,<81",
     "setuptools_scm>=8",
     "setuptools_scm_git_archive",
     "wheel>=0.33",

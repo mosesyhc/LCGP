@@ -1,6 +1,6 @@
 name: Test with Python versions
 env:
-  CLONE_PATH:   ${{ github.workspace }}
+  CLONE_PATH:    ${{ github.workspace }}
 
 on:
   workflow_dispatch:
@@ -15,14 +15,14 @@ jobs:
       ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -36,24 +36,4 @@ jobs:
           # default set of ruff rules with GitHub Annotations
           ruff check --output-format=github --exclude=illustration-examples,reference_code,tests .
       - name: Run test suite
-        run: tox -r -e coverage
-      - name: Upload coverage data
-        continue-on-error: true
-        run: |
-         coveralls --service=github
-        env:
-         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-         COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
-         COVERALLS_PARALLEL: true
-
-  finish:
-   name: Finish Coveralls
-   needs: test
-   runs-on: ubuntu-latest
-   steps:
-     - name: Coveralls GitHub Action
-       continue-on-error: true
-       uses: coverallsapp/github-action@v2
-       with:
-         github-token: ${{ secrets.GITHUB_TOKEN }}
-         parallel-finished: true
+        run: tox -r -e nocoverage

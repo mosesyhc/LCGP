@@ -16,10 +16,10 @@ lcgp.egg-info/
 
 # archive
 src/archive/*
-../src/lcgp/lcgp/archive/
-../src/lcgp/lcgp/debug/
-../src/lcgp/lcgp/reference_code/
-../src/lcgp/lcgp/plot_code/
+src/lcgp/lcgp/archive/
+src/lcgp/lcgp/debug/
+src/lcgp/lcgp/reference_code/
+src/lcgp/lcgp/plot_code/
 
 # data files
 lcgp/tests/data/*
@@ -40,6 +40,7 @@ illustration-examples/lcgp-3d-mean-var.py
 illustration-examples/output_fig/*
 # notebooks
 illustration-examples/notebooks/*
+*/results_figure*/*
 
 # output and plot files
 */data/
@@ -58,3 +59,4 @@ reference_code/GPPCA/
 
 # pdfs
 literature/
+lcgp-311py-oilmm/
