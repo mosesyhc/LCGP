@@ -5,7 +5,8 @@ authors = [
     {name = "Edbert Handjaja"}
 ]
 description = "Latent component Gaussian process"
-license = {file = "LICENSE.txt"}
+license = "MIT"
+license-files = "LICENSE.txt"
 readme = "docs/readme.rst"
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -42,13 +43,13 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-write_to = "lcgp/_version.py"
+write_to = "src/lcgp/_version.py"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "--cov-report=html:.coverage_html.info"
 testpaths = [
-    "lcgp/tests",
+    "src/lcgp/tests",
 ]
 
 # Coverage
