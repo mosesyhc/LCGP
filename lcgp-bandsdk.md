@@ -26,7 +26,7 @@ the emulation of multivariate stochastic simulation outputs.
 | # | Policy                 |Support| Notes                   |
 |---|-----------------------|-------|-------------------------|
 | 1. | Support BAND community GNU Autoconf, CMake, or other build options. |Full| The source code is written fully in Python, built using `setuptools` backend for the use of pip installer. It does not require other build tools. |
-| 2. | Have a README file in the top directory that states a specific set of testing procedures for a user to verify the software was installed and run correctly. |Full| Refer to `docs/readme.rst` for a full test procedure. |
+| 2. | Have a README file in the top directory that states a specific set of testing procedures for a user to verify the software was installed and run correctly. | Partial | Refer to `docs/readme.rst` for a full test procedure. |
 | 3. | Provide a documented, reliable way to contact the development team. |Full| The `LCGP` developers should be contacted through the public [issues page on GitHub](https://github.com/mosesyhc/LCGP/issues) |
 | 4. | Come with an open-source license. |Full| Uses the MIT license. |
 | 5. | Provide a runtime API to return the current version number of the software. |Full| The version can be returned within Python via `lcgp.__version__`. |
@@ -36,19 +36,19 @@ the emulation of multivariate stochastic simulation outputs.
 
 ### Recommended Policies
 
-| # | Policy                 | Support  | Notes                                                                                                                  |
-|---|------------------------|----------|------------------------------------------------------------------------------------------------------------------------|
-|**R1.**| Have a public repository. | Full     | https://github.com/mosesyhc/lcgp                                                                                       |
-|**R2.**| Free all system resources acquired as soon as they are no longer needed. | Full     | Handled natively by Python.                                                                                            |
-|**R3.**| Provide a mechanism to export ordered list of library dependencies. | Full     | Dependencies are listed in the project's pyproject.toml configuration.                                                 |
-|**R4.**| Document versions of packages that it works with or depends upon, preferably in machine-readable form. | Full     |                                                                                                                        |
-|**R5.**| Have SUPPORT, LICENSE, and CHANGELOG files in top directory.  | Partial. | LICENSE file is in the top directory.                                                                                  |
-|**R6.**| Have sufficient documentation to support use and further development.  | Full     | README provides usage examples.                                                                                        |
-|**R7.**| Be buildable using 64-bit pointers; 32-bit is optional. | Full     | Package supports both 32 and 64 bit under same API.                                                                    |
-|**R8.**| Do not assume a full MPI communicator; allow for user-provided MPI communicator. | N/a      | None.                                                                                                                  |
-|**R9.**| Use a limited and well-defined name space (e.g., symbol, macro, library, include). | Full     | `LCGP` uses the `lcgp` namespace.                                                                                      |
-|**R10.**| Give best effort at portability to key architectures. | Full     | `LCGP` is tested on several Python versions as part of its continuous integration via Github actions.                  |
-|**R11.**| Install headers and libraries under `<prefix>/include` and `<prefix>/lib`, respectively. | Full     | The standard Python installation is used for Python dependencies.                                                      |
-|**R12.**| All BAND compatibility changes should be sustainable. | Full     |                                                                                                                        |
-|**R13.**| Respect system resources and settings made by other previously called packages. | Full     | `LCGP` does not modify system resources or settings.                                                                   |
-|**R14.**| Provide a comprehensive test suite for correctness of installation verification. | Full     | Tests live in [lcgp/tests/](https://github.com/mosesyhc/lcgp/tree/main/lcgp/tests) and are callable by `lcgp.tests()`. |
+| # | Policy                 | Support  | Notes                                                                                                                      |
+|---|------------------------|----------|----------------------------------------------------------------------------------------------------------------------------|
+|**R1.**| Have a public repository. | Full     | https://github.com/mosesyhc/lcgp                                                                                           |
+|**R2.**| Free all system resources acquired as soon as they are no longer needed. | Full     | Handled natively by Python.                                                                                                |
+|**R3.**| Provide a mechanism to export ordered list of library dependencies. | Full     | Dependencies are listed in the project's pyproject.toml configuration.                                                     |
+|**R4.**| Document versions of packages that it works with or depends upon, preferably in machine-readable form. | Full     |                                                                                                                            |
+|**R5.**| Have SUPPORT, LICENSE, and CHANGELOG files in top directory.  | Partial. | LICENSE file is in the top directory.                                                                                      |
+|**R6.**| Have sufficient documentation to support use and further development.  | Full     | README provides usage examples.                                                                                            |
+|**R7.**| Be buildable using 64-bit pointers; 32-bit is optional. | Full     | Package supports both 32 and 64 bit under same API.                                                                        |
+|**R8.**| Do not assume a full MPI communicator; allow for user-provided MPI communicator. | N/a      | None.                                                                                                                      |
+|**R9.**| Use a limited and well-defined name space (e.g., symbol, macro, library, include). | Full     | `LCGP` uses the `lcgp` namespace.                                                                                          |
+|**R10.**| Give best effort at portability to key architectures. | Full     | `LCGP` is tested on several Python versions as part of its continuous integration via Github actions.                      |
+|**R11.**| Install headers and libraries under `<prefix>/include` and `<prefix>/lib`, respectively. | Full     | The standard Python installation is used for Python dependencies.                                                          |
+|**R12.**| All BAND compatibility changes should be sustainable. | Full     |                                                                                                                            |
+|**R13.**| Respect system resources and settings made by other previously called packages. | Full     | `LCGP` does not modify system resources or settings.                                                                       |
+|**R14.**| Provide a comprehensive test suite for correctness of installation verification. | Full     | Tests live in [src/lcgp/tests/](https://github.com/mosesyhc/lcgp/tree/main/lcgp/tests) and are callable by `lcgp.tests()`. |
