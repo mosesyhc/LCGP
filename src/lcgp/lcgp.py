@@ -36,7 +36,6 @@ class LCGP(gpflow.Module):
                  diag_error_structure: list = None,
                  parameter_clamp_flag: bool = False,
                  robust_mean: bool = True,
-                 penalty_const: dict = None,
                  submethod: str = 'full',
                  rep_standardize_ybar: bool = True,
                  verbose: bool = False):
@@ -65,6 +64,8 @@ class LCGP(gpflow.Module):
         # Mode selection (full vs rep)
         # -----------------------------
         self.method = 'LCGP'
+        if submethod not in ['full', 'rep']:
+            raise ValueError('Invalid submethod. Choices are \'full\' or \'rep\'.')
         self.submethod = submethod
         self.submethod_loss_map = {'full': self.neglpost,
                                     'rep':  self.neglpost_rep # replicated marginal likelihood
@@ -208,17 +209,6 @@ class LCGP(gpflow.Module):
             ),
             dtype=tf.float64
         )
-
-        # -----------------------------
-        # Penalty constants / regularization
-        # -----------------------------
-        if penalty_const is None:
-            pc = {'lLmb': 40, 'lLmb0': 5}
-        else:
-            pc = penalty_const
-            for k, v in pc.items():
-                assert v >= 0, 'penalty constant should be nonnegative.'
-        self.penalty_const = pc
 
         self.init_params()
 
@@ -570,7 +560,7 @@ class LCGP(gpflow.Module):
         xk = self.x_unique_s
 
         r = tf.cast(self.r, tf.float64)
-        R = self.R
+
         n = tf.cast(self.n, tf.float64)
         p = tf.cast(self.p, tf.float64)
 
@@ -649,8 +639,6 @@ class LCGP(gpflow.Module):
         x = self.x
         y = self.y
 
-        pc = self.penalty_const
-
         n = self.n
         q = self.q
         D = self.diag_D
@@ -675,11 +663,6 @@ class LCGP(gpflow.Module):
         nlp += (n / 2 * tf.reduce_sum(lsigma2s))
         nlp += (0.5 * tf.reduce_sum(tf.square(tf.transpose(y) / tf.sqrt(tf.exp(lsigma2s)))))
 
-        # Regularization
-        # nlp += (pc['lLmb'] * tf.reduce_sum(tf.square(tf.math.log(lLmb))) +
-        #         pc['lLmb0'] * (2 / n) * tf.reduce_sum(tf.square(lLmb0.unconstrained_variable)))
-        # nlp += (-tf.reduce_sum(tf.math.log(tf.math.log(lnugGPs) + 100)))
-        # nlp /= tf.cast(n, tf.float64)
         return nlp
 
     # =========================================================================
@@ -687,14 +670,14 @@ class LCGP(gpflow.Module):
     # =========================================================================
     def predict(self, x0, return_fullcov=False):
         x0 = self._verify_data_types(x0)
-        submethod = self.submethod
-        predict_map = self.submethod_predict_map
         try:
-            predict_call = predict_map[submethod]
+            predict_call = self.submethod_predict_map[self.submethod]
         except KeyError as e:
             print(e)
             raise KeyError('Invalid submethod.  Choices are \'full\' or \'rep\'.')
-        return tf.stop_gradient(predict_call(x0=x0, return_fullcov=return_fullcov))
+        
+        result = predict_call(x0=x0, return_fullcov=return_fullcov)
+        return tuple(tf.stop_gradient(r) if r is not None else None for r in result)
 
     # =========================================================================
     # Aux predictive quantities 
@@ -744,7 +727,7 @@ class LCGP(gpflow.Module):
 
     def _compute_aux_predictive_quantities_rep(self):
         """
-        Compute auxiliary quantities for predictions using rep submethod.
+        Compute auxiliary quantities for predictions using replication approach.
         """
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         xk = self.x_unique_s
@@ -865,10 +848,12 @@ class LCGP(gpflow.Module):
         ypredvar = tf.transpose(predvar) * tf.square(self.ystd)
 
         if return_fullcov:
-            CH = tf.sqrt(gvar)[..., tf.newaxis] * psi[tf.newaxis, ...]
-            yfullpredcov = (tf.einsum('nij,njk->nik', CH, tf.transpose(CH, perm=[0, 2, 1])) +
-                            tf.linalg.diag(tf.exp(lsigma2s)))
-            yfullpredcov *= tf.square(self.ystd)
+            CH = tf.einsum('kn,kp->npk', tf.sqrt(gvar), psi)
+            yfullpredcov = tf.matmul(CH, tf.transpose(CH, perm=[0, 2, 1]))
+            yfullpredcov += tf.linalg.diag(tf.exp(lsigma2s))[tf.newaxis, ...]
+            ystd_vec = tf.squeeze(self.ystd, axis=1)
+            scale = ystd_vec[:, tf.newaxis] * ystd_vec[tf.newaxis, :]
+            yfullpredcov *= scale[tf.newaxis, ...]
             return ypred, ypredvar, yconfvar, yfullpredcov
 
         return ypred, ypredvar, yconfvar

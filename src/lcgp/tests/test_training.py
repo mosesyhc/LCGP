@@ -21,7 +21,7 @@ class TestTraining:
     def test_invalid_submethod(self):
         x = np.linspace(0, 1, 40)
         y = np.reshape(copy.copy(x), (1, 40))
-        model = LCGP(y=y, x=x, submethod='null')
         with pytest.raises(ValueError):
+            model = LCGP(y=y, x=x, submethod='null')
             model.fit()
             model.predict(x0=x)
