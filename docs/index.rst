@@ -5,6 +5,15 @@
 
 .. include:: readme.rst
 
+Example usage
+__________________
+
+.. toctree::
+   :caption: Example Usage
+   :maxdepth: 2
+
+   replications-illustration
+
 Modules
 __________________
 

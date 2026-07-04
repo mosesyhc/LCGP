@@ -1,5 +1,8 @@
+pandas
+matplotlib
+tensorflow-probability[tf]
 sphinx==6.2.1
 sphinx-book-theme==1.0.1
 sphinxcontrib-bibtex==2.5.0
 sphinx-copybutton==0.5.2
-myst_parser==2.0.0
+myst-nb==1.4.0

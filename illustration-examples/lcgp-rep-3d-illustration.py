@@ -4,7 +4,7 @@ import time
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from call_model import LCGPRun
+from docs.call_model import LCGPRun
 from lcgp import evaluation
 
 np.random.seed(42)

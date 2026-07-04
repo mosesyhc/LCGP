@@ -6,8 +6,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'lcgp'
-copyright = '2023, Moses Chan'
-author = 'Moses Chan'
+copyright = '2023, Moses Y.-H. Chan'
+author = 'Moses Y.-H. Chan, Edbert Handjaja'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -21,7 +21,7 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.napoleon',
               'sphinxcontrib.bibtex',
               'sphinx_copybutton',
-              'myst_parser']
+              'myst_nb']
 
 bibtex_bibfiles = ['lcgp.bib']
 templates_path = ['_templates']
