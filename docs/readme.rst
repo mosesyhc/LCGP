@@ -9,7 +9,7 @@ the emulation of multivariate stochastic simulation outputs.
 Reference
 ---------
 
-The development of this work is described fully in the following work, cited as:
+The development of the foundation of this work is described in the following work, cited as:
 
 .. code-block:: 
 
@@ -19,6 +19,8 @@ The development of this work is described fully in the following work, cited as:
      school  = "Northwestern University",
      year    = "2023",
    }
+
+
 
 --------------
 
@@ -57,6 +59,8 @@ The LCGP package has the following dependencies, as listed in its pyproject.toml
     'gpflow>=2.5.0'
 
 ..
+
+This package is supported in Python `>=3.9, <3.14`.
 
 Test suite
 ~~~~~~~~~~
@@ -170,7 +174,7 @@ takes into account the uncertainty propagated to the latent components and integ
 the latent components.
 
 Under circumstances where the simulation outputs are stochastic, the
-full posterior approach or the replication method (``rep``) should perform the best.
+full posterior approach or the replication method (``rep``) should perform most effectively.
 The replication method is recommended when the simulation outputs contain replicated inputs.
 
 .. code:: python
