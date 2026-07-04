@@ -32,7 +32,6 @@ To cite the software, please use:
       version = {1.0.0}
    }
 
---------------
 
 List of Contents:
 
