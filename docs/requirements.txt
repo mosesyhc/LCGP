@@ -2,6 +2,7 @@ lcgp>=0.9.0
 pandas
 matplotlib
 tensorflow-probability[tf]
+pytest
 sphinx==6.2.1
 sphinx-book-theme==1.0.1
 sphinxcontrib-bibtex==2.5.0
