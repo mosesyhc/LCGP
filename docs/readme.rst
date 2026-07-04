@@ -14,15 +14,24 @@ The development of the foundation of this work is described in the following wor
 .. code-block:: 
 
    @phdthesis{chan2023thesis,
-     author  = "Moses Y.-H. Chan",
-     title   = "High-Dimensional Gaussian Process Methods for Uncertainty Quantification",
-     school  = "Northwestern University",
-     year    = "2023",
+      author  = "Moses Y.-H. Chan",
+      title   = "High-Dimensional {Gaussian} Process Methods for Uncertainty Quantification",
+      school  = "Northwestern University",
+      year    = "2023",
    }
 
+To cite the software, please use:
 
+.. code-block::
 
---------------
+   @software{Chan_LCGP,
+      author = {Chan, Moses Y.-H. and Handjaja, Edbert},
+      license = {MIT},
+      title = {{LCGP: Latent Component {Gaussian} Processes}},
+      url = {https://github.com/mosesyhc/lcgp},
+      version = {1.0.0}
+   }
+
 
 List of Contents:
 
