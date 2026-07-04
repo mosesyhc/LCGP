@@ -16,7 +16,7 @@
 
 **Website:** [LCGP](https://lcgp.readthedocs.io/)
 **Contact:** Moses Chan, (<moses.chan@northwestern.edu>)
-**Icon:** TBD
+**Icon:** https://github.com/mosesyhc/LCGP/blob/main/logo_lcgp.png
 **Description:**  `LCGP` (Latent Component Gaussian process) handles
 the emulation of multivariate stochastic simulation outputs.
 
