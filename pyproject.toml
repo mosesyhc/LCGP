@@ -6,11 +6,10 @@ authors = [
 ]
 description = "Latent component Gaussian process"
 license = "MIT"
-license-files = "LICENSE.txt"
+license-files = ["./LICENSE.txt"]
 readme = "docs/readme.rst"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 requires-python = ">=3.9, <3.14"
