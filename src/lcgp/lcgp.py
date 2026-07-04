@@ -728,6 +728,7 @@ class LCGP(gpflow.Module):
     def _compute_aux_predictive_quantities_rep(self):
         """
         Compute auxiliary quantities for predictions using replication approach.
+        """
         lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
         xk = self.x_unique_s
         r = tf.cast(self.r, tf.float64)
