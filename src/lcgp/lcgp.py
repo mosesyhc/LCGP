@@ -3,6 +3,7 @@ import tensorflow_probability as tfp
 import gpflow
 from .covmat import Matern32
 import numpy as np
+from joblib import Parallel, delayed
 
 # for Python 3.9 inclusion
 from typing import Optional
@@ -35,7 +36,6 @@ class LCGP(gpflow.Module):
                  diag_error_structure: list = None,
                  parameter_clamp_flag: bool = False,
                  robust_mean: bool = True,
-                 penalty_const: dict = None,
                  submethod: str = 'full',
                  rep_standardize_ybar: bool = True,
                  verbose: bool = False):
@@ -64,6 +64,8 @@ class LCGP(gpflow.Module):
         # Mode selection (full vs rep)
         # -----------------------------
         self.method = 'LCGP'
+        if submethod not in ['full', 'rep']:
+            raise ValueError('Invalid submethod. Choices are \'full\' or \'rep\'.')
         self.submethod = submethod
         self.submethod_loss_map = {'full': self.neglpost,
                                     'rep':  self.neglpost_rep # replicated marginal likelihood
@@ -207,17 +209,6 @@ class LCGP(gpflow.Module):
             ),
             dtype=tf.float64
         )
-
-        # -----------------------------
-        # Penalty constants / regularization
-        # -----------------------------
-        if penalty_const is None:
-            pc = {'lLmb': 40, 'lLmb0': 5}
-        else:
-            pc = penalty_const
-            for k, v in pc.items():
-                assert v >= 0, 'penalty constant should be nonnegative.'
-        self.penalty_const = pc
 
         self.init_params()
 
@@ -569,7 +560,7 @@ class LCGP(gpflow.Module):
         xk = self.x_unique_s
 
         r = tf.cast(self.r, tf.float64)
-        R = self.R
+
         n = tf.cast(self.n, tf.float64)
         p = tf.cast(self.p, tf.float64)
 
@@ -648,8 +639,6 @@ class LCGP(gpflow.Module):
         x = self.x
         y = self.y
 
-        pc = self.penalty_const
-
         n = self.n
         q = self.q
         D = self.diag_D
@@ -674,11 +663,6 @@ class LCGP(gpflow.Module):
         nlp += (n / 2 * tf.reduce_sum(lsigma2s))
         nlp += (0.5 * tf.reduce_sum(tf.square(tf.transpose(y) / tf.sqrt(tf.exp(lsigma2s)))))
 
-        # Regularization
-        # nlp += (pc['lLmb'] * tf.reduce_sum(tf.square(tf.math.log(lLmb))) +
-        #         pc['lLmb0'] * (2 / n) * tf.reduce_sum(tf.square(lLmb0.unconstrained_variable)))
-        # nlp += (-tf.reduce_sum(tf.math.log(tf.math.log(lnugGPs) + 100)))
-        # nlp /= tf.cast(n, tf.float64)
         return nlp
 
     # =========================================================================
@@ -686,14 +670,14 @@ class LCGP(gpflow.Module):
     # =========================================================================
     def predict(self, x0, return_fullcov=False):
         x0 = self._verify_data_types(x0)
-        submethod = self.submethod
-        predict_map = self.submethod_predict_map
         try:
-            predict_call = predict_map[submethod]
+            predict_call = self.submethod_predict_map[self.submethod]
         except KeyError as e:
             print(e)
             raise KeyError('Invalid submethod.  Choices are \'full\' or \'rep\'.')
-        return tf.stop_gradient(predict_call(x0=x0, return_fullcov=return_fullcov))
+        
+        result = predict_call(x0=x0, return_fullcov=return_fullcov)
+        return tuple(tf.stop_gradient(r) if r is not None else None for r in result)
 
     # =========================================================================
     # Aux predictive quantities 
@@ -715,18 +699,26 @@ class LCGP(gpflow.Module):
         CinvM = tf.zeros([self.q, self.n], dtype=tf.float64)
         Th = tf.zeros([self.q, self.n, self.n], dtype=tf.float64)
 
-        for k in range(self.q):
+        def _compute_aux_full_k(k):
             Ck = Matern32(x, x, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
             Wk, Uk = tf.linalg.eigh(Ck)
-
-            IpdkCkinv = tf.matmul(Uk, tf.matmul(tf.linalg.diag(1.0 / (1.0 + D[k] * Wk)), tf.transpose(Uk)))
-
+            IpdkCkinv = tf.matmul(Uk, tf.matmul(
+                tf.linalg.diag(1.0 / (1.0 + D[k] * Wk)), tf.transpose(Uk)
+            ))
             CkinvMk = tf.linalg.matvec(IpdkCkinv, tf.transpose(B)[k])
             Thk = tf.matmul(
                 Uk,
-                tf.matmul(tf.linalg.diag(tf.sqrt((D[k] * Wk ** 2) / (Wk ** 2 + D[k] * Wk ** 3))), tf.transpose(Uk))
+                tf.matmul(
+                    tf.linalg.diag(tf.sqrt((D[k] * Wk ** 2) / (Wk ** 2 + D[k] * Wk ** 3))),
+                    tf.transpose(Uk)
+                )
             )
+            return k, CkinvMk, Thk
 
+        results = Parallel(n_jobs=-1, backend='threading')(
+            delayed(_compute_aux_full_k)(k) for k in range(self.q)
+        )
+        for k, CkinvMk, Thk in results:
             CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], tf.expand_dims(CkinvMk, axis=0))
             Th = tf.tensor_scatter_nd_update(Th, [[k]], tf.expand_dims(Thk, axis=0))
 
@@ -770,17 +762,14 @@ class LCGP(gpflow.Module):
 
         sr = tf.sqrt(r)
 
-        for k in range(q):
+        def _compute_aux_rep_k(k):
             Ck = Matern32(xk, xk, llmb=lLmb[k], llmb0=lLmb0[k], lnug=lnugGPs[k])
 
-            # b_k = R @ ybar^T @ (Σ^{-1/2} φ_k)
-            v_k = sigma_inv_sqrt_used * phi[:, k]               # (p,)
-            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)     # (n,)
-            b_k = r * ytv                                       # (n,)
-
+            v_k = sigma_inv_sqrt_used * phi[:, k]
+            ytv = tf.linalg.matvec(tf.transpose(ybar), v_k)
+            b_k = r * ytv
             d_k = D[k]
 
-            # m_k = V_k b_k via Woodbury
             Cb = tf.linalg.matvec(Ck, b_k)
             A = tf.eye(n, dtype=tf.float64) + d_k * ((Ck * sr[None, :]) * sr[:, None])
             LA = tf.linalg.cholesky(A)
@@ -789,23 +778,21 @@ class LCGP(gpflow.Module):
             z = tf.squeeze(z, -1)
             m_k = Cb - tf.linalg.matvec(Ck, (tf.sqrt(d_k) * (sr * z)))
 
-            # C_k^{-1} m_k = b_k - d_k R m_k
             CinvM_k = b_k - d_k * tf.linalg.matvec(R, m_k)
 
-            # Build C_k^{-1} explicitly for T_k
             LC = tf.linalg.cholesky(Ck)
             Id = tf.eye(n, dtype=tf.float64)
             invC = tf.linalg.cholesky_solve(LC, Id)
-
-            # P_k = C_k^{-1} + d_k R
             P_k = invC + d_k * R
-
-            # V_k = P_k^{-1}
             V_k = tf.linalg.inv(P_k)
-
-            # T_k = C_k^{-1} - C_k^{-1} V_k C_k^{-1}
             Tk = invC - invC @ V_k @ invC
 
+            return k, CinvM_k, Tk, m_k
+
+        results = Parallel(n_jobs=-1, backend='threading')(
+            delayed(_compute_aux_rep_k)(k) for k in range(q)
+        )
+        for k, CinvM_k, Tk, m_k in results:
             CinvM = tf.tensor_scatter_nd_update(CinvM, [[k]], [CinvM_k])
             Tks = tf.tensor_scatter_nd_update(Tks, [[k]], [Tk])
             mks = tf.tensor_scatter_nd_update(mks, [[k]], [m_k])
@@ -861,10 +848,12 @@ class LCGP(gpflow.Module):
         ypredvar = tf.transpose(predvar) * tf.square(self.ystd)
 
         if return_fullcov:
-            CH = tf.sqrt(gvar)[..., tf.newaxis] * psi[tf.newaxis, ...]
-            yfullpredcov = (tf.einsum('nij,njk->nik', CH, tf.transpose(CH, perm=[0, 2, 1])) +
-                            tf.linalg.diag(tf.exp(lsigma2s)))
-            yfullpredcov *= tf.square(self.ystd)
+            CH = tf.einsum('kn,kp->npk', tf.sqrt(gvar), psi)
+            yfullpredcov = tf.matmul(CH, tf.transpose(CH, perm=[0, 2, 1]))
+            yfullpredcov += tf.linalg.diag(tf.exp(lsigma2s))[tf.newaxis, ...]
+            ystd_vec = tf.squeeze(self.ystd, axis=1)
+            scale = ystd_vec[:, tf.newaxis] * ystd_vec[tf.newaxis, :]
+            yfullpredcov *= scale[tf.newaxis, ...]
             return ypred, ypredvar, yconfvar, yfullpredcov
 
         return ypred, ypredvar, yconfvar

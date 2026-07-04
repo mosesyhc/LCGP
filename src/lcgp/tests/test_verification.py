@@ -1,7 +1,4 @@
-# python -m lcgp.tests.test_verification
-
 import numpy as np
-import tensorflow as tf
 import sys
 from pathlib import Path
 
@@ -208,7 +205,7 @@ class LCGPVerifier:
             ypredvar = ypredvar.numpy()
             yconfvar = yconfvar.numpy()
             
-            print(f"Prediction shapes:")
+            print("Prediction shapes:")
             print(f"  ypred: {ypred.shape}")
             print(f"  ypredvar: {ypredvar.shape}")
             print(f"  yconfvar: {yconfvar.shape}")
@@ -223,11 +220,11 @@ class LCGPVerifier:
         abs_error = np.linalg.norm(ypred - ybar_actual) / np.linalg.norm(ybar_actual)
         max_error = np.max(np.abs(ypred - ybar_actual))
         
-        print(f"\nPrediction vs actual comparison:")
+        print("\nPrediction vs actual comparison:")
         print(f"  Relative error: {abs_error:.2e}")
         print(f"  Max absolute error: {max_error:.2e}")
         
-        print(f"\nPrediction uncertainty:")
+        print("\nPrediction uncertainty:")
         print(f"  Mean prediction std: {np.mean(np.sqrt(ypredvar)):.4f}")
         print(f"  Mean confidence std: {np.mean(np.sqrt(yconfvar)):.4f}")
         
@@ -253,23 +250,17 @@ class LCGPVerifier:
         print(f"Test point {x_test_idx}:")
         print(f"  x_test (original): {x_test.numpy().flatten()}")
         print(f"  x_test (standardized): {x_test_s.numpy().flatten()}")
-        
-        lLmb = self.model.lLmb.numpy()
-        lLmb0 = self.model.lLmb0.numpy()
-        lnugGPs = self.model.lnugGPs.numpy()
-        
+
         CinvM = self.model.CinvMs.numpy()
         Tks = self.model.Tks.numpy()
         psi_c = self.model.psi_c.numpy()
         
-        print(f"\nPrecomputed quantities:")
+        print("\nPrecomputed quantities:")
         print(f"  CinvM: {CinvM.shape}")
         print(f"  Tks: {Tks.shape}")
         print(f"  psi_c: {psi_c.shape}")
         
         q = self.model.q
-        ghat = np.zeros(q)
-        gvar = np.zeros(q)
         
         print(f"\nProcessing {q} latent components:")
         
@@ -277,7 +268,7 @@ class LCGPVerifier:
             print(f"\n  Latent component k={k}:")
             
             # covariances 
-            print(f"    Computing covariances...")
+            print("    Computing covariances...")
             print(f"      c0k = K(x_test, x_train; theta_{k})")
             print(f"      c00k = K(x_test, x_test; theta_{k})")
             
@@ -291,46 +282,50 @@ class LCGPVerifier:
         
         print(f"\n  ... (remaining {q-3} components)" if q > 3 else "")
         
-        print(f"\nTransforming latent predictions to output space:")
-        print(f"  predmean_std = psi_c @ ghat")
+        print("\nTransforming latent predictions to output space:")
+        print("  predmean_std = psi_c @ ghat")
         print(f"    psi_c shape: {psi_c.shape}")
         print(f"    ghat shape: (q,) = ({q},)")
         print(f"    Result shape: (p,) = ({self.model.p},)")
-        
-        print(f"\n  confvar_std = psi_c^2 @ gvar")
-        print(f"    Element-wise square then matrix-vector multiply")
-        
-        print(f"\nInverse standardization:")
-        print(f"  ypred = predmean_std * ybar_std + ybar_mean")
-        print(f"  ypredvar = (confvar_std + sigma_std^2) * ybar_std^2")
-        
+        #
+        # print("\n  confvar_std = psi_c^2 @ gvar")
+        # print("    Element-wise square then matrix-vector multiply")
+        #
+        # print("\nInverse standardization:")
+        # print("  ypred = predmean_std * ybar_std + ybar_mean")
+        # print("  ypredvar = (confvar_std + sigma_std^2) * ybar_std^2")
+        #
         return True
-    
-    def run_all_tests(self):
-        """Run all verification tests."""
-        print("\n" + "="*70)
-        print("LCGP VERIFICATION TEST SUITE")
-        print("="*70)
+
+def test_run_all():
+    """Run all verification tests."""
+    print("\n" + "="*70)
+    print("LCGP VERIFICATION TEST SUITE")
+    print("="*70)
+
+    x, y = create_sample_data_with_replicates(50, 3, 2, 3, 0)
+
+    model = LCGP(y=y, x=x, submethod='rep')
+    all_tests = LCGPVerifier(model=model)
+
+    results = {}
+
+    results['test_1_transformation'] = all_tests.test_1_transformation_consistency()
+    results['test_2_basis_reconstruction'] = all_tests.test_2_basis_reconstruction()
+    results['test_3_psi_c_computation'] = all_tests.test_3_psi_c_computation()
+    results['test_4_prediction_pipeline'] = all_tests.test_4_prediction_at_training_points()
+    results['test_5_detailed_steps'] = all_tests.test_5_detailed_prediction_steps()
+
+    print("\n" + "="*70)
+    print("TEST SUMMARY")
+    print("="*70)
+    for test_name, passed in results.items():
+        status = "PASS" if passed else "FAIL"
+        print(f"{test_name}: {status}")
+
+    print("="*70)
         
-        results = {}
-        
-        results['test_1_transformation'] = self.test_1_transformation_consistency()
-        results['test_2_basis_reconstruction'] = self.test_2_basis_reconstruction()
-        results['test_3_psi_c_computation'] = self.test_3_psi_c_computation()
-        results['test_4_prediction_pipeline'] = self.test_4_prediction_at_training_points()
-        results['test_5_detailed_steps'] = self.test_5_detailed_prediction_steps()
-        
-        print("\n" + "="*70)
-        print("TEST SUMMARY")
-        print("="*70)
-        for test_name, passed in results.items():
-            status = "PASS" if passed else "FAIL"
-            print(f"{test_name}: {status}")
-        
-        all_passed = all(results.values())
-        print("="*70)
-        
-        return results
+    return results
 
 
 def create_sample_data_with_replicates(n_unique=10, n_replicates=3, d=2, p=3, seed=42):
@@ -344,16 +339,3 @@ def create_sample_data_with_replicates(n_unique=10, n_replicates=3, d=2, p=3, se
     y = y_true + 0.1 * np.random.randn(p, n_unique * n_replicates)
     
     return x, y
-
-if __name__ == "__main__":
-    print("Creating sample replicated data...")
-    x, y = create_sample_data_with_replicates(n_unique=10, n_replicates=3, d=2, p=3)
-    
-    print("Initializing LCGP model...")
-    model = LCGP(y=y, x=x, q=None, submethod='rep', verbose=False)
-    
-    print("\nRunning verification tests...")
-    verifier = LCGPVerifier(model, verbose=True)
-    results = verifier.run_all_tests()
-    
-    sys.exit(0 if all(results.values()) else 1)

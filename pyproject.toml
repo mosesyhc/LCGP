@@ -11,11 +11,12 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.9, <3.14"
 dependencies = [
     'numpy>=1.18.3',
     'scipy>=1.10.1',
     'tensorflow>=2.16.0',
+    'joblib>=1.4.2',
     'gpflow>=2.5.0']
 dynamic = ["version"]
 
@@ -30,7 +31,7 @@ Repository = "https://github.com/mosesyhc/lcgp"
 
 [build-system]
 requires = [
-    "setuptools>=80",
+    "setuptools>=80,<81",
     "setuptools_scm>=8",
     "setuptools_scm_git_archive",
     "wheel>=0.33",
