@@ -1,3 +1,4 @@
+lcgp>=0.9.0
 pandas
 matplotlib
 tensorflow-probability[tf]
