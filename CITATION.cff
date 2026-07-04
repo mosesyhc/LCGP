@@ -13,6 +13,8 @@ authors:
     email: moses.chan@northwestern.edu
     affiliation: Northwestern University
     orcid: 'https://orcid.org/0000-0002-2181-5116'
+  - given-names: Edbert
+    family-names: Handjaja
 identifiers:
   - type: url
     value: 'https://lcgp.readthedocs.io/en/latest/'
@@ -29,7 +31,7 @@ keywords:
   - stochastic output
 license: MIT
 commit: 4349a6acfc9f0205d6f87d73e3548be3e62e3e1d
-version: 0.2.0
+version: 0.5.0
 references:
   - type: thesis
     title: High-Dimensional Gaussian Process Methods for Uncertainty Quantification

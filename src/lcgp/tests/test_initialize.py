@@ -58,22 +58,6 @@ class TestInit:
         y = np.random.randn(3, 40)
         LCGP(y=y, x=x, q=None, var_threshold=0.9)
 
-    @pytest.mark.parametrize('penalty_constant', [None,
-                                                  {'lLmb': 0, 'lLmb0': 0},
-                                                  {'lLmb': 40, 'lLmb0': 5}])
-    def test_penalty(self, penalty_constant):
-        x = np.linspace(0, 1, 40)
-        y = np.reshape(copy.copy(x), (1, 40))
-        LCGP(y=y, x=x, penalty_const=penalty_constant)
-
-    @pytest.mark.parametrize('penalty_constant', [{'lLmb': -5, 'lLmb0': 10},
-                                                  {'lLmb': 5, 'lLmb0': -10}])
-    def test_invalid_penalty(self, penalty_constant):
-        x = np.linspace(0, 1, 40)
-        y = np.reshape(copy.copy(x), (1, 40))
-        with pytest.raises(AssertionError):
-            LCGP(y=y, x=x, penalty_const=penalty_constant)
-
     @pytest.mark.parametrize('x, y', [(np.linspace(0, 1, 40),
                                        np.random.randn(3, 25))])
     def test_mismatch_dimension(self, x, y):
