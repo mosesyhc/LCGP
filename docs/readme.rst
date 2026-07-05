@@ -1,7 +1,9 @@
 Latent component Gaussian process (LCGP)
 ========================================
 
-|CI| |Coverage Status| |Documentation Status|
+|CI| |Coverage Status| |Documentation Status| 
+
+|Logo|
 
 Implementation of latent component Gaussian process (LCGP). LCGP handles
 the emulation of multivariate stochastic simulation outputs.
@@ -218,3 +220,4 @@ hyperparameter training. The two choices are implemented through
    :target: https://coveralls.io/github/mosesyhc/LCGP
 .. |Documentation Status| image:: https://readthedocs.org/projects/lcgp/badge/?version=latest
    :target: https://lcgp.readthedocs.io/en/latest/?badge=latest
+.. |Logo| image:: https://raw.githubusercontent.com/mosesyhc/LCGP/refs/heads/main/logo_lcgp.png
