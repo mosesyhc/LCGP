@@ -4,7 +4,7 @@ import time
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from docs.call_model import LCGPRun
+from call_model import LCGPRun
 from lcgp import evaluation
 
 np.random.seed(42)
@@ -113,7 +113,7 @@ def make_rep_data_hotspots(n_unique=50,
 # )
 
 # # CASE 2: Skewed replication
-results_fig_path = './results_figure_rep_1d_skewed/'
+results_fig_path = './results_figure_rep_1d_uneven/'
 Path(results_fig_path).mkdir(parents=True, exist_ok=True)
 xtrain, ytrain, xtest, ytrue = make_rep_data_skewed(
     n_unique=40,
