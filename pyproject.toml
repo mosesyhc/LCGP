@@ -19,6 +19,8 @@ dependencies = [
     'tensorflow>=2.16.0',
     'joblib>=1.4.2',
     'gpflow>=2.5.0',
+    "tensorflow-probability[tf]>=0.25.0",
+    "pytest>=8.4.2",
 ]
 dynamic = ["version"]
 
