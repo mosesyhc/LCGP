@@ -41,7 +41,7 @@ List of Contents:
 Installation
 ------------
 
-The implementation of LCGP requires Python 3.9 or above.  The package can be installed through
+The implementation of LCGP requires Python `>=3.9, <3.14`.  The package can be installed through
 
 .. code:: bash
 
@@ -56,11 +56,12 @@ The LCGP package has the following dependencies, as listed in its pyproject.toml
     'numpy>=1.18.3',
     'scipy>=1.10.1',
     'tensorflow>=2.16.0',
-    'gpflow>=2.5.0'
+    'joblib>=1.4.2',
+    'gpflow>=2.5.0',
+    "tensorflow-probability[tf]>=0.25.0",
+    "pytest>=8.4.2",
 
 ..
-
-This package is supported in Python `>=3.9, <3.14`.
 
 Test suite
 ~~~~~~~~~~
@@ -201,7 +202,6 @@ hyperparameter training. The two choices are implemented through
 
    model = LCGP(y=y, x=x, robust_mean=False)
 
---------------
 
 .. |CI| image:: https://github.com/mosesyhc/lcgp/actions/workflows/ci.yml/badge.svg?branch=main
    :target: https://github.com/mosesyhc/LCGP/actions/workflows/ci.yml
