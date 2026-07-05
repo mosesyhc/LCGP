@@ -212,7 +212,6 @@ hyperparameter training. The two choices are implemented through
 
    model = LCGP(y=y, x=x, robust_mean=False)
 
---------------
 
 .. |CI| image:: https://github.com/mosesyhc/lcgp/actions/workflows/ci.yml/badge.svg?branch=main
    :target: https://github.com/mosesyhc/LCGP/actions/workflows/ci.yml
