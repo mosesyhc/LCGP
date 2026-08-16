@@ -31,7 +31,7 @@ To cite the software, please use:
       license = {MIT},
       title = {{LCGP: Latent Component {Gaussian} Processes}},
       url = {https://github.com/mosesyhc/lcgp},
-      version = {1.1.0}
+      version = {1.1.1}
    }
 
 
@@ -52,7 +52,7 @@ List of Contents:
 Installation
 ------------
 
-The implementation of LCGP requires Python `>=3.10, <3.14`.  The package can be installed through
+The implementation of LCGP requires Python `>=3.11, <3.14`.  The package can be installed through
 
 .. code:: bash
 
