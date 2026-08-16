@@ -20,7 +20,7 @@ jobs:
       matrix:
         # Please adjust pyproject.toml Python version requirement to match
         # supported version expressed here.
-        os: [ubuntu-latest, windows-latest]  # macos-latest disabled as of now
+        os: [ubuntu-latest, windows-latest, macos-latest]  # macos-latest disabled as of now
         python-version: ["3.12"]
     steps:
     - uses: actions/checkout@v7
