@@ -31,7 +31,7 @@ To cite the software, please use:
       license = {MIT},
       title = {{LCGP: Latent Component {Gaussian} Processes}},
       url = {https://github.com/mosesyhc/lcgp},
-      version = {1.0.0}
+      version = {1.1.0}
    }
 
 
