@@ -9,13 +9,12 @@ license = "MIT"
 license-files = ["./LICENSE.txt"]
 readme = "docs/readme.rst"
 classifiers = [
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.10, <3.14"
+requires-python = ">=3.11, <3.14"
 dependencies = [
     'numpy>=1.18.3',
     'scipy>=1.10.1',
