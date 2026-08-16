@@ -324,8 +324,9 @@ def test_run_all():
         print(f"{test_name}: {status}")
 
     print("="*70)
+    print(results)
         
-    return results
+    return
 
 
 def create_sample_data_with_replicates(n_unique=10, n_replicates=3, d=2, p=3, seed=42):

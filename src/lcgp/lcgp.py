@@ -1,6 +1,6 @@
 from ._import_util import _import_tensorflow
-import tensorflow_probability as tfp
-import gpflow
+from ._backend import (Module, Parameter, SoftClip, percentile,
+                       scipy_minimize, tabulate_module_summary)
 from .covmat import Matern32
 import numpy as np
 from joblib import Parallel, delayed
@@ -16,7 +16,7 @@ tf.get_logger().setLevel('ERROR')
 tf.keras.backend.set_floatx('float64')
 
 
-class LCGP(gpflow.Module):
+class LCGP(Module):
     """
     Latent Component Gaussian Process (LCGP)
 
@@ -178,32 +178,32 @@ class LCGP(gpflow.Module):
         # -----------------------------
         # Initialize parameters (GP + noise)
         # -----------------------------
-        self.lLmb = gpflow.Parameter(
+        self.lLmb = Parameter(
             tf.ones([self.q, self.x.shape[1]], dtype=tf.float64),
             name='Latent GP log-scale',
-            transform=tfp.bijectors.SoftClip(
+            transform=SoftClip(
                 low=tf.constant(1e-6, dtype=tf.float64),
                 high=tf.constant(1e4, dtype=tf.float64)
             ),
             dtype=tf.float64
         )
-        self.lLmb0 = gpflow.Parameter(
+        self.lLmb0 = Parameter(
             tf.ones([self.q], dtype=tf.float64),
             name='Latent GP log-lengthscale',
-            transform=tfp.bijectors.SoftClip(
+            transform=SoftClip(
                 low=tf.constant(1e-4, dtype=tf.float64),
                 high=tf.constant(1e4, dtype=tf.float64)
             ),
             dtype=tf.float64
         )
-        self.lsigma2s = gpflow.Parameter(
+        self.lsigma2s = Parameter(
             tf.ones([len(self.diag_error_structure)], dtype=tf.float64),
             name='Diagonal error log-variance'
         )
-        self.lnugGPs = gpflow.Parameter(
+        self.lnugGPs = Parameter(
             tf.ones([self.q], dtype=tf.float64) * 1e-6,
             name='Latent GP nugget scale',
-            transform=tfp.bijectors.SoftClip(
+            transform=SoftClip(
                 low=tf.math.exp(tf.constant(-16, dtype=tf.float64)),
                 high=tf.math.exp(tf.constant(-2, dtype=tf.float64))
             ),
@@ -225,7 +225,7 @@ class LCGP(gpflow.Module):
     # Display
     # =========================================================================
     def __repr__(self):
-        params = gpflow.utilities.tabulate_module_summary(self)
+        params = tabulate_module_summary(self)
         desc = 'LCGP(\n' \
                '\tsubmethod:\t{:s}\n' \
                '\toutput dimension:\t{:d}\n' \
@@ -314,8 +314,8 @@ class LCGP(gpflow.Module):
         Standardizes outputs and collects summary information.
         """
         if self.robust_mean:
-            ycenter = tfp.stats.percentile(y, 50.0, axis=1, keepdims=True)
-            yspread = tfp.stats.percentile(tf.abs(y - ycenter), 50.0, axis=1, keepdims=True)
+            ycenter = percentile(y, 50.0, axis=1, keepdims=True)
+            yspread = percentile(tf.abs(y - ycenter), 50.0, axis=1, keepdims=True)
         else:
             ycenter = tf.reduce_mean(y, axis=1, keepdims=True)
             yspread = tf.math.reduce_std(y, axis=1, keepdims=True)
@@ -385,8 +385,8 @@ class LCGP(gpflow.Module):
         Compute (center, spread) per output dim for standardization
         """
         if self.robust_mean:
-            ycenter = tfp.stats.percentile(Y, 50.0, axis=1, keepdims=True)
-            yspread = tfp.stats.percentile(tf.abs(Y - ycenter), 50.0, axis=1, keepdims=True)
+            ycenter = percentile(Y, 50.0, axis=1, keepdims=True)
+            yspread = percentile(tf.abs(Y - ycenter), 50.0, axis=1, keepdims=True)
         else:
             ycenter = tf.reduce_mean(Y, axis=1, keepdims=True)
             yspread = tf.math.reduce_std(Y, axis=1, keepdims=True)
@@ -535,8 +535,7 @@ class LCGP(gpflow.Module):
     # Training / loss dispatch
     # =========================================================================
     def fit(self, verbose=False):
-        opt = gpflow.optimizers.Scipy()
-        opt.minimize(self.loss, self.trainable_variables, compile=False)
+        scipy_minimize(self.loss, self.trainable_variables)
         return
 
     def loss(self):
