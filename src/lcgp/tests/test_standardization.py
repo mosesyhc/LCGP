@@ -1,8 +1,8 @@
-import pytest
 import numpy as np
+import pytest
 import tensorflow as tf
-from lcgp import LCGP
 
+from lcgp import LCGP
 
 # ===========================================================================
 # Fixtures / shared helpers
@@ -36,7 +36,7 @@ class TestStandardizeX:
     def test_range_is_zero_to_one(self, n, d):
         rng = np.random.default_rng(42)
         x = rng.uniform(-5, 5, (n, d))
-        xs, x_min, x_max, _, _ = LCGP.init_standard_x(
+        xs, _x_min, _x_max, _, _ = LCGP.init_standard_x(
             tf.convert_to_tensor(x, dtype=tf.float64)
         )
         assert float(tf.reduce_min(xs)) >= 0.0 - 1e-9

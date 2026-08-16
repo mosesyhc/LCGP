@@ -1,10 +1,11 @@
-import numpy as np
-import tensorflow as tf
 import time
-import matplotlib.pyplot as plt
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
 from call_model import LCGPRun
+
 from lcgp import evaluation
 
 np.random.seed(42)
@@ -175,7 +176,7 @@ def transform_consistency_check(modelrun, predmean_from_runner, xtest):
 
     _ = mdl.predict(x0=xtest, return_fullcov=False)
 
-    lLmb, lLmb0, built_lsigma2s, lnug = mdl.get_param()
+    _lLmb, _lLmb0, built_lsigma2s, _lnug = mdl.get_param()
     sigma_sqrt = tf.sqrt(tf.exp(built_lsigma2s)).numpy()
     phi = mdl.phi.numpy()                               
     ghat = np.asarray(mdl.ghat)                         
@@ -191,7 +192,7 @@ def transform_consistency_check(modelrun, predmean_from_runner, xtest):
     diff = np.max(np.abs(y_from_g - predmean_from_runner))
     print(f"[transform check] max |recomposed - runner| = {diff:.3e}")
 
-print(f"\n=== BASIS ===")
+print("\n=== BASIS ===")
 print(f"diag_D values: {modelrun.model.diag_D.numpy()}")
 print(f"phi^T @ phi diagonal: {np.diag(modelrun.model.phi.numpy().T @ modelrun.model.phi.numpy())}")    
 print("\n=== FITTED PARAMETERS ===")
@@ -202,9 +203,9 @@ for k in range(lLmb.shape[0]):
 print(f"\nVariances (lLmb0): {lLmb0.numpy()}")
 print(f"Noise log-var (lsigma2s): {lsigma2s.numpy()}")
 print(f"Noise std (fitted): {np.sqrt(np.exp(lsigma2s.numpy()))}")
-print(f"Noise std (true):   [0.05, 0.08, 0.10]")
+print("Noise std (true):   [0.05, 0.08, 0.10]")
 print(f"GP nuggets (lnugGPs): {lnugGPs.numpy()}")
-print(f"\n=== STATS ===")
+print("\n=== STATS ===")
 r = modelrun.model.r.numpy()
 print(f"Replication counts: {r}")
 print(f"Average replications: {np.mean(r):.2f}")

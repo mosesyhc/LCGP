@@ -1,5 +1,6 @@
-from lcgp import LCGP
 import numpy as np
+
+from lcgp import LCGP
 
 
 class SuperRun:
@@ -9,9 +10,9 @@ class SuperRun:
         self.ytrain = data['ytrain']
         self.xtest = data['xtest']
         self.ytest = data['ytest']
-        if 'ytrue' in data.keys():
+        if 'ytrue' in data:
             self.ytrue = data['ytrue']
-        if 'ystd' in data.keys():
+        if 'ystd' in data:
             self.ystd = data['ystd']
         self.runno = runno
         self.model = None
@@ -20,7 +21,6 @@ class SuperRun:
         self.num_output = self.ytrain.shape[0]
         self.verbose = verbose
 
-        return
 
     def define_model(self):
         pass

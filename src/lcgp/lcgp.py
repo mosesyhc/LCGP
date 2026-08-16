@@ -1,12 +1,18 @@
-from ._import_util import _import_tensorflow
-from ._backend import (Module, Parameter, SoftClip, percentile,
-                       scipy_minimize, tabulate_module_summary)
-from .covmat import Matern32
+# for Python 3.9 inclusion
+
 import numpy as np
 from joblib import Parallel, delayed
 
-# for Python 3.9 inclusion
-from typing import Optional
+from ._backend import (
+    Module,
+    Parameter,
+    SoftClip,
+    percentile,
+    scipy_minimize,
+    tabulate_module_summary,
+)
+from ._import_util import _import_tensorflow
+from .covmat import Matern32
 
 tf = _import_tensorflow()
 
@@ -29,11 +35,11 @@ class LCGP(Module):
     # Constructor
     # =========================================================================
     def __init__(self,
-                 y: Optional[np.ndarray] = tf.Tensor,
-                 x: Optional[np.ndarray] = tf.Tensor,
-                 q: int = None,
-                 var_threshold: float = None,
-                 diag_error_structure: list = None,
+                 y: np.ndarray | None = tf.Tensor,
+                 x: np.ndarray | None = tf.Tensor,
+                 q: int | None = None,
+                 var_threshold: float | None = None,
+                 diag_error_structure: list | None = None,
                  parameter_clamp_flag: bool = False,
                  robust_mean: bool = True,
                  submethod: str = 'full',
@@ -104,7 +110,7 @@ class LCGP(Module):
         # =====================================================================
         if self.submethod == 'rep':
             # 1) resolve raw xy numpy
-            xr, yr, N, d, p = self._get_raw_xy(x_raw=self.x_orig, y_raw=self.y_orig)
+            xr, yr, _N, d, p = self._get_raw_xy(x_raw=self.x_orig, y_raw=self.y_orig)
 
             # 2) group identical rows
             x_unique_np, inverse_np, counts_np = self._group_unique_rows_np(xr)
@@ -227,19 +233,13 @@ class LCGP(Module):
     def __repr__(self):
         params = tabulate_module_summary(self)
         desc = 'LCGP(\n' \
-               '\tsubmethod:\t{:s}\n' \
-               '\toutput dimension:\t{:d}\n' \
-               '\tnumber of latent components:\t{:d}\n' \
-               '\tparameter_clamping:\t{:s}\n' \
-               '\trobust_standardization:\t{:s}\n' \
-               '\tdiagonal_error structure:\t{:s}\n' \
-               '\tparameters:\t\n{}\n)'.format(
-                    self.submethod, self.p,
-                    self.q, str(self.parameter_clamp_flag),
-                    str(self.robust_mean),
-                    str(self.diag_error_structure),
-                    params
-               )
+               f'\tsubmethod:\t{self.submethod:s}\n' \
+               f'\toutput dimension:\t{self.p:d}\n' \
+               f'\tnumber of latent components:\t{self.q:d}\n' \
+               f'\tparameter_clamping:\t{self.parameter_clamp_flag!s:s}\n' \
+               f'\trobust_standardization:\t{self.robust_mean!s:s}\n' \
+               f'\tdiagonal_error structure:\t{self.diag_error_structure!s:s}\n' \
+               f'\tparameters:\t\n{params}\n)'
         return desc
 
     # =========================================================================
@@ -303,7 +303,7 @@ class LCGP(Module):
 
         xnorm = tf.zeros(x.shape[1], dtype=tf.float64)
         for j in range(x.shape[1]):
-            xdist = tf.abs((tf.reshape(x[:, j], (-1, 1)) - x[:, j]))
+            xdist = tf.abs(tf.reshape(x[:, j], (-1, 1)) - x[:, j])
             positive_xdist = tf.boolean_mask(xdist, xdist > 0)
             mean_val = tf.reduce_mean(positive_xdist)
             xnorm = tf.tensor_scatter_nd_update(xnorm, [[j]], [mean_val])
@@ -359,7 +359,7 @@ class LCGP(Module):
         """
         Compute replicate-averaged outputs ybar on RAW scale
         """
-        p, N = yr.shape
+        p, _N = yr.shape
         ybar = np.zeros((p, n), dtype=np.float64)
         for i in range(n):
             cols = (inverse == i)
@@ -398,7 +398,7 @@ class LCGP(Module):
         """
         Returns a tuple of replication structures
         """
-        xr, yr, N, d, p = self._get_raw_xy(x_raw=x_raw, y_raw=y_raw)
+        xr, yr, _N, d, p = self._get_raw_xy(x_raw=x_raw, y_raw=y_raw)
         x_unique_np, inverse_np, counts_np = self._group_unique_rows_np(xr)
         n_unique = int(x_unique_np.shape[0])
         r_np = counts_np.astype(np.int32)
@@ -451,7 +451,7 @@ class LCGP(Module):
             return self.ybar
         return self.y
 
-    def init_phi(self, var_threshold: float = None):
+    def init_phi(self, var_threshold: float | None = None):
         """
         Initialization of orthogonal basis, computed with SVD.
         Uses ybar_s if replication, else y.
@@ -510,7 +510,6 @@ class LCGP(Module):
         self.lLmb0.assign(lLmb0)
         self.lnugGPs.assign(lnugGPs)
         self.lsigma2s.assign(lsigma2_diag)
-        return
 
     def get_param(self):
         """
@@ -536,7 +535,6 @@ class LCGP(Module):
     # =========================================================================
     def fit(self, verbose=False):
         scipy_minimize(self.loss, self.trainable_variables)
-        return
 
     def loss(self):
         """
