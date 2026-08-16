@@ -31,7 +31,7 @@ To cite the software, please use:
       license = {MIT},
       title = {{LCGP: Latent Component {Gaussian} Processes}},
       url = {https://github.com/mosesyhc/lcgp},
-      version = {1.0.0}
+      version = {1.1.0}
    }
 
 
@@ -52,7 +52,7 @@ List of Contents:
 Installation
 ------------
 
-The implementation of LCGP requires Python `>=3.9, <3.14`.  The package can be installed through
+The implementation of LCGP requires Python `>=3.10, <3.14`.  The package can be installed through
 
 .. code:: bash
 
@@ -66,12 +66,15 @@ The LCGP package has the following dependencies, as listed in its pyproject.toml
 
     'numpy>=1.18.3',
     'scipy>=1.10.1',
-    'tensorflow>=2.16.0',
+    'tensorflow>=2.21.0',
     'joblib>=1.4.2',
-    'gpflow>=2.5.0',
-    "tensorflow-probability[tf]>=0.25.0",
-    "pytest>=8.4.2",
+    "pytest",
 
+..
+
+.. note::
+
+    Apple Silicon is supported, however, Intel Macs are not supported, since TensorFlow no longer provides wheels after version 2.16.2.
 ..
 
 Test suite

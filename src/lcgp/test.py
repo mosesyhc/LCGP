@@ -1,6 +1,3 @@
-import pytest
-
-
 def test(level=0):
     """
     Run full set of surmise tests.
@@ -15,6 +12,8 @@ def test(level=0):
     bool
         True if all tests passed; False, otherwise.
     """
+    import pytest  # test-only dependency; not required to import lcgp
+
     VERBOSITY = [0, 1, 2]
 
     if level not in VERBOSITY:

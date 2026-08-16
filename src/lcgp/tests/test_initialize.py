@@ -1,6 +1,7 @@
-import pytest
-import numpy as np
 import copy
+
+import numpy as np
+import pytest
 
 from lcgp import LCGP
 
