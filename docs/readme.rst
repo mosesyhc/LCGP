@@ -52,7 +52,7 @@ List of Contents:
 Installation
 ------------
 
-The implementation of LCGP requires Python `>=3.9, <3.14`.  The package can be installed through
+The implementation of LCGP requires Python `>=3.10, <3.14`.  The package can be installed through
 
 .. code:: bash
 
