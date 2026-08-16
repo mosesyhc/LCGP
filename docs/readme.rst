@@ -66,10 +66,15 @@ The LCGP package has the following dependencies, as listed in its pyproject.toml
 
     'numpy>=1.18.3',
     'scipy>=1.10.1',
-    'tensorflow>=2.16.0',
+    'tensorflow>=2.21.0',
     'joblib>=1.4.2',
-    "pytest>=8.4.2",
+    "pytest",
 
+..
+
+.. note::
+
+    Apple Silicon is supported, however, Intel Macs are not supported, since TensorFlow no longer provides wheels after version 2.16.2.
 ..
 
 Test suite

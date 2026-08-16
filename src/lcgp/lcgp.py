@@ -1,5 +1,3 @@
-# for Python 3.9 inclusion
-
 import numpy as np
 from joblib import Parallel, delayed
 
