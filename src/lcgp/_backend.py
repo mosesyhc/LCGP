@@ -4,9 +4,10 @@ functionality LCGP uses.
 
 Motivation: GPflow declares a dependency on the retired ``tensorflow-macos``
 package for Apple Silicon and caps ``numpy<2``, and TensorFlow Probability
-imports ``distutils`` at module scope. Both make the dependency tree
-unresolvable on recent Python versions and unusable on Apple Silicon. Nothing
-here needs anything beyond TensorFlow, NumPy and SciPy.
+imports ``distutils`` in the module. Both make the dependency tree
+unresolvable on recent Python versions and unusable on Apple Silicon. 
+Since only TensorFlow, NumPy and SciPy are required for the functionality, 
+this file replaces the used GPflow dependencies.
 
 Public names mirror the semantics of the pieces they replace:
 
@@ -104,9 +105,6 @@ class SoftClip(Bijector):
 class Module(tf.Module):
     """
     ``tf.Module`` with GPflow's attribute-name behaviour.
-
-    ``tf.Module.__init__`` validates ``name`` as a Python identifier; parameters
-    here carry human-readable names instead, so nothing is passed through.
     """
 
     def __init__(self, name=None):
@@ -119,8 +117,7 @@ class Parameter(tf.Module):
 
     The variable exposed to the optimizer through ``trainable_variables`` is the
     unconstrained one. Reading the parameter (in a TF op, via ``__getitem__``,
-    ``numpy()`` or NumPy coercion) applies the forward transform, so gradients
-    flow through the constraint exactly as they did under GPflow.
+    ``numpy()`` or NumPy coercion) applies the forward transform.
     """
 
     def __init__(self, value, transform=None, name=None, dtype=tf.float64,
@@ -268,8 +265,7 @@ def percentile(x, q, axis=None, keepdims=False, interpolation="nearest"):
     ``tfp.stats.percentile`` replacement.
 
     The default interpolation is ``'nearest'``, matching TFP rather than NumPy
-    (whose default is ``'linear'``). Keeping that default is what preserves the
-    numerical behaviour of the robust standardization path.
+    (whose default is ``'linear'``). 
     """
     t = tf.convert_to_tensor(x)
     arr = t.numpy() if hasattr(t, "numpy") else np.asarray(t)
