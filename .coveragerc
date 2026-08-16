@@ -1,4 +1,4 @@
 [run]
 omit =
-    lcgp/test.py
-    lcgp/_version.py
+    src/lcgp/test.py
+    src/lcgp/_version.py
