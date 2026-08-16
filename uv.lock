@@ -399,6 +399,7 @@ dependencies = [
     { name = "joblib" },
     { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pytest" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "tensorflow" },
@@ -406,7 +407,6 @@ dependencies = [
 
 [package.optional-dependencies]
 test = [
-    { name = "pytest" },
     { name = "pytest-cov" },
 ]
 
@@ -414,7 +414,7 @@ test = [
 requires-dist = [
     { name = "joblib", specifier = ">=1.4.2" },
     { name = "numpy", specifier = ">=1.18.3" },
-    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest" },
     { name = "pytest-cov", marker = "extra == 'test'" },
     { name = "scipy", specifier = ">=1.10.1" },
     { name = "tensorflow", specifier = ">=2.21.0" },
