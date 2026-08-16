@@ -68,8 +68,6 @@ The LCGP package has the following dependencies, as listed in its pyproject.toml
     'scipy>=1.10.1',
     'tensorflow>=2.16.0',
     'joblib>=1.4.2',
-    'gpflow>=2.5.0',
-    "tensorflow-probability[tf]>=0.25.0",
     "pytest>=8.4.2",
 
 ..
