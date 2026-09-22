@@ -37,7 +37,7 @@ def dss(y, ypredmean, ypredcov, use_diag):
         score_single = np.log(diagSigma).sum() + (r * r / diagSigma).sum()
         return score_single
 
-    p, n = y.shape
+    _p, n = y.shape
     score = 0
     if use_diag:
         for i in range(n):

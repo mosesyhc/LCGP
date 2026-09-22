@@ -1,7 +1,9 @@
 Latent component Gaussian process (LCGP)
 ========================================
 
-|CI| |Coverage Status| |Documentation Status|
+|CI| |Coverage Status| |Documentation Status| 
+
+|Logo|
 
 Implementation of latent component Gaussian process (LCGP). LCGP handles
 the emulation of multivariate stochastic simulation outputs.
@@ -14,15 +16,24 @@ The development of the foundation of this work is described in the following wor
 .. code-block:: 
 
    @phdthesis{chan2023thesis,
-     author  = "Moses Y.-H. Chan",
-     title   = "High-Dimensional Gaussian Process Methods for Uncertainty Quantification",
-     school  = "Northwestern University",
-     year    = "2023",
+      author  = "Moses Y.-H. Chan",
+      title   = "High-Dimensional {Gaussian} Process Methods for Uncertainty Quantification",
+      school  = "Northwestern University",
+      year    = "2023",
    }
 
+To cite the software, please use:
 
+.. code-block::
 
---------------
+   @software{Chan_LCGP,
+      author = {Chan, Moses Y.-H. and Handjaja, Edbert},
+      license = {MIT},
+      title = {{LCGP: Latent Component {Gaussian} Processes}},
+      url = {https://github.com/mosesyhc/lcgp},
+      version = {1.1.1}
+   }
+
 
 List of Contents:
 
@@ -41,7 +52,7 @@ List of Contents:
 Installation
 ------------
 
-The implementation of LCGP requires Python 3.9 or above.  The package can be installed through
+The implementation of LCGP requires Python `>=3.11, <3.14`.  The package can be installed through
 
 .. code:: bash
 
@@ -55,12 +66,16 @@ The LCGP package has the following dependencies, as listed in its pyproject.toml
 
     'numpy>=1.18.3',
     'scipy>=1.10.1',
-    'tensorflow>=2.16.0',
-    'gpflow>=2.5.0'
+    'tensorflow>=2.21.0',
+    'joblib>=1.4.2',
+    "pytest",
 
 ..
 
-This package is supported in Python `>=3.9, <3.14`.
+.. note::
+
+    Apple Silicon is supported, however, Intel Macs are not supported, since TensorFlow no longer provides wheels after version 2.16.2.
+..
 
 Test suite
 ~~~~~~~~~~
@@ -201,7 +216,6 @@ hyperparameter training. The two choices are implemented through
 
    model = LCGP(y=y, x=x, robust_mean=False)
 
---------------
 
 .. |CI| image:: https://github.com/mosesyhc/lcgp/actions/workflows/ci.yml/badge.svg?branch=main
    :target: https://github.com/mosesyhc/LCGP/actions/workflows/ci.yml
@@ -209,3 +223,4 @@ hyperparameter training. The two choices are implemented through
    :target: https://coveralls.io/github/mosesyhc/LCGP
 .. |Documentation Status| image:: https://readthedocs.org/projects/lcgp/badge/?version=latest
    :target: https://lcgp.readthedocs.io/en/latest/?badge=latest
+.. |Logo| image:: https://raw.githubusercontent.com/mosesyhc/LCGP/refs/heads/main/logo_lcgp.png

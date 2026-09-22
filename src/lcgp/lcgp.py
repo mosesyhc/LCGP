@@ -1,12 +1,16 @@
-from ._import_util import _import_tensorflow
-import tensorflow_probability as tfp
-import gpflow
-from .covmat import Matern32
 import numpy as np
 from joblib import Parallel, delayed
 
-# for Python 3.9 inclusion
-from typing import Optional
+from ._backend import (
+    Module,
+    Parameter,
+    SoftClip,
+    percentile,
+    scipy_minimize,
+    tabulate_module_summary,
+)
+from ._import_util import _import_tensorflow
+from .covmat import Matern32
 
 tf = _import_tensorflow()
 
@@ -16,7 +20,7 @@ tf.get_logger().setLevel('ERROR')
 tf.keras.backend.set_floatx('float64')
 
 
-class LCGP(gpflow.Module):
+class LCGP(Module):
     """
     Latent Component Gaussian Process (LCGP)
 
@@ -29,11 +33,11 @@ class LCGP(gpflow.Module):
     # Constructor
     # =========================================================================
     def __init__(self,
-                 y: Optional[np.ndarray] = tf.Tensor,
-                 x: Optional[np.ndarray] = tf.Tensor,
-                 q: int = None,
-                 var_threshold: float = None,
-                 diag_error_structure: list = None,
+                 y: np.ndarray | None = tf.Tensor,
+                 x: np.ndarray | None = tf.Tensor,
+                 q: int | None = None,
+                 var_threshold: float | None = None,
+                 diag_error_structure: list | None = None,
                  parameter_clamp_flag: bool = False,
                  robust_mean: bool = True,
                  submethod: str = 'full',
@@ -104,7 +108,7 @@ class LCGP(gpflow.Module):
         # =====================================================================
         if self.submethod == 'rep':
             # 1) resolve raw xy numpy
-            xr, yr, N, d, p = self._get_raw_xy(x_raw=self.x_orig, y_raw=self.y_orig)
+            xr, yr, _N, d, p = self._get_raw_xy(x_raw=self.x_orig, y_raw=self.y_orig)
 
             # 2) group identical rows
             x_unique_np, inverse_np, counts_np = self._group_unique_rows_np(xr)
@@ -178,32 +182,32 @@ class LCGP(gpflow.Module):
         # -----------------------------
         # Initialize parameters (GP + noise)
         # -----------------------------
-        self.lLmb = gpflow.Parameter(
+        self.lLmb = Parameter(
             tf.ones([self.q, self.x.shape[1]], dtype=tf.float64),
             name='Latent GP log-scale',
-            transform=tfp.bijectors.SoftClip(
+            transform=SoftClip(
                 low=tf.constant(1e-6, dtype=tf.float64),
                 high=tf.constant(1e4, dtype=tf.float64)
             ),
             dtype=tf.float64
         )
-        self.lLmb0 = gpflow.Parameter(
+        self.lLmb0 = Parameter(
             tf.ones([self.q], dtype=tf.float64),
             name='Latent GP log-lengthscale',
-            transform=tfp.bijectors.SoftClip(
+            transform=SoftClip(
                 low=tf.constant(1e-4, dtype=tf.float64),
                 high=tf.constant(1e4, dtype=tf.float64)
             ),
             dtype=tf.float64
         )
-        self.lsigma2s = gpflow.Parameter(
+        self.lsigma2s = Parameter(
             tf.ones([len(self.diag_error_structure)], dtype=tf.float64),
             name='Diagonal error log-variance'
         )
-        self.lnugGPs = gpflow.Parameter(
+        self.lnugGPs = Parameter(
             tf.ones([self.q], dtype=tf.float64) * 1e-6,
             name='Latent GP nugget scale',
-            transform=tfp.bijectors.SoftClip(
+            transform=SoftClip(
                 low=tf.math.exp(tf.constant(-16, dtype=tf.float64)),
                 high=tf.math.exp(tf.constant(-2, dtype=tf.float64))
             ),
@@ -225,21 +229,15 @@ class LCGP(gpflow.Module):
     # Display
     # =========================================================================
     def __repr__(self):
-        params = gpflow.utilities.tabulate_module_summary(self)
+        params = tabulate_module_summary(self)
         desc = 'LCGP(\n' \
-               '\tsubmethod:\t{:s}\n' \
-               '\toutput dimension:\t{:d}\n' \
-               '\tnumber of latent components:\t{:d}\n' \
-               '\tparameter_clamping:\t{:s}\n' \
-               '\trobust_standardization:\t{:s}\n' \
-               '\tdiagonal_error structure:\t{:s}\n' \
-               '\tparameters:\t\n{}\n)'.format(
-                    self.submethod, self.p,
-                    self.q, str(self.parameter_clamp_flag),
-                    str(self.robust_mean),
-                    str(self.diag_error_structure),
-                    params
-               )
+               f'\tsubmethod:\t{self.submethod:s}\n' \
+               f'\toutput dimension:\t{self.p:d}\n' \
+               f'\tnumber of latent components:\t{self.q:d}\n' \
+               f'\tparameter_clamping:\t{self.parameter_clamp_flag!s:s}\n' \
+               f'\trobust_standardization:\t{self.robust_mean!s:s}\n' \
+               f'\tdiagonal_error structure:\t{self.diag_error_structure!s:s}\n' \
+               f'\tparameters:\t\n{params}\n)'
         return desc
 
     # =========================================================================
@@ -303,7 +301,7 @@ class LCGP(gpflow.Module):
 
         xnorm = tf.zeros(x.shape[1], dtype=tf.float64)
         for j in range(x.shape[1]):
-            xdist = tf.abs((tf.reshape(x[:, j], (-1, 1)) - x[:, j]))
+            xdist = tf.abs(tf.reshape(x[:, j], (-1, 1)) - x[:, j])
             positive_xdist = tf.boolean_mask(xdist, xdist > 0)
             mean_val = tf.reduce_mean(positive_xdist)
             xnorm = tf.tensor_scatter_nd_update(xnorm, [[j]], [mean_val])
@@ -314,8 +312,8 @@ class LCGP(gpflow.Module):
         Standardizes outputs and collects summary information.
         """
         if self.robust_mean:
-            ycenter = tfp.stats.percentile(y, 50.0, axis=1, keepdims=True)
-            yspread = tfp.stats.percentile(tf.abs(y - ycenter), 50.0, axis=1, keepdims=True)
+            ycenter = percentile(y, 50.0, axis=1, keepdims=True)
+            yspread = percentile(tf.abs(y - ycenter), 50.0, axis=1, keepdims=True)
         else:
             ycenter = tf.reduce_mean(y, axis=1, keepdims=True)
             yspread = tf.math.reduce_std(y, axis=1, keepdims=True)
@@ -359,7 +357,7 @@ class LCGP(gpflow.Module):
         """
         Compute replicate-averaged outputs ybar on RAW scale
         """
-        p, N = yr.shape
+        p, _N = yr.shape
         ybar = np.zeros((p, n), dtype=np.float64)
         for i in range(n):
             cols = (inverse == i)
@@ -385,8 +383,8 @@ class LCGP(gpflow.Module):
         Compute (center, spread) per output dim for standardization
         """
         if self.robust_mean:
-            ycenter = tfp.stats.percentile(Y, 50.0, axis=1, keepdims=True)
-            yspread = tfp.stats.percentile(tf.abs(Y - ycenter), 50.0, axis=1, keepdims=True)
+            ycenter = percentile(Y, 50.0, axis=1, keepdims=True)
+            yspread = percentile(tf.abs(Y - ycenter), 50.0, axis=1, keepdims=True)
         else:
             ycenter = tf.reduce_mean(Y, axis=1, keepdims=True)
             yspread = tf.math.reduce_std(Y, axis=1, keepdims=True)
@@ -398,7 +396,7 @@ class LCGP(gpflow.Module):
         """
         Returns a tuple of replication structures
         """
-        xr, yr, N, d, p = self._get_raw_xy(x_raw=x_raw, y_raw=y_raw)
+        xr, yr, _N, d, p = self._get_raw_xy(x_raw=x_raw, y_raw=y_raw)
         x_unique_np, inverse_np, counts_np = self._group_unique_rows_np(xr)
         n_unique = int(x_unique_np.shape[0])
         r_np = counts_np.astype(np.int32)
@@ -451,7 +449,7 @@ class LCGP(gpflow.Module):
             return self.ybar
         return self.y
 
-    def init_phi(self, var_threshold: float = None):
+    def init_phi(self, var_threshold: float | None = None):
         """
         Initialization of orthogonal basis, computed with SVD.
         Uses ybar_s if replication, else y.
@@ -510,7 +508,6 @@ class LCGP(gpflow.Module):
         self.lLmb0.assign(lLmb0)
         self.lnugGPs.assign(lnugGPs)
         self.lsigma2s.assign(lsigma2_diag)
-        return
 
     def get_param(self):
         """
@@ -535,9 +532,7 @@ class LCGP(gpflow.Module):
     # Training / loss dispatch
     # =========================================================================
     def fit(self, verbose=False):
-        opt = gpflow.optimizers.Scipy()
-        opt.minimize(self.loss, self.trainable_variables, compile=False)
-        return
+        scipy_minimize(self.loss, self.trainable_variables)
 
     def loss(self):
         """

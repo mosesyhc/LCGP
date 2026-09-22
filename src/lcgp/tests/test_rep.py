@@ -1,8 +1,8 @@
-import pytest
 import numpy as np
+import pytest
 import tensorflow as tf
-from lcgp import LCGP
 
+from lcgp import LCGP
 
 # ===========================================================================
 # Fixtures / shared helpers
@@ -36,7 +36,7 @@ class TestGroupUniqueRows:
         rng = np.random.default_rng(1)
         x_unique = rng.uniform(0, 1, (n_unique, d))
         x = np.tile(x_unique, (reps, 1))
-        x_uniq_out, inverse, counts = np.unique(x, axis=0, return_inverse=True, return_counts=True)
+        x_uniq_out, _inverse, _counts = np.unique(x, axis=0, return_inverse=True, return_counts=True)
         assert x_uniq_out.shape[0] == n_unique
 
     @pytest.mark.parametrize('n_unique,reps,d', [(10, 3, 2)])
@@ -190,7 +190,7 @@ class TestRepPredict:
         (15, 4, 3, 1),
     ])
     def test_predict_output_shapes(self, n_unique, reps, p, d):
-        x, y, x_unique, _ = _make_rep_data(n_unique=n_unique, p=p, d=d, reps=reps)
+        x, y, _x_unique, _ = _make_rep_data(n_unique=n_unique, p=p, d=d, reps=reps)
         model = LCGP(y=y, x=x, submethod='rep')
         model.fit()
         n0 = 10

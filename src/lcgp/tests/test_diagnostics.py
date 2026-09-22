@@ -1,7 +1,7 @@
-import pytest
 import numpy as np
+import pytest
 
-from lcgp.evaluation import dss, rmse, normalized_rmse, intervalstats
+from lcgp.evaluation import dss, intervalstats, normalized_rmse, rmse
 
 
 @pytest.mark.parametrize('y1', [np.random.normal(0, 1, (3, 40))])

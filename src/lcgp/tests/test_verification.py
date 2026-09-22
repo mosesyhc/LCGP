@@ -1,10 +1,11 @@
-import numpy as np
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import numpy as np
 
 from lcgp.lcgp import LCGP
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 class LCGPVerifier:
@@ -52,7 +53,7 @@ class LCGPVerifier:
         
         print(f"Original data shape: y_orig = {y_orig.shape}, x_orig = {x_orig.shape}")
         
-        x_unique, inverse, counts = np.unique(x_orig, axis=0, 
+        x_unique, inverse, _ = np.unique(x_orig, axis=0,
                                               return_inverse=True, 
                                               return_counts=True)
         n_unique = x_unique.shape[0]
@@ -99,7 +100,7 @@ class LCGPVerifier:
         self.print_step(2, "Basis Decomposition Reconstruction Test")
         
         ybar_s = self.model.ybar_s.numpy()  
-        p, n = ybar_s.shape
+        p, _ = ybar_s.shape
         
         phi = self.model.phi.numpy()  
         g = self.model.g.numpy()      
@@ -199,21 +200,16 @@ class LCGPVerifier:
         print(f"Testing at n={x_test.shape[0]} training points")
         
         # Step 2: Compute predictions
-        try:
-            ypred, ypredvar, yconfvar = self.model.predict(x_test, return_fullcov=False)
-            ypred = ypred.numpy()
-            ypredvar = ypredvar.numpy()
-            yconfvar = yconfvar.numpy()
-            
-            print("Prediction shapes:")
-            print(f"  ypred: {ypred.shape}")
-            print(f"  ypredvar: {ypredvar.shape}")
-            print(f"  yconfvar: {yconfvar.shape}")
-        except Exception as e:
-            print(f"FAIL: Prediction failed with error: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
+        ypred, ypredvar, yconfvar = self.model.predict(x_test, return_fullcov=False)
+        ypred = ypred.numpy()
+        ypredvar = ypredvar.numpy()
+        yconfvar = yconfvar.numpy()
+
+        print("Prediction shapes:")
+        print(f"  ypred: {ypred.shape}")
+        print(f"  ypredvar: {ypredvar.shape}")
+        print(f"  yconfvar: {yconfvar.shape}")
+
         
         ybar_actual = self.model.ybar.numpy() 
         
@@ -324,8 +320,7 @@ def test_run_all():
         print(f"{test_name}: {status}")
 
     print("="*70)
-        
-    return results
+    print(results)
 
 
 def create_sample_data_with_replicates(n_unique=10, n_replicates=3, d=2, p=3, seed=42):
