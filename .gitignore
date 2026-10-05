@@ -5,6 +5,8 @@ venv/
 *.pyc
 *.pclprof
 *.dat
+*.ipynb_checkpoints
+*.python-version
 
 # automatic version file
 *_version.py

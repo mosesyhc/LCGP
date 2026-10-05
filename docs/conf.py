@@ -27,6 +27,11 @@ bibtex_bibfiles = ['lcgp.bib']
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
+nb_execution_mode = "cache"
+nb_execution_timeout = 300
+nb_execution_raise_on_error = True
+nb_output_stderr = "show"
+
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 #

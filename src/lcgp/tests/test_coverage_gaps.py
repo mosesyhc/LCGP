@@ -1,6 +1,7 @@
-import pytest
 import numpy as np
+import pytest
 import tensorflow as tf
+
 from lcgp import LCGP
 
 
@@ -35,12 +36,12 @@ class TestComputeCenterSpreadNonRobust:
 class TestPreprocess:
     @pytest.mark.parametrize('n_unique,reps,p,d', [(15, 4, 3, 2)])
     def test_preprocess_returns_expected_tuple(self, n_unique, reps, p, d):
-        x, y, x_unique, _ = _make_rep_data(n_unique=n_unique, p=p, d=d, reps=reps)
+        x, y, _x_unique, _ = _make_rep_data(n_unique=n_unique, p=p, d=d, reps=reps)
         model = LCGP(y=y, x=x, submethod='rep')
 
         result = model.preprocess(x_raw=x, y_raw=y)
-        (x_unique_tf, x_unique_s, group_ids_tf, r_tf, R_tf,
-         ybar_tf, ybar_s_tf, ybar_mean_tf, ybar_std_tf,
+        (x_unique_tf, _x_unique_s, _group_ids_tf, _r_tf, R_tf,
+         ybar_tf, ybar_s_tf, _ybar_mean_tf, _ybar_std_tf,
          n_unique_out, d_out, p_out) = result
 
         assert int(n_unique_out.numpy()) == n_unique
@@ -191,7 +192,7 @@ class TestPredictRepNonStdAndFullCov:
     @pytest.mark.parametrize('n_unique,reps,p,d', [(20, 3, 4, 2)])
     def test_predict_rep_non_standardized(self, n_unique, reps, p, d):
         """rep_standardize_ybar=False path in predict_rep."""
-        x, y, x_unique, _ = _make_rep_data(n_unique=n_unique, p=p, d=d, reps=reps)
+        x, y, _x_unique, _ = _make_rep_data(n_unique=n_unique, p=p, d=d, reps=reps)
         model = LCGP(y=y, x=x, submethod='rep', rep_standardize_ybar=False)
         model.fit()
 
@@ -211,7 +212,7 @@ class TestPredictRepNonStdAndFullCov:
         model.fit()
 
         x0 = np.random.default_rng(13).uniform(0, 1, (10, d))
-        ypred, ypredvar, yconfvar, fullcov = model.predict(x0, return_fullcov=True)
+        ypred, _ypredvar, _yconfvar, fullcov = model.predict(x0, return_fullcov=True)
 
         assert fullcov is None
         assert ypred.shape == (p, 10)

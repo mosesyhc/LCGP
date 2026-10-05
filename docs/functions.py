@@ -1,5 +1,6 @@
 import numpy as np
 
+
 # Cox, Parker, and Singer (2001)
 def cps2001(x):
     x = x.expand_dims(0) if x.ndim < 2 else x

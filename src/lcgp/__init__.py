@@ -1,8 +1,8 @@
-from .lcgp import LCGP
-from .covmat import Matern32
-from importlib.metadata import version, PackageNotFoundError
-from .test import test
+from importlib.metadata import PackageNotFoundError, version
 
+from .covmat import Matern32
+from .lcgp import LCGP
+from .test import test
 
 try:
     __version__ = version("lcgp")
