@@ -33,8 +33,13 @@ class SuperRun:
 
 
 class LCGPRun(SuperRun):
+    ##### NEW (hetero) ######################################################
     def __init__(self, submethod='full', robust=True, err_struct=None,
-                 num_latent=None, var_threshold=None, **kwargs):
+                 num_latent=None, var_threshold=None,
+                 hetero_noise=False, within_term=None,
+                 lam_prior_var=1.0, lam_predict='plugin',
+                 **kwargs):
+    ##### END NEW (hetero) ##################################################
         super().__init__(**kwargs)
         self.modelname = 'LCGP'
         self.num_latent = num_latent
@@ -44,6 +49,14 @@ class LCGPRun(SuperRun):
         self.err_struct = err_struct
         if self.robust:
             self.modelname += '_robust'
+        ##### NEW (hetero) ######################################################
+        self.hetero_noise = hetero_noise
+        self.within_term = within_term
+        self.lam_prior_var = lam_prior_var
+        self.lam_predict = lam_predict
+        if self.hetero_noise:
+            self.modelname += '_hetero'
+        ##### END NEW (hetero) ##################################################
 
 
     def define_model(self):
@@ -54,7 +67,22 @@ class LCGPRun(SuperRun):
                           var_threshold=self.var_threshold,
                           diag_error_structure=self.err_struct,
                           robust_mean=self.robust,
-                          submethod=self.submethod)
+                          submethod=self.submethod,
+                          ##### NEW (hetero) ######################################
+                          hetero_noise=self.hetero_noise,
+                          within_term=self.within_term,
+                          lam_prior_var=self.lam_prior_var,
+                          lam_predict=self.lam_predict,
+                          ##### END NEW (hetero) ##################################
+                          )
+
+    ##### NEW (hetero) ##########################################################
+    def predict_noise(self, train: bool = False):
+        """Fitted noise sd per output, sqrt(lambda(x) sigma_l^2), raw scale, (p, n0)."""
+        xtest = self.xtrain if train else self.xtest
+        _, noisevar = self.model.predict_noise(xtest)
+        return np.sqrt(np.asarray(noisevar))
+    ##### END NEW (hetero) ######################################################
 
     def train(self):
         self.model.fit(verbose=self.verbose)

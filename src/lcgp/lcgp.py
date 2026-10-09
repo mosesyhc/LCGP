@@ -42,6 +42,13 @@ class LCGP(Module):
                  robust_mean: bool = True,
                  submethod: str = 'full',
                  rep_standardize_ybar: bool = True,
+                 ##### NEW (hetero) ##############################################
+                 hetero_noise: bool = False,      # estimate lambda(x)?  (rep only)
+                 within_term: bool | None = None, # replicate-scatter term; None -> on for 'rep'
+                 lam_prior_var: float = 1.0,      # tau^2
+                 lam_nugget: float = 0.1,         # g in Delta ~ N(0, tau^2 (K_lambda + g I))
+                 lam_predict: str = 'plugin',     
+                 ##### END NEW (hetero) ##########################################
                  verbose: bool = False):
         """
         Constructor for LCGP class.
@@ -49,6 +56,20 @@ class LCGP(Module):
         LCGP with optional replication support (set submethod='rep').
         """
         super().__init__()
+
+        ##### NEW (hetero) ######################################################
+        if hetero_noise and submethod != 'rep':
+            raise ValueError("hetero_noise=True requires submethod='rep'.")
+        if lam_predict not in ['plugin', 'lognormal']:
+            raise ValueError("lam_predict must be 'plugin' or 'lognormal'.")
+        self.hetero_noise = bool(hetero_noise)
+        self.within_term = (submethod == 'rep') if within_term is None else bool(within_term)
+        self.lam_prior_var = float(lam_prior_var)
+        self.lam_nugget = float(lam_nugget)
+        self.lam_predict = lam_predict
+        # weight on the within-input term; set to 0 during stage 1 of fit
+        self._within_w = tf.Variable(1.0, dtype=tf.float64, trainable=False)
+        ##### END NEW (hetero) ##################################################
 
         # -----------------------------
         # User toggles / config
@@ -146,6 +167,19 @@ class LCGP(Module):
             self.ybar_mean = ybar_mean_tf
             self.ybar_std = ybar_std_tf
 
+            ##### NEW (hetero) ##################################################
+            # within-input: S_il = sum_j (y_ijl - ybar_il)^2, shape (n, p).
+            # Only the diagonal is needed because Sigma is diagonal. r_i = 1 rows are 0.
+            inv = np.asarray(inverse_np).reshape(-1)
+            dev2 = (yr - ybar_np[:, inv]) ** 2                     # (p, N)
+            S_np = np.zeros((n_unique, p), dtype=np.float64)
+            np.add.at(S_np, inv, dev2.T)
+            self.N_total = int(_N)
+            self.S_within_raw = tf.constant(S_np, dtype=tf.float64)
+            self.S_within_used = (self.S_within_raw / tf.square(ybar_std_tf[:, 0])[None, :]
+                                  if self.rep_standardize_ybar else self.S_within_raw)
+            ##### END NEW (hetero) ##############################################
+
             # 7) reset (n,d,p) to unique counts
             self.n = tf.constant(n_unique, dtype=tf.int32)
             self.d = tf.constant(d, dtype=tf.int32)
@@ -213,6 +247,27 @@ class LCGP(Module):
             ),
             dtype=tf.float64
         )
+
+        ##### NEW (hetero) ######################################################
+        # Noise-field hyperparameters. 
+        if self.hetero_noise:
+            # Delta_i = log(lambda_i) at the unique inputs 
+            self.lam_delta = Parameter(
+                tf.zeros([int(self.n)], dtype=tf.float64),
+                name='Noise field log-lambda (Delta)',
+                dtype=tf.float64
+            )
+            # lengthscale of the log-lambda GP
+            self.lLmb_lam = Parameter(
+                tf.ones([int(self.d)], dtype=tf.float64),
+                name='Noise field GP lengthscale',
+                transform=SoftClip(
+                    low=tf.constant(5e-2, dtype=tf.float64),
+                    high=tf.constant(1e4, dtype=tf.float64)
+                ),
+                dtype=tf.float64
+            )
+        ##### END NEW (hetero) ##################################################
 
         self.init_params()
 
@@ -509,6 +564,40 @@ class LCGP(Module):
         self.lnugGPs.assign(lnugGPs)
         self.lsigma2s.assign(lsigma2_diag)
 
+        ##### NEW (hetero) ######################################################
+        if self.hetero_noise:
+            self.lLmb_lam.assign(np.maximum(llmb, 0.1))   
+            delta0 = np.zeros(int(self.n), dtype=np.float64)
+            if self.N_total > int(self.n):              
+                lam_hat = self.lambda_diagnostic()['lambda_hat']
+                ok = np.isfinite(lam_hat)
+                delta0[ok] = np.log(lam_hat[ok])
+            self.lam_delta.assign(delta0)
+        ##### END NEW (hetero) ##################################################
+
+    ##### NEW (hetero) ##########################################################
+    def lambda_diagnostic(self):
+        """
+        Closed-form noise levels for replicated inputs
+        """
+        S = self.S_within_raw.numpy()
+        r = self.r.numpy().astype(np.float64)
+        n, p = S.shape
+        dof = self.N_total - n
+        if dof <= 0:
+            raise ValueError("No replication: replicate scatters are all zero.")
+        sig2 = S.sum(axis=0) / dof
+        sig2 = np.where(sig2 > 0, sig2, 1.0)
+        lam = np.full(n, np.nan)
+        rep = r >= 2
+        lam[rep] = np.maximum((S[rep] / sig2).sum(axis=1) / (p * (r[rep] - 1.0)), 1e-8)
+        w = r[rep] - 1.0
+        shift = np.sum(w * np.log(lam[rep])) / np.sum(w)
+        lam[rep] = np.exp(np.log(lam[rep]) - shift)
+        return {'x_unique': self.x_unique.numpy(), 'r': r.astype(int),
+                'lambda_hat': lam, 'sigma2_pooled': sig2 * np.exp(shift)}
+    ##### END NEW (hetero) ######################################################
+
     def get_param(self):
         """
         Returns the parameters for LCGP instance.
@@ -528,11 +617,131 @@ class LCGP(Module):
 
         return lLmb, lLmb0, built_lsigma2s, lnugGPs
 
+    ##### NEW (hetero) ##########################################################
+    # =========================================================================
+    # Noise field lambda(x):  log lambda ~ GP(0, tau^2 K_lambda)
+    # =========================================================================
+    def _lam_kernel(self, x1, x2):
+        """Unit-variance Matern 3/2 correlation for the log-lambda GP."""
+        one = tf.constant(1.0, dtype=tf.float64)
+        tiny = tf.constant(np.exp(-12.), dtype=tf.float64)
+        K = Matern32(x1, x2, llmb=self.lLmb_lam, llmb0=one, lnug=tiny, diag_only=False)
+        amp = Matern32(x1[:1], x1[:1], llmb=self.lLmb_lam, llmb0=one, lnug=tiny, diag_only=True)[0]
+        return K / amp
+
+    def _loglam_and_penalty(self):
+        """
+        Returns (log lambda at unique inputs (n,), prior penalty).
+        penalty = -log N(Delta | 0, tau^2 K_lambda) up to a constant.
+        hetero_noise=False -> (zeros, 0), i.e. lambda = 1.
+        """
+        if not self.hetero_noise:
+            return tf.zeros([self.n], dtype=tf.float64), tf.constant(0.0, tf.float64)
+        delta = tf.convert_to_tensor(self.lam_delta)
+        n = tf.shape(self.x_unique_s)[0]
+        tau2 = tf.constant(self.lam_prior_var, dtype=tf.float64)
+        K = tau2 * (self._lam_kernel(self.x_unique_s, self.x_unique_s)
+                    + self.lam_nugget * tf.eye(n, dtype=tf.float64))
+        L = tf.linalg.cholesky(K)
+        alpha = tf.squeeze(tf.linalg.cholesky_solve(L, delta[:, None]), -1)
+        penalty = 0.5 * tf.tensordot(delta, alpha, axes=1) \
+            + tf.reduce_sum(tf.math.log(tf.linalg.diag_part(L)))
+        return delta, penalty
+
+    def _predict_loglam(self, x0s):
+        """Mean and variance of log lambda at standardized new inputs x0s (n0, d)."""
+        n0 = tf.shape(x0s)[0]
+        if not self.hetero_noise:
+            z = tf.zeros([n0], dtype=tf.float64)
+            return z, z
+        delta = tf.convert_to_tensor(self.lam_delta)
+        n = tf.shape(self.x_unique_s)[0]
+        tau2 = tf.constant(self.lam_prior_var, dtype=tf.float64)
+        K = tau2 * (self._lam_kernel(self.x_unique_s, self.x_unique_s)
+                    + self.lam_nugget * tf.eye(n, dtype=tf.float64))
+        L = tf.linalg.cholesky(K)
+        K0 = tau2 * self._lam_kernel(x0s, self.x_unique_s)                
+        alpha = tf.squeeze(tf.linalg.cholesky_solve(L, delta[:, None]), -1)
+        mu = tf.linalg.matvec(K0, alpha)
+        W = tf.linalg.triangular_solve(L, tf.transpose(K0), lower=True)   
+        var = tf.maximum(tau2 * (1.0 + self.lam_nugget) - tf.reduce_sum(tf.square(W), axis=0), 0.0)
+        return mu, var
+
+    def _lam_at(self, x0s):
+        """lambda(x*) used in the predictive variance."""
+        mu, var = self._predict_loglam(x0s)
+        return tf.exp(mu + 0.5 * var) if self.lam_predict == 'lognormal' else tf.exp(mu)
+
+    def predict_noise(self, x0):
+        """
+        Fitted noise level at x0 on the RAW output scale.
+        Returns lam0 (n0,) and per-output noise variance lam0 * sigma_l^2, shape (p, n0).
+        """
+        x0 = self._verify_data_types(x0)
+        x0s = (x0 - self.x_min) / (self.x_max - self.x_min)
+        lam0 = self._lam_at(x0s)
+        _, _, lsigma2s, _ = self.get_param()
+        return lam0, tf.exp(lsigma2s)[:, None] * lam0[None, :]
+    ##### END NEW (hetero) ######################################################
+
     # =========================================================================
     # Training / loss dispatch
     # =========================================================================
     def fit(self, verbose=False):
+        ##### NEW (hetero) ######################################################
+        if self.submethod == 'rep' and (self.within_term or self.hetero_noise):
+            allv = list(self.trainable_variables)
+            init_vals = [v.numpy().copy() for v in allv]
+            frozen = set()
+            if self.hetero_noise:
+                frozen = {v.ref() for p in (self.lam_delta, self.lLmb_lam)
+                          for v in getattr(p, 'trainable_variables', [p])}
+                delta_init = np.asarray(self.lam_delta.numpy()).copy()
+
+            def _set_full_start():
+                self._within_w.assign(1.0)
+                if self.within_term and self.N_total > int(self.n):
+                    sig2 = self.lambda_diagnostic()['sigma2_pooled']
+                    err_struct, col = self.diag_error_structure, 0
+                    lsig = np.zeros(len(err_struct))
+                    for k in range(len(err_struct)):
+                        lsig[k] = np.log(np.mean(sig2[col:(col + err_struct[k])]))
+                        col += err_struct[k]
+                    self.lsigma2s.assign(lsig)
+                if self.hetero_noise:
+                    self.lam_delta.assign(delta_init)        
+
+            if self.hetero_noise:
+                self.lam_delta.assign(np.zeros_like(delta_init))   
+            self._within_w.assign(0.0)
+            scipy_minimize(self.loss, [v for v in allv if v.ref() not in frozen])
+            _set_full_start()
+            scipy_minimize(self.loss, allv)
+            loss_a, vals_a = float(self.loss()), [v.numpy().copy() for v in allv]
+
+            for v, val in zip(allv, init_vals):
+                v.assign(val)
+            _set_full_start()
+            scipy_minimize(self.loss, allv)
+            loss_b = float(self.loss())
+
+            if not (np.isfinite(loss_b) and loss_b <= loss_a):
+                for v, val in zip(allv, vals_a):
+                    v.assign(val)
+            self.fit_losses = {'staged': loss_a, 'direct': loss_b}
+            self._reset_predictive_cache()                
+            return
+        ##### END NEW (hetero) ##################################################
         scipy_minimize(self.loss, self.trainable_variables)
+
+    ##### NEW (hetero) ##########################################################
+    def _reset_predictive_cache(self):
+        nan = tf.constant(float('nan'), dtype=tf.float64)
+        self.CinvMs = tf.fill([self.q, self.n], nan)
+        self.Ths = tf.fill([self.q, self.n, self.n], nan)
+        self.mks = tf.fill([self.q, self.n], nan)
+        self.Tks = None
+    ##### END NEW (hetero) ######################################################
 
     def loss(self):
         """
@@ -555,6 +764,12 @@ class LCGP(Module):
         xk = self.x_unique_s
 
         r = tf.cast(self.r, tf.float64)
+
+        ##### NEW (hetero) ######################################################
+        r_raw = r
+        loglam, lam_penalty = self._loglam_and_penalty()
+        r = r_raw * tf.exp(-loglam)
+        ##### END NEW (hetero) ##################################################
 
         n = tf.cast(self.n, tf.float64)
         p = tf.cast(self.p, tf.float64)
@@ -620,6 +835,17 @@ class LCGP(Module):
 
         nlp += -0.5 * bkSb_sum
         nlp += 0.5 * logA_sum
+
+        ##### NEW (hetero) ######################################################
+        if self.within_term:
+            N_tot = tf.constant(float(self.N_total), dtype=tf.float64)
+            trace_i = tf.reduce_sum(self.S_within_used / sigma_var_used[None, :], axis=1)
+            within = 0.5 * p * tf.reduce_sum((r_raw - 1.0) * loglam)
+            within += 0.5 * (N_tot - n) * tf.reduce_sum(tf.math.log(sigma_var_used))
+            within += 0.5 * tf.reduce_sum(tf.exp(-loglam) * trace_i)
+            nlp += self._within_w * within
+        nlp += lam_penalty
+        ##### END NEW (hetero) ##################################################
 
         nlp /= n
         return nlp
@@ -728,6 +954,12 @@ class LCGP(Module):
         xk = self.x_unique_s
         r = tf.cast(self.r, tf.float64)
         R = self.R
+
+        ##### NEW (hetero) ######################################################
+        loglam, _ = self._loglam_and_penalty()
+        r = r * tf.exp(-loglam)
+        R = tf.linalg.diag(r)
+        ##### END NEW (hetero) ##################################################
 
         D = self.diag_D
         phi = self.phi  # (p,q)
@@ -911,7 +1143,11 @@ class LCGP(Module):
 
         predmean_used = tf.matmul(Psi, ghat)               # (p,n0)
         confvar_used = tf.matmul(tf.square(Psi), gvar)     # (p,n0)
-        predvar_used = confvar_used + sigma_var_used[:, None]
+        ##### NEW (hetero) ######################################################
+        lam0 = self._lam_at(x0)                      
+        self.lam_pred = lam0
+        predvar_used = confvar_used + sigma_var_used[:, None] * lam0[None, :]
+        ##### END NEW (hetero) ##################################################
 
         if use_std:
             ypred = predmean_used * self.ybar_std + self.ybar_mean
