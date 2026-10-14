@@ -18,6 +18,19 @@ def f_true(x):
     f3 = -0.4 - (x-0.5)**2 + 0.2*np.sin(4*np.pi*x)
     return np.vstack([f1, f2, f3])
 
+##### NEW (hetero) ##############################################################
+# Input-dependent noise: eps_ij ~ N(0, lambda(x_i) * noise_std^2), i.e. the noise
+# SD at x is noise_std * sqrt(lambda(x)). 
+NOISE_FIELDS = {
+    'none': lambda x: np.ones_like(np.asarray(x, dtype=np.float64)),
+    'sine': lambda x: np.exp(1.5*np.sin(2*np.pi*np.asarray(x))),
+    'ramp': lambda x: np.exp(3.0*(np.asarray(x) - 0.5)),
+    'bump': lambda x: 0.3 + 6.0*np.exp(-0.5*((np.asarray(x) - 0.7)/0.08)**2),
+}
+NOISE_FIELD = 'sine'
+lam_fn = NOISE_FIELDS[NOISE_FIELD]
+##### END NEW (hetero) ##########################################################
+
 def make_rep_data(n_unique=12, rep_choices=(1,2,3,4), noise_std=(0.05, 0.08, 0.10), seed=None):
     if seed is not None:
         rng = np.random.default_rng(seed)
@@ -33,10 +46,13 @@ def make_rep_data(n_unique=12, rep_choices=(1,2,3,4), noise_std=(0.05, 0.08, 0.1
     xs, ys = [], []
     for i, xi in enumerate(x_unique):
         yi_true = f_true([xi])[:, 0]
+        s_lam = np.sqrt(lam_fn(xi))   ##### NEW (hetero): noise SD scale at this location
         for _ in range(int(r[i])):
-            eps = np.array([normal(0, noise_std[0]),
-                            normal(0, noise_std[1]),
-                            normal(0, noise_std[2])], dtype=np.float64)
+            ##### CHANGED (hetero): was normal(0, noise_std[k])
+            eps = np.array([normal(0, s_lam * noise_std[0]),
+                            normal(0, s_lam * noise_std[1]),
+                            normal(0, s_lam * noise_std[2])], dtype=np.float64)
+            ##### END CHANGED (hetero) ##########################################
             xs.append([xi]); ys.append(yi_true + eps)
 
     xtrain = np.array(xs, dtype=np.float64)
@@ -59,10 +75,13 @@ def make_rep_data_skewed(n_unique=40,
         r = int(rng.choice(heavy_rep_choices) if (heavy_region[0] <= xi <= heavy_region[1])
                 else rng.choice(light_rep_choices))
         yi_base = f_true([xi])[:, 0]
+        s_lam = np.sqrt(lam_fn(xi))   ##### NEW (hetero): noise SD scale at this location
         for _ in range(r):
-            eps = np.array([rng.normal(0, noise_std[0]),
-                            rng.normal(0, noise_std[1]),
-                            rng.normal(0, noise_std[2])], dtype=np.float64)
+            ##### CHANGED (hetero): was rng.normal(0, noise_std[k])
+            eps = np.array([rng.normal(0, s_lam * noise_std[0]),
+                            rng.normal(0, s_lam * noise_std[1]),
+                            rng.normal(0, s_lam * noise_std[2])], dtype=np.float64)
+            ##### END CHANGED (hetero) ##########################################
             xs.append([xi]); ys.append(yi_base + eps)
 
     xtrain = np.array(xs, dtype=np.float64)
@@ -88,10 +107,13 @@ def make_rep_data_hotspots(n_unique=50,
         else:
             r = int(rng.choice(base_rep_choices))
         yi_base = f_true([xi])[:, 0]
+        s_lam = np.sqrt(lam_fn(xi))   ##### NEW (hetero): noise SD scale at this location
         for _ in range(r):
-            eps = np.array([rng.normal(0, noise_std[0]),
-                            rng.normal(0, noise_std[1]),
-                            rng.normal(0, noise_std[2])], dtype=np.float64)
+            ##### CHANGED (hetero): was rng.normal(0, noise_std[k])
+            eps = np.array([rng.normal(0, s_lam * noise_std[0]),
+                            rng.normal(0, s_lam * noise_std[1]),
+                            rng.normal(0, s_lam * noise_std[2])], dtype=np.float64)
+            ##### END CHANGED (hetero) ##########################################
             xs.append([xi]); ys.append(yi_base + eps)
 
     xtrain = np.array(xs, dtype=np.float64)
@@ -158,6 +180,7 @@ modelrun = LCGPRun(
     submethod=SUBMETHOD,
     diag_error_structure=[1,1,1],
     robust_mean=True,
+    hetero_noise=True,     ##### NEW (hetero): estimate lambda(x)
 )
 modelrun.define_model()
 
@@ -182,7 +205,9 @@ def transform_consistency_check(modelrun, predmean_from_runner, xtest):
     ghat = np.asarray(mdl.ghat)                         
 
     if mdl.submethod == 'rep':
-        y_std = phi @ ghat    
+        ##### CHANGED (hetero): was  y_std = phi @ ghat   (omitted Psi = Sigma^{1/2} Phi)
+        y_std = (phi * (sigma_sqrt / np.asarray(mdl.ybar_std)[:, 0])[:, None]) @ ghat
+        ##### END CHANGED (hetero) ##############################################
         y_from_g = y_std * np.asarray(mdl.ybar_std) + np.asarray(mdl.ybar_mean)
     else:
         psi = phi * sigma_sqrt[:, None]                    
@@ -203,7 +228,9 @@ for k in range(lLmb.shape[0]):
 print(f"\nVariances (lLmb0): {lLmb0.numpy()}")
 print(f"Noise log-var (lsigma2s): {lsigma2s.numpy()}")
 print(f"Noise std (fitted): {np.sqrt(np.exp(lsigma2s.numpy()))}")
-print("Noise std (true):   [0.05, 0.08, 0.10]")
+##### CHANGED (hetero): was print("Noise std (true):   [0.05, 0.08, 0.10]")
+print(f"Noise std (true):   [0.05, 0.08, 0.10] x sqrt(lambda(x)), field '{NOISE_FIELD}'")
+##### END CHANGED (hetero) ######################################################
 print(f"GP nuggets (lnugGPs): {lnugGPs.numpy()}")
 print("\n=== STATS ===")
 r = modelrun.model.r.numpy()
@@ -294,5 +321,3 @@ else:
     plt.tight_layout()
     plt.savefig(Path(results_fig_path)/'lcgp_rep_1d_demo.png', dpi=150)
     plt.close()
-
-
