@@ -178,8 +178,8 @@ modelrun = LCGPRun(
     num_latent=3,
     var_threshold=None,
     submethod=SUBMETHOD,
-    diag_error_structure=[1,1,1],
-    robust_mean=True,
+    err_struct=[1,1,1],    # LCGPRun name for diag_error_structure
+    robust=True,           # LCGPRun name for robust_mean
     hetero_noise=True,     ##### NEW (hetero): estimate lambda(x)
 )
 modelrun.define_model()

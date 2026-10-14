@@ -36,8 +36,8 @@ class LCGPRun(SuperRun):
     ##### NEW (hetero) ######################################################
     def __init__(self, submethod='full', robust=True, err_struct=None,
                  num_latent=None, var_threshold=None,
-                 hetero_noise=False, within_term=None,
-                 lam_prior_var=1.0, lam_predict='plugin',
+                 hetero_noise=False,
+                 lam_prior_var=1.0, lam_nugget=0.1, lam_predict='plugin',
                  **kwargs):
     ##### END NEW (hetero) ##################################################
         super().__init__(**kwargs)
@@ -51,8 +51,8 @@ class LCGPRun(SuperRun):
             self.modelname += '_robust'
         ##### NEW (hetero) ######################################################
         self.hetero_noise = hetero_noise
-        self.within_term = within_term
         self.lam_prior_var = lam_prior_var
+        self.lam_nugget = lam_nugget
         self.lam_predict = lam_predict
         if self.hetero_noise:
             self.modelname += '_hetero'
@@ -70,8 +70,8 @@ class LCGPRun(SuperRun):
                           submethod=self.submethod,
                           ##### NEW (hetero) ######################################
                           hetero_noise=self.hetero_noise,
-                          within_term=self.within_term,
                           lam_prior_var=self.lam_prior_var,
+                          lam_nugget=self.lam_nugget,
                           lam_predict=self.lam_predict,
                           ##### END NEW (hetero) ##################################
                           )

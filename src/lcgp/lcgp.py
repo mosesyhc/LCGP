@@ -44,10 +44,9 @@ class LCGP(Module):
                  rep_standardize_ybar: bool = True,
                  ##### NEW (hetero) ##############################################
                  hetero_noise: bool = False,      # estimate lambda(x)?  (rep only)
-                 within_term: bool | None = None, # replicate-scatter term; None -> on for 'rep'
                  lam_prior_var: float = 1.0,      # tau^2
                  lam_nugget: float = 0.1,         # g in Delta ~ N(0, tau^2 (K_lambda + g I))
-                 lam_predict: str = 'plugin',     
+                 lam_predict: str = 'plugin',
                  ##### END NEW (hetero) ##########################################
                  verbose: bool = False):
         """
@@ -62,11 +61,14 @@ class LCGP(Module):
             raise ValueError("hetero_noise=True requires submethod='rep'.")
         if lam_predict not in ['plugin', 'lognormal']:
             raise ValueError("lam_predict must be 'plugin' or 'lognormal'.")
+        # user-retrievable settings
         self.hetero_noise = bool(hetero_noise)
-        self.within_term = (submethod == 'rep') if within_term is None else bool(within_term)
-        self.lam_prior_var = float(lam_prior_var)
-        self.lam_nugget = float(lam_nugget)
         self.lam_predict = lam_predict
+        # internal settings
+        # replicate-scatter term is implied by the model: on iff rep + hetero noise
+        self._within_term = (submethod == 'rep') and self.hetero_noise
+        self._lam_prior_var = float(lam_prior_var)
+        self._lam_nugget = float(lam_nugget)
         # weight on the within-input term; set to 0 during stage 1 of fit
         self._within_w = tf.Variable(1.0, dtype=tf.float64, trainable=False)
         ##### END NEW (hetero) ##################################################
@@ -174,10 +176,10 @@ class LCGP(Module):
             dev2 = (yr - ybar_np[:, inv]) ** 2                     # (p, N)
             S_np = np.zeros((n_unique, p), dtype=np.float64)
             np.add.at(S_np, inv, dev2.T)
-            self.N_total = int(_N)
-            self.S_within_raw = tf.constant(S_np, dtype=tf.float64)
-            self.S_within_used = (self.S_within_raw / tf.square(ybar_std_tf[:, 0])[None, :]
-                                  if self.rep_standardize_ybar else self.S_within_raw)
+            self._N_total = int(_N)
+            self._S_within_raw = tf.constant(S_np, dtype=tf.float64)
+            self._S_within_used = (self._S_within_raw / tf.square(ybar_std_tf[:, 0])[None, :]
+                                   if self.rep_standardize_ybar else self._S_within_raw)
             ##### END NEW (hetero) ##############################################
 
             # 7) reset (n,d,p) to unique counts
@@ -249,9 +251,9 @@ class LCGP(Module):
         )
 
         ##### NEW (hetero) ######################################################
-        # Noise-field hyperparameters. 
+        # Noise-field hyperparameters.
         if self.hetero_noise:
-            # Delta_i = log(lambda_i) at the unique inputs 
+            # Delta_i = log(lambda_i) at the unique inputs
             self.lam_delta = Parameter(
                 tf.zeros([int(self.n)], dtype=tf.float64),
                 name='Noise field log-lambda (Delta)',
@@ -292,8 +294,41 @@ class LCGP(Module):
                f'\tparameter_clamping:\t{self.parameter_clamp_flag!s:s}\n' \
                f'\trobust_standardization:\t{self.robust_mean!s:s}\n' \
                f'\tdiagonal_error structure:\t{self.diag_error_structure!s:s}\n' \
+               f'\thetero_noise:\t{self.hetero_noise!s:s}\n' \
                f'\tparameters:\t\n{params}\n)'
         return desc
+
+    ##### NEW (hetero) ##########################################################
+    def get_fitted_model(self):
+        """
+        Everything about the fitted model, including internal settings
+        (underscore attributes) that are not part of the everyday API.
+        """
+        lLmb, lLmb0, lsigma2s, lnugGPs = self.get_param()
+        out = {
+            'submethod': self.submethod,
+            'q': int(self.q),
+            'robust_mean': self.robust_mean,
+            'rep_standardize_ybar': self.rep_standardize_ybar,
+            'diag_error_structure': list(self.diag_error_structure),
+            'hetero_noise': self.hetero_noise,
+            'lam_predict': self.lam_predict,
+            'within_term': self._within_term,
+            'lam_prior_var': self._lam_prior_var,
+            'lam_nugget': self._lam_nugget,
+            'lLmb': lLmb.numpy(),
+            'lLmb0': lLmb0.numpy(),
+            'lsigma2s': lsigma2s.numpy(),
+            'lnugGPs': lnugGPs.numpy(),
+            'phi': self.phi.numpy(),
+        }
+        if self.hetero_noise:
+            out['lam_delta'] = np.asarray(self.lam_delta.numpy())
+            out['lLmb_lam'] = np.asarray(self.lLmb_lam.numpy())
+        if hasattr(self, 'fit_losses'):
+            out['fit_losses'] = dict(self.fit_losses)
+        return out
+    ##### END NEW (hetero) ######################################################
 
     # =========================================================================
     # Utils: type checks, dims, transforms
@@ -343,7 +378,7 @@ class LCGP(Module):
         return ys * self.ystd + self.ymean
 
     # =========================================================================
-    # Standardization 
+    # Standardization
     # =========================================================================
     @staticmethod
     def init_standard_x(x):
@@ -566,9 +601,9 @@ class LCGP(Module):
 
         ##### NEW (hetero) ######################################################
         if self.hetero_noise:
-            self.lLmb_lam.assign(np.maximum(llmb, 0.1))   
+            self.lLmb_lam.assign(np.maximum(llmb, 0.1))
             delta0 = np.zeros(int(self.n), dtype=np.float64)
-            if self.N_total > int(self.n):              
+            if self._N_total > int(self.n):
                 lam_hat = self.lambda_diagnostic()['lambda_hat']
                 ok = np.isfinite(lam_hat)
                 delta0[ok] = np.log(lam_hat[ok])
@@ -580,10 +615,10 @@ class LCGP(Module):
         """
         Closed-form noise levels for replicated inputs
         """
-        S = self.S_within_raw.numpy()
+        S = self._S_within_raw.numpy()
         r = self.r.numpy().astype(np.float64)
         n, p = S.shape
-        dof = self.N_total - n
+        dof = self._N_total - n
         if dof <= 0:
             raise ValueError("No replication: replicate scatters are all zero.")
         sig2 = S.sum(axis=0) / dof
@@ -639,9 +674,9 @@ class LCGP(Module):
             return tf.zeros([self.n], dtype=tf.float64), tf.constant(0.0, tf.float64)
         delta = tf.convert_to_tensor(self.lam_delta)
         n = tf.shape(self.x_unique_s)[0]
-        tau2 = tf.constant(self.lam_prior_var, dtype=tf.float64)
+        tau2 = tf.constant(self._lam_prior_var, dtype=tf.float64)
         K = tau2 * (self._lam_kernel(self.x_unique_s, self.x_unique_s)
-                    + self.lam_nugget * tf.eye(n, dtype=tf.float64))
+                    + self._lam_nugget * tf.eye(n, dtype=tf.float64))
         L = tf.linalg.cholesky(K)
         alpha = tf.squeeze(tf.linalg.cholesky_solve(L, delta[:, None]), -1)
         penalty = 0.5 * tf.tensordot(delta, alpha, axes=1) \
@@ -656,15 +691,15 @@ class LCGP(Module):
             return z, z
         delta = tf.convert_to_tensor(self.lam_delta)
         n = tf.shape(self.x_unique_s)[0]
-        tau2 = tf.constant(self.lam_prior_var, dtype=tf.float64)
+        tau2 = tf.constant(self._lam_prior_var, dtype=tf.float64)
         K = tau2 * (self._lam_kernel(self.x_unique_s, self.x_unique_s)
-                    + self.lam_nugget * tf.eye(n, dtype=tf.float64))
+                    + self._lam_nugget * tf.eye(n, dtype=tf.float64))
         L = tf.linalg.cholesky(K)
-        K0 = tau2 * self._lam_kernel(x0s, self.x_unique_s)                
+        K0 = tau2 * self._lam_kernel(x0s, self.x_unique_s)
         alpha = tf.squeeze(tf.linalg.cholesky_solve(L, delta[:, None]), -1)
         mu = tf.linalg.matvec(K0, alpha)
-        W = tf.linalg.triangular_solve(L, tf.transpose(K0), lower=True)   
-        var = tf.maximum(tau2 * (1.0 + self.lam_nugget) - tf.reduce_sum(tf.square(W), axis=0), 0.0)
+        W = tf.linalg.triangular_solve(L, tf.transpose(K0), lower=True)
+        var = tf.maximum(tau2 * (1.0 + self._lam_nugget) - tf.reduce_sum(tf.square(W), axis=0), 0.0)
         return mu, var
 
     def _lam_at(self, x0s):
@@ -689,18 +724,17 @@ class LCGP(Module):
     # =========================================================================
     def fit(self, verbose=False):
         ##### NEW (hetero) ######################################################
-        if self.submethod == 'rep' and (self.within_term or self.hetero_noise):
+        # hetero_noise already implies submethod == 'rep' and the within term
+        if self.hetero_noise:
             allv = list(self.trainable_variables)
             init_vals = [v.numpy().copy() for v in allv]
-            frozen = set()
-            if self.hetero_noise:
-                frozen = {v.ref() for p in (self.lam_delta, self.lLmb_lam)
-                          for v in getattr(p, 'trainable_variables', [p])}
-                delta_init = np.asarray(self.lam_delta.numpy()).copy()
+            frozen = {v.ref() for p in (self.lam_delta, self.lLmb_lam)
+                      for v in getattr(p, 'trainable_variables', [p])}
+            delta_init = np.asarray(self.lam_delta.numpy()).copy()
 
             def _set_full_start():
                 self._within_w.assign(1.0)
-                if self.within_term and self.N_total > int(self.n):
+                if self._N_total > int(self.n):
                     sig2 = self.lambda_diagnostic()['sigma2_pooled']
                     err_struct, col = self.diag_error_structure, 0
                     lsig = np.zeros(len(err_struct))
@@ -708,17 +742,17 @@ class LCGP(Module):
                         lsig[k] = np.log(np.mean(sig2[col:(col + err_struct[k])]))
                         col += err_struct[k]
                     self.lsigma2s.assign(lsig)
-                if self.hetero_noise:
-                    self.lam_delta.assign(delta_init)        
+                self.lam_delta.assign(delta_init)
 
-            if self.hetero_noise:
-                self.lam_delta.assign(np.zeros_like(delta_init))   
+            # stage 1: homoscedastic, no within term, noise field frozen
+            self.lam_delta.assign(np.zeros_like(delta_init))
             self._within_w.assign(0.0)
             scipy_minimize(self.loss, [v for v in allv if v.ref() not in frozen])
             _set_full_start()
             scipy_minimize(self.loss, allv)
             loss_a, vals_a = float(self.loss()), [v.numpy().copy() for v in allv]
 
+            # direct start from the initial values
             for v, val in zip(allv, init_vals):
                 v.assign(val)
             _set_full_start()
@@ -729,7 +763,7 @@ class LCGP(Module):
                 for v, val in zip(allv, vals_a):
                     v.assign(val)
             self.fit_losses = {'staged': loss_a, 'direct': loss_b}
-            self._reset_predictive_cache()                
+            self._reset_predictive_cache()
             return
         ##### END NEW (hetero) ##################################################
         scipy_minimize(self.loss, self.trainable_variables)
@@ -837,9 +871,9 @@ class LCGP(Module):
         nlp += 0.5 * logA_sum
 
         ##### NEW (hetero) ######################################################
-        if self.within_term:
-            N_tot = tf.constant(float(self.N_total), dtype=tf.float64)
-            trace_i = tf.reduce_sum(self.S_within_used / sigma_var_used[None, :], axis=1)
+        if self._within_term:
+            N_tot = tf.constant(float(self._N_total), dtype=tf.float64)
+            trace_i = tf.reduce_sum(self._S_within_used / sigma_var_used[None, :], axis=1)
             within = 0.5 * p * tf.reduce_sum((r_raw - 1.0) * loglam)
             within += 0.5 * (N_tot - n) * tf.reduce_sum(tf.math.log(sigma_var_used))
             within += 0.5 * tf.reduce_sum(tf.exp(-loglam) * trace_i)
@@ -896,12 +930,12 @@ class LCGP(Module):
         except KeyError as e:
             print(e)
             raise KeyError('Invalid submethod.  Choices are \'full\' or \'rep\'.')
-        
+
         result = predict_call(x0=x0, return_fullcov=return_fullcov)
         return tuple(tf.stop_gradient(r) if r is not None else None for r in result)
 
     # =========================================================================
-    # Aux predictive quantities 
+    # Aux predictive quantities
     # =========================================================================
     def compute_aux_predictive_quantities(self):
         """
@@ -979,7 +1013,6 @@ class LCGP(Module):
 
         # corresponds to Φ^T Σ^{-1/2}
         self.psi_c = tf.transpose(phi) / sigma_inv_sqrt_used[:, None]  # (q,p)
-
         q = tf.cast(self.q, tf.int32)
         n = tf.cast(self.n, tf.int32)
 
@@ -1144,7 +1177,7 @@ class LCGP(Module):
         predmean_used = tf.matmul(Psi, ghat)               # (p,n0)
         confvar_used = tf.matmul(tf.square(Psi), gvar)     # (p,n0)
         ##### NEW (hetero) ######################################################
-        lam0 = self._lam_at(x0)                      
+        lam0 = self._lam_at(x0)
         self.lam_pred = lam0
         predvar_used = confvar_used + sigma_var_used[:, None] * lam0[None, :]
         ##### END NEW (hetero) ##################################################
