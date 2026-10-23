@@ -1,0 +1,18 @@
+[project]
+name = "stochastic-SIR-example"
+version = "0.1.0"
+description = "An example of a stochastic SIR model calibration with LCGP"
+requires-python = ">=3.11,<3.14"   # lcgp needs <3.14
+dependencies = [
+    "adaptive-ts",
+    "numba>=0.68.0",   # needed by adaptive_ts's odinSIR simulator but not declared by it
+    "lcgp==1.1.1",
+    "numpy",
+    "pandas",
+    "scipy",
+    "matplotlib",
+    "seaborn",
+]
+
+[tool.uv.sources]
+adaptive-ts = { git = "https://github.com/emews/adaptive-ts.git", rev = "2a484f625dbb5d293b9a9e32ecb45b64f4cd90e7" }
