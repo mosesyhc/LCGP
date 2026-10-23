@@ -746,7 +746,7 @@ class LCGP(Module):
             sigma_inv_sqrt_used = sigma_inv_sqrt_raw
 
         # corresponds to Φ^T Σ^{-1/2}
-        self.psi_c = tf.transpose(phi) / sigma_inv_sqrt_used[:, None]  # (q,p)
+        self.psi_c = tf.transpose(phi) * sigma_inv_sqrt_used[None, :]  # (q,p)
 
         q = tf.cast(self.q, tf.int32)
         n = tf.cast(self.n, tf.int32)
